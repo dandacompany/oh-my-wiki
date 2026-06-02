@@ -61,3 +61,19 @@ CREATE TABLE IF NOT EXISTS note_tags (
   tag_id  INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
   PRIMARY KEY (note_id, tag_id)
 );
+
+CREATE TABLE IF NOT EXISTS inbox_queue (
+  id             INTEGER PRIMARY KEY,
+  vault_id       INTEGER NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,
+  url            TEXT NOT NULL,
+  normalized_url TEXT NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'queued'
+                   CHECK (status IN ('queued', 'fetched', 'ingested', 'failed')),
+  title          TEXT,
+  added_at       TEXT NOT NULL,
+  fetched_at     TEXT,
+  raw_relpath    TEXT,
+  error          TEXT,
+  UNIQUE(vault_id, normalized_url)
+);
+CREATE INDEX IF NOT EXISTS idx_inbox_vault_status ON inbox_queue(vault_id, status);
