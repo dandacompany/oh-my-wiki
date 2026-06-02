@@ -1,5 +1,6 @@
 # tests/test_registry_visibility.py
 import sqlite3
+from pathlib import Path
 
 from scripts import registry
 
@@ -46,3 +47,52 @@ def test_migration_adds_visibility_to_old_notes_table(tmp_path):
         assert row["visibility"] == "private"  # existing rows default to private
     finally:
         conn.close()
+
+
+def _visibility(db):
+    conn = registry.connect(db)
+    try:
+        return conn.execute(
+            "SELECT visibility FROM notes WHERE relpath='wiki/a.md'"
+        ).fetchone()["visibility"]
+    finally:
+        conn.close()
+
+
+def test_upsert_note_defaults_private(tmp_path):
+    db = tmp_path / "r.db"
+    registry.init_db(db)
+    registry.add_vault(db, name="v", path=Path(tmp_path / "v"), type_="markdown", mode="wiki")
+    vid = registry.list_vaults(db)[0]["id"]
+    registry.upsert_note(db, vault_id=vid, relpath="wiki/a.md", layer="wiki",
+                         title="A", summary="s", mtime=1.0, size_bytes=10, tags=[])
+    assert _visibility(db) == "private"
+
+
+def test_upsert_note_stores_and_updates_visibility(tmp_path):
+    db = tmp_path / "r.db"
+    registry.init_db(db)
+    registry.add_vault(db, name="v", path=Path(tmp_path / "v"), type_="markdown", mode="wiki")
+    vid = registry.list_vaults(db)[0]["id"]
+    registry.upsert_note(db, vault_id=vid, relpath="wiki/a.md", layer="wiki",
+                         title="A", summary="s", mtime=1.0, size_bytes=10, tags=[],
+                         visibility="public")
+    # The INSERT path must store the requested visibility verbatim.
+    assert _visibility(db) == "public"
+    # ON CONFLICT path must also update visibility back to private.
+    # Keep mtime/size_bytes identical so only `visibility` differs.
+    registry.upsert_note(db, vault_id=vid, relpath="wiki/a.md", layer="wiki",
+                         title="A", summary="s", mtime=1.0, size_bytes=10, tags=[],
+                         visibility="private")
+    assert _visibility(db) == "private"
+
+
+def test_upsert_note_invalid_visibility_falls_back_to_private(tmp_path):
+    db = tmp_path / "r.db"
+    registry.init_db(db)
+    registry.add_vault(db, name="v", path=Path(tmp_path / "v"), type_="markdown", mode="wiki")
+    vid = registry.list_vaults(db)[0]["id"]
+    registry.upsert_note(db, vault_id=vid, relpath="wiki/a.md", layer="wiki",
+                         title="A", summary="s", mtime=1.0, size_bytes=10, tags=[],
+                         visibility="internal")  # not a valid value
+    assert _visibility(db) == "private"

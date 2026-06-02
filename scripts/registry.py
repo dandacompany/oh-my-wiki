@@ -154,25 +154,29 @@ def upsert_note(
     size_bytes: int,
     tags: list[str],
     parse_error: bool = False,
+    visibility: str = "private",
 ) -> int:
+    if visibility not in ("public", "private"):
+        visibility = "private"
     conn = connect(db_path)
     try:
         with conn:
             conn.execute(
                 """
                 INSERT INTO notes(vault_id, relpath, layer, title, summary,
-                                  mtime, size_bytes, parse_error)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                  mtime, size_bytes, parse_error, visibility)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(vault_id, relpath) DO UPDATE SET
                     layer       = excluded.layer,
                     title       = excluded.title,
                     summary     = excluded.summary,
                     mtime       = excluded.mtime,
                     size_bytes  = excluded.size_bytes,
-                    parse_error = excluded.parse_error
+                    parse_error = excluded.parse_error,
+                    visibility  = excluded.visibility
                 """,
                 (vault_id, relpath, layer, title, summary,
-                 mtime, size_bytes, 1 if parse_error else 0),
+                 mtime, size_bytes, 1 if parse_error else 0, visibility),
             )
             note_id = conn.execute(
                 "SELECT id FROM notes WHERE vault_id = ? AND relpath = ?",
