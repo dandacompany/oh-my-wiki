@@ -27,28 +27,29 @@ def query(
     vault_id: int,
     query: str,
     limit: int = 5,
+    visibility: str | None = None,
 ) -> list[dict]:
-    """Return top-N hits as dicts {relpath, title, summary, tags, score}."""
+    """Return top-N hits as dicts {relpath, title, summary, tags, score}.
+    When visibility='public', only public pages are returned (used by `omw serve`)."""
     q_tokens = _tokens(query)
     if not q_tokens:
         return []
 
     if fts.fts5_available():
-        hits = fts.search(db_path, vault_id=vault_id, query=query, limit=limit)
+        hits = fts.search(db_path, vault_id=vault_id, query=query, limit=limit,
+                          visibility=visibility)
         if hits is not None:
             return hits
-    # else / not-indexed → token-weighted fallback below (unchanged)
+    # else / not-indexed → token-weighted fallback below
 
     conn = registry.connect(db_path)
     try:
-        notes = list(conn.execute(
-            """
-            SELECT id, relpath, title, summary
-            FROM notes
-            WHERE vault_id = ? AND parse_error = 0
-            """,
-            (vault_id,),
-        ))
+        sql = ("SELECT id, relpath, title, summary FROM notes "
+               "WHERE vault_id = ? AND parse_error = 0")
+        params: list = [vault_id]
+        if visibility == "public":
+            sql += " AND visibility = 'public'"
+        notes = list(conn.execute(sql, params))
         tags_by_id: dict[int, list[str]] = {}
         for row in conn.execute(
             """
