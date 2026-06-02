@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from scripts import urls
 from scripts.fetch_errors import FetchError, NeedsYtDlp
 
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -34,6 +35,8 @@ def parse_vtt(vtt: str) -> str:
 def fetch_transcript(url: str) -> tuple[str, str]:
     """Return (title, transcript_text) for a YouTube URL using yt-dlp.
     Raises NeedsYtDlp if the CLI is missing, FetchError on extraction failure."""
+    if not urls.is_youtube(url):
+        raise FetchError(f"not a YouTube URL: {url!r}")
     exe = shutil.which("yt-dlp")
     if not exe:
         raise NeedsYtDlp("yt-dlp is not installed")
@@ -42,7 +45,7 @@ def fetch_transcript(url: str) -> tuple[str, str]:
         proc = subprocess.run(
             [exe, "--skip-download", "--write-auto-subs", "--write-subs",
              "--sub-langs", "ko,en", "--sub-format", "vtt",
-             "--write-info-json", "-o", str(tmpdir / "%(id)s.%(ext)s"), url],
+             "--write-info-json", "-o", str(tmpdir / "%(id)s.%(ext)s"), "--", url],
             capture_output=True, text=True, timeout=120,
         )
         if proc.returncode != 0:
