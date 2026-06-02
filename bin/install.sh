@@ -164,6 +164,11 @@ cat <<EOF
      - python3 -m scripts.lint --vault-id N       # health check a vault
      - bash bin/uninstall.sh                      # remove symlinks + uninstall pkg
 
+   Optional fetch backends (for \`omw inbox\` / \`omw fetch\`):
+     - yt-dlp (YouTube transcripts):   pip install yt-dlp   (or: brew install yt-dlp)
+     - Playwright chromium (SPA pages): pip install playwright && playwright install chromium
+     - or configure a cloud scraper:    omw setup search   (firecrawl / brightdata)
+
    Docs:
      - README.md        — overview
      - TUTORIAL.md      — English walkthrough

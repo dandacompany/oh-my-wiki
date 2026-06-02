@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import shutil
 import sys
 from pathlib import Path
 
@@ -358,4 +359,9 @@ def doctor() -> int:
             print(f"  {mark} {v['name']} ({v['mode']}/{v['type']}) {v['path']}")
     else:
         print("  no vaults registered — run: omw setup")
+    import scripts.fetch_chromium as _fc
+    ytdlp = "ok" if shutil.which("yt-dlp") else "missing (pip install yt-dlp — for YouTube)"
+    chromium = "ok" if _fc.available() else "missing (pip install playwright && playwright install chromium — for SPA pages)"
+    print(f"fetch yt-dlp:  {ytdlp}")
+    print(f"fetch chromium: {chromium}")
     return 0
