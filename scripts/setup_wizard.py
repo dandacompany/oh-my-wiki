@@ -325,6 +325,8 @@ def run_all(*, noninteractive: bool = False, base_dir=None) -> int:
 
     Returns the first non-zero section result (continuing through the rest), else 0.
     """
+    from scripts import banner
+    banner.render()   # animated when interactive TTY; static/suppressed otherwise
     first_error = 0
     steps = [
         ("vault", lambda: run(noninteractive=noninteractive)),

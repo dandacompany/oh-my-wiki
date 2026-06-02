@@ -764,8 +764,26 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    return args.func(args)
+    try:
+        argv = list(sys.argv[1:] if argv is None else argv)
+        parser = build_parser()
+        if not argv or argv[0] in ("-h", "--help", "help"):
+            from scripts import banner
+            banner.render(animate=False)   # static, self-gated for TTY/NO_COLOR/CI
+            parser.print_help()
+            sys.stdout.flush()  # surface a broken pipe here (block-buffered stdout)
+            return 0
+        args = parser.parse_args(argv)
+        rc = args.func(args)
+        sys.stdout.flush()  # surface a broken pipe here, not at interpreter shutdown
+        return rc
+    except BrokenPipeError:
+        try:
+            import os as _os
+            _os.dup2(_os.open(_os.devnull, _os.O_WRONLY), sys.stdout.fileno())
+        except Exception:
+            pass
+        return 0
 
 
 if __name__ == "__main__":

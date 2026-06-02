@@ -44,6 +44,26 @@ done
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PKG_TARGET="${EXTRAS:-.}"
 
+# ---------- Banner ----------
+if [ -t 1 ] && [ -z "${OMW_NO_BANNER:-}" ] && [ -z "${NO_COLOR:-}" ] && [ -z "${CI:-}" ]; then
+  cat <<'OMWBANNER'
+        _                                  _ _    _
+   ___ | |__    _ __ ___  _   _  __      _(_) | _(_)
+  / _ \| '_ \  | '_ ` _ \| | | | \ \ /\ / / | |/ / |
+ | (_) | | | | | | | | | | |_| |  \ V  V /| |   <| |
+  \___/|_| |_| |_| |_| |_|\__, |   \_/\_/ |_|_|\_\_|
+                          |___/
+
+  a wiki your AI agent builds as you work
+
+  GitHub    https://github.com/dandacompany/oh-my-wiki
+  Web       https://oh-my-wiki.com
+  Contact   dante@dante-labs.com
+  Made by   Dante Labs · dante-labs.com
+
+OMWBANNER
+fi
+
 # ---------- Pre-flight: tmux required for dispatch workers ----------
 if ! command -v tmux &>/dev/null; then
   echo "WARNING: tmux not found. dispatch/team commands require tmux >= 3.0."

@@ -1,6 +1,6 @@
 [project]
 name = "oh-my-wiki"
-version = "2.5.0"
+version = "2.6.0"
 description = "Karpathy-style LLM Wiki skill with multi-vault sqlite registry and Socratic wizard"
 requires-python = ">=3.10"
 dependencies = [

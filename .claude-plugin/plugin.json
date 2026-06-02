@@ -1,6 +1,6 @@
 {
   "name": "oh-my-wiki",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "Karpathy-style LLM Wiki skill with multi-vault sqlite registry. Capture sources, build a structured wiki, query it with cited answers. Also addressable as 'omw'.",
   "author": "dandacompany",
   "license": "MIT",
