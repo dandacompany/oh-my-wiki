@@ -24,6 +24,9 @@ oh-my-wiki exposes exactly two surfaces. The **`omw` CLI** handles deterministic
 - **Entity-linking** — `omw links suggest` / `omw links link` auto-inserts `[[slug|Name]]` references
 - **Inline fields** — `omw fields` reads `key::` inline syntax alongside frontmatter
 - **Korean matching** — Korean entity names with josa (`카르파시가`) are suggested and linked correctly
+- **Note viewers** — `omw view` opens the active vault, a page, or a search in Obsidian or Logseq (URI schemes, no plugin needed); `omw setup viewer` scaffolds the viewer config
+- **Visibility (secure-by-default)** — `omw visibility get/set` marks pages `public`/`private`; `omw serve` exposes only public pages
+- **URL inbox + fetch** — `omw fetch <url>` saves a web page or YouTube transcript to `raw/` (tiered urllib → chromium → cloud, SSRF-guarded); `omw inbox add/list/run/remove` queues URLs for batch fetch
 
 ---
 
@@ -180,23 +183,27 @@ SKILL.md dispatcher → commands/<op>.md (LLM procedure) → scripts/<op>.py (de
                                                        └─ adapters.py → filesystem (markdown / obsidian)
 ```
 
-The 13 CLI subcommands:
+The 17 CLI subcommands:
 
-| Subcommand  | Purpose                                                              |
-| ----------- | -------------------------------------------------------------------- |
-| `status`    | Show active vault and registry state                                 |
-| `vault`     | Create, list, use, forget vaults                                     |
-| `lint`      | Structural health check (frontmatter + links)                        |
-| `search`    | Web search via the configured external provider (brave/tavily/exa/…) |
-| `serve`     | Local retrieve-only HTTP query API (port 8765) — public pages only   |
-| `schema`    | List / inspect page-type schemas                                     |
-| `supersede` | Mark a page superseded by a newer one                                |
-| `review`    | Spaced-repetition review queue (due / done)                          |
-| `links`     | Suggest and insert `[[slug]]` entity links                           |
-| `fields`    | Read frontmatter + inline `key::` fields                             |
-| `import`    | Import an existing folder as a vault                                 |
-| `setup`     | Interactive setup wizard                                             |
-| `doctor`    | Verify install health                                                |
+| Subcommand   | Purpose                                                              |
+| ------------ | -------------------------------------------------------------------- |
+| `status`     | Show active vault and registry state                                 |
+| `vault`      | Create, list, use, forget vaults                                     |
+| `lint`       | Structural health check (frontmatter + links)                        |
+| `search`     | Web search via the configured external provider (brave/tavily/exa/…) |
+| `serve`      | Local retrieve-only HTTP query API (port 8765) — public pages only   |
+| `view`       | Open the vault / a page / a search in Obsidian or Logseq             |
+| `visibility` | Get / set a page's public/private visibility (`get` / `set`)         |
+| `schema`     | List / inspect page-type schemas                                     |
+| `supersede`  | Mark a page superseded by a newer one                                |
+| `review`     | Spaced-repetition review queue (due / done)                          |
+| `links`      | Suggest and insert `[[slug]]` entity links                           |
+| `fields`     | Read frontmatter + inline `key::` fields                             |
+| `import`     | Import an existing folder as a vault                                 |
+| `fetch`      | Fetch one URL (web page / YouTube transcript) into `raw/`            |
+| `inbox`      | Queue URLs and batch-fetch them into `raw/` (add/list/run/remove)    |
+| `setup`      | Interactive setup wizard                                             |
+| `doctor`     | Verify install health                                                |
 
 > **Visibility (secure-by-default):** `omw serve` returns only pages with
 > `visibility: public` in their frontmatter. Pages without the field are treated as
