@@ -16,7 +16,9 @@ Detect the source type from user input:
 | Pasted long-form text       | paste               | use as body                                               |
 | Path ending in `.pdf`       | pdf file            | `ingest.save_raw_pdf` → returns (relpath, extracted_text) |
 | Path ending in `.md`/`.txt` | text file           | `Path(p).read_text()` → body                              |
-| URL                         | (LLM fetches first) | use Bright Data MCP per CLAUDE.md, then treat as paste    |
+| URL                         | `omw fetch <url>`   | runs the deterministic fetch cascade (yt-dlp/urllib/chromium/cloud) → saves raw/, returns the relpath; then continue from step 2 (Discuss takeaways) reading that raw file |
+
+For a URL, prefer `omw fetch <url>` (deterministic, handles YouTube + SPA) over an ad-hoc MCP fetch; it saves the source to `raw/` and you continue the synthesis steps below against that file.
 
 For paste/md/txt, use `ingest.save_raw` with `ext` = `md` or `txt`. For pdf, use `ingest.save_raw_pdf` (returns extracted text for the next step).
 
