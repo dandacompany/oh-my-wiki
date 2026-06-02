@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS notes (
   mtime        REAL NOT NULL,
   size_bytes   INTEGER NOT NULL,
   parse_error  INTEGER NOT NULL DEFAULT 0 CHECK (parse_error IN (0, 1)),
+  visibility   TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('public', 'private')),
   UNIQUE(vault_id, relpath)
 );
 CREATE INDEX IF NOT EXISTS idx_notes_vault ON notes(vault_id);
