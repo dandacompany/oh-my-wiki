@@ -111,6 +111,7 @@ def _scan(
             size_bytes=path.stat().st_size,
             tags=[str(t) for t in tags],
             parse_error=parse_error,
+            visibility=meta.get("visibility") or "private",
         )
         links.replace_links(db_path, vault_id=vault_id, src_note_id=note_id, body=body, meta=meta)
         if fts_conn is not None:
