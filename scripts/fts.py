@@ -29,10 +29,29 @@ def fts5_available() -> bool:
     return _FTS5_AVAILABLE
 
 
-def ensure_fts(conn: sqlite3.Connection) -> None:
+def ensure_fts(conn: sqlite3.Connection) -> bool:
+    """Ensure notes_fts exists with a visibility column.
+    Returns True if it migrated an old-shape (no-visibility) table — the caller
+    must then full-reindex to repopulate the rebuilt index."""
+    existing = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='notes_fts'"
+    ).fetchone()
+    if existing:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(notes_fts)")}
+        if "visibility" in cols:
+            return False
+        conn.execute("DROP TABLE notes_fts")  # FTS5 has no ALTER ADD COLUMN
+        _create_fts(conn)
+        return True
+    _create_fts(conn)
+    return False
+
+
+def _create_fts(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5("
-        "relpath, title, summary, tags, body, vault_id UNINDEXED, "
+        "relpath, title, summary, tags, body, "
+        "vault_id UNINDEXED, visibility UNINDEXED, "
         "tokenize='unicode61')"
     )
 
@@ -42,14 +61,14 @@ def clear_vault(conn: sqlite3.Connection, *, vault_id: int) -> None:
 
 
 def index_note(conn: sqlite3.Connection, *, vault_id: int, relpath: str,
-               title, summary, tags, body) -> None:
+               title, summary, tags, body, visibility: str = "private") -> None:
     conn.execute("DELETE FROM notes_fts WHERE vault_id = ? AND relpath = ?",
                  (str(vault_id), relpath))
     conn.execute(
-        "INSERT INTO notes_fts(relpath, title, summary, tags, body, vault_id) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO notes_fts(relpath, title, summary, tags, body, vault_id, visibility) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
         (relpath, title or "", summary or "", " ".join(tags or []),
-         body or "", str(vault_id)),
+         body or "", str(vault_id), visibility if visibility in ("public", "private") else "private"),
     )
 
 
@@ -60,9 +79,11 @@ def _match_query(query: str) -> str:
     return " OR ".join(f'"{t}"' for t in toks)
 
 
-def search(db_path: Path, *, vault_id: int, query: str, limit: int):
+def search(db_path: Path, *, vault_id: int, query: str, limit: int,
+           visibility: str | None = None):
     """FTS5 BM25 search. Returns a list of hit dicts, [] for no match, or
-    None when the vault isn't indexed yet (caller should fall back)."""
+    None when the vault isn't indexed yet (caller should fall back).
+    When visibility='public', only public rows are returned."""
     match = _match_query(query)
     conn = registry.connect(db_path)
     try:
@@ -75,15 +96,17 @@ def search(db_path: Path, *, vault_id: int, query: str, limit: int):
             "SELECT 1 FROM notes_fts WHERE vault_id = ? LIMIT 1", (str(vault_id),)
         ).fetchone()
         if not has_rows:
-            return None  # vault not indexed (e.g. pre-F#6) → fall back
+            return None  # vault not indexed → fall back
         if not match:
             return []
-        rows = list(conn.execute(
-            "SELECT relpath, title, summary, tags, bm25(notes_fts) AS rank "
-            "FROM notes_fts WHERE notes_fts MATCH ? AND vault_id = ? "
-            "ORDER BY rank LIMIT ?",
-            (match, str(vault_id), limit),
-        ))
+        sql = ("SELECT relpath, title, summary, tags, bm25(notes_fts) AS rank "
+               "FROM notes_fts WHERE notes_fts MATCH ? AND vault_id = ?")
+        params: list = [match, str(vault_id)]
+        if visibility == "public":
+            sql += " AND visibility = 'public'"
+        sql += " ORDER BY rank LIMIT ?"
+        params.append(limit)
+        rows = list(conn.execute(sql, params))
         return [{
             "relpath": r["relpath"],
             "title": r["title"] or None,

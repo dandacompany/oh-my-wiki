@@ -68,7 +68,8 @@ def handle_query(
     limit = max(1, min(limit, max_limit))
 
     row = _resolve_vault(db_path, payload.get("vault") or default_vault)
-    hits = search_index.query(db_path, vault_id=row["id"], query=text, limit=limit)
+    hits = search_index.query(db_path, vault_id=row["id"], query=text, limit=limit,
+                              visibility="public")
     return {"query": text, "vault": row["name"], "count": len(hits), "hits": hits}
 
 

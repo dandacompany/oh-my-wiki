@@ -43,5 +43,16 @@ def resolve_provider(name: str | None = None) -> Provider:
     return cls(**kwargs)
 
 
+def resolve_scrape_provider(name: str | None = None) -> Provider:
+    """Resolve a provider that supports scrape(url). Raises SearchError if the
+    configured provider lacks scrape() or no key is set."""
+    prov = resolve_provider(name)
+    if not hasattr(prov, "scrape"):
+        raise SearchError(
+            f"provider {type(prov).__name__} has no scrape(); use firecrawl or brightdata"
+        )
+    return prov
+
+
 def search(query: str, *, provider: str | None = None, limit: int = 10) -> list[dict]:
     return resolve_provider(provider).search(query, limit=limit)

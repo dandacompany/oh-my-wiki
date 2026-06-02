@@ -16,6 +16,17 @@ def connect(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+def _ensure_note_columns(conn: sqlite3.Connection) -> None:
+    """Idempotently add columns introduced after a vault's DB was first created.
+    SQLite has no ADD COLUMN IF NOT EXISTS, so guard on pragma table_info."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(notes)")}
+    if "visibility" not in cols:
+        conn.execute(
+            "ALTER TABLE notes ADD COLUMN visibility TEXT NOT NULL "
+            "DEFAULT 'private' CHECK (visibility IN ('public', 'private'))"
+        )
+
+
 def init_db(db_path: Path) -> None:
     """Create schema if absent. Idempotent."""
     db_path = Path(db_path)
@@ -24,6 +35,7 @@ def init_db(db_path: Path) -> None:
     conn = connect(db_path)
     try:
         conn.executescript(sql)
+        _ensure_note_columns(conn)
         existing = conn.execute(
             "SELECT 1 FROM schema_migrations WHERE version = ?",
             (SCHEMA_VERSION,),
@@ -142,25 +154,29 @@ def upsert_note(
     size_bytes: int,
     tags: list[str],
     parse_error: bool = False,
+    visibility: str = "private",
 ) -> int:
+    if visibility not in ("public", "private"):
+        visibility = "private"
     conn = connect(db_path)
     try:
         with conn:
             conn.execute(
                 """
                 INSERT INTO notes(vault_id, relpath, layer, title, summary,
-                                  mtime, size_bytes, parse_error)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                  mtime, size_bytes, parse_error, visibility)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(vault_id, relpath) DO UPDATE SET
                     layer       = excluded.layer,
                     title       = excluded.title,
                     summary     = excluded.summary,
                     mtime       = excluded.mtime,
                     size_bytes  = excluded.size_bytes,
-                    parse_error = excluded.parse_error
+                    parse_error = excluded.parse_error,
+                    visibility  = excluded.visibility
                 """,
                 (vault_id, relpath, layer, title, summary,
-                 mtime, size_bytes, 1 if parse_error else 0),
+                 mtime, size_bytes, 1 if parse_error else 0, visibility),
             )
             note_id = conn.execute(
                 "SELECT id FROM notes WHERE vault_id = ? AND relpath = ?",

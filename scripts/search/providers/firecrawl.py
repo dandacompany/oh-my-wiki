@@ -22,3 +22,14 @@ class FirecrawlProvider:
         # v1: {"data": [...]} -> results is already a list
         return [{"title": r.get("title", ""), "url": r.get("url", ""),
                  "snippet": r.get("description", "")} for r in results][:limit]
+
+    def scrape(self, url: str) -> dict:
+        data = base._http_json(
+            "https://api.firecrawl.dev/v2/scrape", method="POST",
+            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+            body={"url": url, "formats": ["markdown"]},
+        )
+        payload = (data.get("data") if isinstance(data, dict) else None) or {}
+        md = payload.get("markdown") or ""
+        title = (payload.get("metadata") or {}).get("title") or url
+        return {"markdown": md, "title": title}

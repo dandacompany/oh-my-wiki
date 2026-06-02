@@ -225,6 +225,70 @@ def _cmd_review(args) -> int:
     return 0
 
 
+def _cmd_visibility(args) -> int:
+    from pathlib import Path
+    from scripts import frontmatter, reindex
+    db = registry_path()
+    if not db.exists():
+        print("error: no registry; run `omw status` to set up", file=sys.stderr)
+        return 1
+    if args.vault:
+        match = [v for v in registry.list_vaults(db) if v["name"] == args.vault]
+        if not match:
+            print(f"error: vault {args.vault!r} not found", file=sys.stderr)
+            return 1
+        vault = match[0]
+    else:
+        vault = registry.get_active(db)
+        if vault is None:
+            print("error: no active vault; pass --vault <name>", file=sys.stderr)
+            return 1
+    root = Path(vault["path"])
+
+    if args.visibility_cmd == "get":
+        abs_path = root / args.relpath
+        if not abs_path.exists():
+            print(f"error: page not found: {args.relpath}", file=sys.stderr)
+            return 1
+        try:
+            meta, _ = frontmatter.parse(abs_path.read_text(encoding="utf-8"))
+        except frontmatter.FrontmatterError:
+            meta = {}
+        print(json.dumps({"relpath": args.relpath,
+                          "visibility": meta.get("visibility") or "private"},
+                         ensure_ascii=False, indent=2))
+        return 0
+
+    # set: args.targets is [relpath..., value]
+    *relpaths, value = args.targets
+    if value not in ("public", "private"):
+        print("error: last argument must be 'public' or 'private'", file=sys.stderr)
+        return 1
+    if not relpaths:
+        print("error: provide at least one relpath before the value", file=sys.stderr)
+        return 1
+    updated, missing, failed = [], [], []
+    for rel in relpaths:
+        abs_path = root / rel
+        if not abs_path.exists():
+            missing.append(rel)
+            continue
+        text = abs_path.read_text(encoding="utf-8")
+        try:
+            new_text = frontmatter.edit_field(text, "visibility", value)
+        except frontmatter.FrontmatterError:
+            failed.append(rel)   # malformed frontmatter — skip, don't crash
+            continue
+        abs_path.write_text(new_text, encoding="utf-8")
+        updated.append(rel)
+    if updated:
+        reindex.incremental(db, vault_id=vault["id"])
+    print(json.dumps({"set": value, "updated": updated, "missing": missing, "failed": failed},
+                     ensure_ascii=False, indent=2))
+    # any non-updated target (missing or malformed) → nonzero exit so `&&` chains notice
+    return 1 if (missing or failed) else 0
+
+
 def _cmd_supersede(args) -> int:
     from scripts import supersede
     db = registry_path()
@@ -262,6 +326,72 @@ def _resolve_vault_path(db, name):
     else:
         row = registry.get_active(db)
     return row["path"] if row else None
+
+
+def _resolve_vault_row(db, name):
+    if name:
+        match = [v for v in registry.list_vaults(db) if v["name"] == name]
+        return match[0] if match else None
+    return registry.get_active(db)
+
+
+def _cmd_inbox(args) -> int:
+    from datetime import date
+    from scripts import inbox
+    db = registry_path()
+    if not db.exists():
+        print("error: no registry; run `omw status` to set up", file=sys.stderr)
+        return 1
+    vault = _resolve_vault_row(db, args.vault)
+    if vault is None:
+        print("error: no active vault; pass --vault <name>", file=sys.stderr)
+        return 1
+    vid = vault["id"]
+    if args.inbox_cmd == "add":
+        row = inbox.add(db, vault_id=vid, url=args.url)
+        print(json.dumps({"queued": row["url"], "normalized": row["normalized_url"],
+                          "deduped": row["deduped"]}, ensure_ascii=False, indent=2))
+        return 0
+    if args.inbox_cmd == "list":
+        print(json.dumps(inbox.list_items(db, vault_id=vid), ensure_ascii=False, indent=2))
+        return 0
+    if args.inbox_cmd == "remove":
+        n = inbox.remove(db, vault_id=vid, url=args.url)
+        print(json.dumps({"removed": n}, ensure_ascii=False))
+        return 0 if n else 1
+    if args.inbox_cmd == "run":
+        today = args.today or date.today().isoformat()
+        result = inbox.run(db, vault_id=vid, today=today, html_backend=args.backend)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if result["failed"] else 0
+    return 1
+
+
+def _cmd_fetch(args) -> int:
+    from datetime import date
+    from scripts import fetch, ingest, reindex, search
+    from scripts.fetch_errors import FetchError
+    db = registry_path()
+    if not db.exists():
+        print("error: no registry; run `omw status` to set up", file=sys.stderr)
+        return 1
+    vault = _resolve_vault_row(db, args.vault)
+    if vault is None:
+        print("error: no active vault; pass --vault <name>", file=sys.stderr)
+        return 1
+    try:
+        res = fetch.fetch_url(args.url, html_backend=args.backend)
+    except (FetchError, search.SearchError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    relpath = ingest.save_raw(db, vault_id=vault["id"], content=res["text"], ext="md",
+                              title=res["title"] or args.url,
+                              date_str=args.today or date.today().isoformat())
+    reindex.incremental(db, vault_id=vault["id"])
+    print(json.dumps({"raw_relpath": relpath, "title": res["title"],
+                      "backend": res["backend"], "source_url": res["source_url"]},
+                     ensure_ascii=False, indent=2))
+    return 0
 
 
 def _cmd_schema(args) -> int:
@@ -515,6 +645,44 @@ def build_parser() -> argparse.ArgumentParser:
     psup.add_argument("--by", required=True, help="slug of the superseding page")
     psup.add_argument("--vault", default=None, help="vault name (default: active)")
     psup.set_defaults(func=_cmd_supersede)
+
+    pvis = sub.add_parser("visibility", help="Get/set a page's serve visibility (public|private).")
+    vissub = pvis.add_subparsers(dest="visibility_cmd", required=True)
+    pvg = vissub.add_parser("get", help="Print a page's visibility.")
+    pvg.add_argument("relpath")
+    pvg.add_argument("--vault", default=None, help="vault name (default: active)")
+    pvg.set_defaults(func=_cmd_visibility)
+    pvs = vissub.add_parser("set", help="Set visibility: omw visibility set <relpath...> <public|private>")
+    pvs.add_argument("targets", nargs="+", metavar="RELPATH",
+                     help="one or more page relpaths, then the value: public|private (value LAST)")
+    pvs.add_argument("--vault", default=None, help="vault name (default: active)")
+    pvs.set_defaults(func=_cmd_visibility)
+
+    pib = sub.add_parser("inbox", help="URL inbox queue (add/list/run/remove).")
+    ibsub = pib.add_subparsers(dest="inbox_cmd", required=True)
+    iba = ibsub.add_parser("add", help="Queue a URL.")
+    iba.add_argument("url")
+    iba.add_argument("--vault", default=None)
+    iba.set_defaults(func=_cmd_inbox)
+    ibl = ibsub.add_parser("list", help="List queued/processed items.")
+    ibl.add_argument("--vault", default=None)
+    ibl.set_defaults(func=_cmd_inbox)
+    ibr = ibsub.add_parser("remove", help="Remove a queued URL.")
+    ibr.add_argument("url")
+    ibr.add_argument("--vault", default=None)
+    ibr.set_defaults(func=_cmd_inbox)
+    ibn = ibsub.add_parser("run", help="Fetch all queued URLs into raw/ (no LLM).")
+    ibn.add_argument("--vault", default=None)
+    ibn.add_argument("--backend", choices=["auto", "urllib", "chromium", "cloud"], default="auto")
+    ibn.add_argument("--today", default=None, help="YYYY-MM-DD (default: today)")
+    ibn.set_defaults(func=_cmd_inbox)
+
+    pfe = sub.add_parser("fetch", help="Fetch one URL into raw/ (single-shot, no LLM).")
+    pfe.add_argument("url")
+    pfe.add_argument("--backend", choices=["auto", "urllib", "chromium", "cloud"], default="auto")
+    pfe.add_argument("--vault", default=None)
+    pfe.add_argument("--today", default=None, help="YYYY-MM-DD (default: today)")
+    pfe.set_defaults(func=_cmd_fetch)
 
     psch = sub.add_parser("schema", help="Show page-type schemas (conventions).")
     schsub = psch.add_subparsers(dest="schema_cmd", required=True)
