@@ -225,6 +225,70 @@ def _cmd_review(args) -> int:
     return 0
 
 
+def _cmd_visibility(args) -> int:
+    from pathlib import Path
+    from scripts import frontmatter, reindex
+    db = registry_path()
+    if not db.exists():
+        print("error: no registry; run `omw status` to set up", file=sys.stderr)
+        return 1
+    if args.vault:
+        match = [v for v in registry.list_vaults(db) if v["name"] == args.vault]
+        if not match:
+            print(f"error: vault {args.vault!r} not found", file=sys.stderr)
+            return 1
+        vault = match[0]
+    else:
+        vault = registry.get_active(db)
+        if vault is None:
+            print("error: no active vault; pass --vault <name>", file=sys.stderr)
+            return 1
+    root = Path(vault["path"])
+
+    if args.visibility_cmd == "get":
+        abs_path = root / args.relpath
+        if not abs_path.exists():
+            print(f"error: page not found: {args.relpath}", file=sys.stderr)
+            return 1
+        try:
+            meta, _ = frontmatter.parse(abs_path.read_text(encoding="utf-8"))
+        except frontmatter.FrontmatterError:
+            meta = {}
+        print(json.dumps({"relpath": args.relpath,
+                          "visibility": meta.get("visibility") or "private"},
+                         ensure_ascii=False, indent=2))
+        return 0
+
+    # set: args.targets is [relpath..., value]
+    *relpaths, value = args.targets
+    if value not in ("public", "private"):
+        print("error: last argument must be 'public' or 'private'", file=sys.stderr)
+        return 1
+    if not relpaths:
+        print("error: provide at least one relpath before the value", file=sys.stderr)
+        return 1
+    updated, missing, failed = [], [], []
+    for rel in relpaths:
+        abs_path = root / rel
+        if not abs_path.exists():
+            missing.append(rel)
+            continue
+        text = abs_path.read_text(encoding="utf-8")
+        try:
+            new_text = frontmatter.edit_field(text, "visibility", value)
+        except frontmatter.FrontmatterError:
+            failed.append(rel)   # malformed frontmatter — skip, don't crash
+            continue
+        abs_path.write_text(new_text, encoding="utf-8")
+        updated.append(rel)
+    if updated:
+        reindex.incremental(db, vault_id=vault["id"])
+    print(json.dumps({"set": value, "updated": updated, "missing": missing, "failed": failed},
+                     ensure_ascii=False, indent=2))
+    # any non-updated target (missing or malformed) → nonzero exit so `&&` chains notice
+    return 1 if (missing or failed) else 0
+
+
 def _cmd_supersede(args) -> int:
     from scripts import supersede
     db = registry_path()
@@ -515,6 +579,18 @@ def build_parser() -> argparse.ArgumentParser:
     psup.add_argument("--by", required=True, help="slug of the superseding page")
     psup.add_argument("--vault", default=None, help="vault name (default: active)")
     psup.set_defaults(func=_cmd_supersede)
+
+    pvis = sub.add_parser("visibility", help="Get/set a page's serve visibility (public|private).")
+    vissub = pvis.add_subparsers(dest="visibility_cmd", required=True)
+    pvg = vissub.add_parser("get", help="Print a page's visibility.")
+    pvg.add_argument("relpath")
+    pvg.add_argument("--vault", default=None, help="vault name (default: active)")
+    pvg.set_defaults(func=_cmd_visibility)
+    pvs = vissub.add_parser("set", help="Set visibility: omw visibility set <relpath...> <public|private>")
+    pvs.add_argument("targets", nargs="+", metavar="RELPATH",
+                     help="one or more page relpaths, then the value: public|private (value LAST)")
+    pvs.add_argument("--vault", default=None, help="vault name (default: active)")
+    pvs.set_defaults(func=_cmd_visibility)
 
     psch = sub.add_parser("schema", help="Show page-type schemas (conventions).")
     schsub = psch.add_subparsers(dest="schema_cmd", required=True)
