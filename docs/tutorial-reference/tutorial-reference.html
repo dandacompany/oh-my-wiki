@@ -239,11 +239,11 @@ footer .links a{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spa
     <span class="hero-badge">oh-my-wiki · v3 · 전체 기능 레퍼런스</span>
     <h1>oh-my-wiki 전체 기능<br>레퍼런스</h1>
     <p class="tagline">Claude Code · Codex · Gemini 세션에서 자연어로 위키를 키우고,
-    <code>omw</code> CLI 13개 서브커맨드로 결정론 작업을 실행합니다. 기능 영역 6개 + 부록 표 4종.
+    <code>omw</code> CLI 17개 서브커맨드로 결정론 작업을 실행합니다. 기능 영역 10개 + 부록 표 4종.
     모든 플래그는 <code>--help</code>로, 출력은 격리 vault에서 실측했습니다.</p>
     <dl class="meta-grid">
       <div><dt>표면</dt><dd>omw CLI + omw 스킬</dd></div>
-      <div><dt>CLI 서브커맨드</dt><dd>13개</dd></div>
+      <div><dt>CLI 서브커맨드</dt><dd>17개</dd></div>
       <div><dt>페르소나 · 팀</dt><dd>16 · 9</dd></div>
       <div><dt>페이지 타입</dt><dd>13개 스키마</dd></div>
     </dl>
@@ -257,6 +257,10 @@ footer .links a{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spa
 <a href="#step-D"><span class="tag">D</span>작성 — 페르소나 · 팀</a>
 <a href="#step-E"><span class="tag">E</span>유지 — 규약 · 신뢰도 · 링크</a>
 <a href="#step-F"><span class="tag">F</span>운영</a>
+<a href="#step-G"><span class="tag">G</span>뷰어 연동 — Obsidian · Logseq</a>
+<a href="#step-H"><span class="tag">H</span>공개 여부 — visibility</a>
+<a href="#step-I"><span class="tag">I</span>받은함 — inbox</a>
+<a href="#step-J"><span class="tag">J</span>개별 URL 수집 — fetch</a>
 <a href="#step-부록"><span class="tag">부록</span>레퍼런스 표</a>
 </div></nav>
 
@@ -269,7 +273,7 @@ footer .links a{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spa
     모든 소스는 raw 스냅샷, 요약 페이지, 10–15개의 엔티티·개념 페이지 터치로 이어지고,
     쿼리는 구조화된 위키에서 출처를 인용해 답합니다. host-universal — 하나의 SKILL.md가
     Claude Code · Codex · Gemini에서 동일하게 동작합니다. 인터페이스는 정확히 두 개입니다.</p>
-    <div class="design"><div class="goal"><span class="ico">🎯</span><span>omw를 두 표면으로 쓴다 — 결정론 CLI와 세션 내 스킬.</span></div><div class="sub-label">📏 PRINCIPLES</div><div class="principles"><div class="pr"><span class="n">1</span><span>페르소나는 제안, 결정론 명령이 실행 (propose → confirm → execute).</span></div><div class="pr"><span class="n">2</span><span>어떤 AI 호스트(Claude Code · Codex · Gemini)에서도 동일한 SKILL.md, 동일한 트리거 문구.</span></div><div class="pr"><span class="n">3</span><span>모든 파일 변경은 감사 가능 — 추론은 투명하게, 출력은 결정론으로.</span></div></div><div class="sub-label">🧱 COMPONENTS</div><div class="components"><div class="cmp"><span class="ico">⌨️</span><div class="nm">omw CLI (13개)</div><div class="ds">결정론 ops — status · vault · lint · fields · links · review · supersede · schema · search · serve · setup · import · doctor</div></div><div class="cmp"><span class="ico">💬</span><div class="nm">omw 스킬</div><div class="ds">세션 내 자연어 추론 — ingest · query · find · edit · autoresearch · 16 페르소나 · 9 팀</div></div></div></div>
+    <div class="design"><div class="goal"><span class="ico">🎯</span><span>omw를 두 표면으로 쓴다 — 결정론 CLI와 세션 내 스킬.</span></div><div class="sub-label">📏 PRINCIPLES</div><div class="principles"><div class="pr"><span class="n">1</span><span>페르소나는 제안, 결정론 명령이 실행 (propose → confirm → execute).</span></div><div class="pr"><span class="n">2</span><span>어떤 AI 호스트(Claude Code · Codex · Gemini)에서도 동일한 SKILL.md, 동일한 트리거 문구.</span></div><div class="pr"><span class="n">3</span><span>모든 파일 변경은 감사 가능 — 추론은 투명하게, 출력은 결정론으로.</span></div></div><div class="sub-label">🧱 COMPONENTS</div><div class="components"><div class="cmp"><span class="ico">⌨️</span><div class="nm">omw CLI (17개)</div><div class="ds">결정론 ops — status · vault · lint · fields · links · review · supersede · schema · search · serve · setup · import · doctor · view · visibility · inbox · fetch</div></div><div class="cmp"><span class="ico">💬</span><div class="nm">omw 스킬</div><div class="ds">세션 내 자연어 추론 — ingest · query · find · edit · autoresearch · 16 페르소나 · 9 팀</div></div></div></div>
   </div>
 </section>
 
@@ -455,13 +459,71 @@ curl -s -X POST http://127.0.0.1:8765/query \
 <div class="note"><span class='star'>★ 백업 · 이전</span> — 모든 상태가 <code>$OMW_HOME</code>(기본 <code>~/.omw</code>) 한 곳에 모입니다 — <code>registry.db</code> · <code>config.yaml</code> · <code>.env</code> · <code>vaults/</code>.<ul><li>이 디렉토리를 복사하면 백업이, 새 머신에서 같은 위치에 두고 <code>OMW_HOME</code>을 가리키면 이전이 끝납니다.</li><li>SMB 마운트 vault(<code>/Volumes/…</code>)는 <code>cp -a</code> 대신 <code>rsync -rlpt</code>를 사용합니다.</li></ul></div>
 </div></section>
 
+<section id="step-G">
+<div class="container">
+<div class="section-num">G</div>
+<h2>뷰어 연동 — Obsidian · Logseq</h2>
+<p class="lede">활성 vault·페이지·검색 결과를 Obsidian 또는 Logseq에서 URI 스킴으로 직접 엽니다. 플러그인 설치 없이 동작하며, <code>omw setup viewer</code>로 기본 뷰어를 저장하고 설정 스캐폴드를 생성합니다.</p>
+<div class="block-label">기본 뷰어 설정 — omw setup viewer</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw setup viewer</pre></div>
+<div class="callout">기본 뷰어(obsidian 또는 logseq)를 <code>~/.omw/config.yaml</code>에 저장하고, <code>.obsidian/</code> 또는 <code>logseq/</code> 설정 스캐폴드를 생성합니다.</div>
+<div class="block-label">페이지 열기 — omw view</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw view                                          # 활성 vault를 뷰어로
+omw view wiki/concepts/llm-wiki.md               # 특정 페이지를 뷰어로
+omw view --search "compounding knowledge"         # 검색 결과를 뷰어로
+omw view --viewer logseq                          # 뷰어 일회성 지정
+omw view wiki/concepts/llm-wiki.md --print        # URI만 출력 (열지 않음)</pre></div>
+<div class="callout"><code>--viewer</code>를 생략하면 <code>omw setup viewer</code>에서 저장한 기본값을 사용합니다. <code>--print</code>는 앱을 실행하지 않고 URI만 stdout에 출력해 자동화에 활용합니다.</div>
+<div class="note"><span class='star'>★ URI 스킴</span> — Obsidian은 <code>obsidian://open?vault=…&file=…</code>, Logseq는 <code>logseq://graph/…?page=…</code> 형식을 사용합니다. 두 앱 모두 URI 스킴을 지원하므로 별도 플러그인이 불필요합니다.</div>
+</div></section>
+
+<section id="step-H">
+<div class="container">
+<div class="section-num">H</div>
+<h2>공개 여부 — visibility</h2>
+<p class="lede">페이지별로 공개(public)·비공개(private) 여부를 설정합니다. 기본값은 private이며, <code>omw serve</code>는 public 페이지만 노출합니다(secure-by-default).</p>
+<div class="block-label">공개 여부 조회 — omw visibility get</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw visibility get wiki/concepts/llm-wiki.md</pre></div>
+<div class="callout">해당 페이지의 현재 공개 여부를 출력합니다.</div>
+<div class="block-label">공개 여부 설정 — omw visibility set</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw visibility set wiki/concepts/llm-wiki.md public
+omw visibility set wiki/concepts/old-method.md wiki/concepts/draft.md private</pre></div>
+<div class="callout">여러 <code>relpath</code>를 동시에 지정할 수 있습니다. 마지막 인수가 <code>public</code> 또는 <code>private</code>입니다. <code>omw serve</code>는 <code>public</code>으로 설정된 페이지만 <code>POST /query</code>로 노출합니다.</div>
+<div class="note"><span class='star'>★ secure-by-default</span> — 새 페이지의 기본값은 <strong>private</strong>입니다. 공개 API나 메신저 봇에 노출하려면 <code>omw visibility set &lt;relpath&gt; public</code>으로 명시적으로 설정해야 합니다.</div>
+</div></section>
+
+<section id="step-I">
+<div class="container">
+<div class="section-num">I</div>
+<h2>받은함 — inbox</h2>
+<p class="lede">URL을 큐에 모아 일괄 수집합니다. 브라우저를 읽다 흥미로운 링크를 발견하면 <code>add</code>로 쌓아 두고, 나중에 <code>run</code>으로 한 번에 raw/로 가져옵니다.</p>
+<div class="block-label">URL 큐에 추가 — omw inbox add</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw inbox add https://example.com/article
+omw inbox add https://youtu.be/dQw4w9WgXcQ</pre></div>
+<div class="callout">URL을 받은함 큐에 등록합니다. 즉시 수집하지 않습니다.</div>
+<div class="block-label">큐 조회 — omw inbox list</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw inbox list           # 대기 중인 URL 목록
+omw inbox list --done    # 처리된 항목 포함</pre></div>
+<div class="block-label">항목 제거 — omw inbox remove</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw inbox remove https://example.com/article</pre></div>
+<div class="block-label">일괄 수집 — omw inbox run</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw inbox run</pre></div>
+<div class="callout">큐에 있는 URL을 순서대로 가져와 <code>raw/</code> 레이어에 저장합니다. LLM 추론 없이 원본 그대로 저장하는 결정론 수집입니다.</div>
+<div class="note"><span class='star'>★ LLM 없음</span> — <code>omw inbox run</code>은 <strong>LLM 없이</strong> 원본을 그대로 raw/에 저장합니다. 이후 세션에서 <code>ingest</code>를 사용하면 LLM이 요약·페이지 생성까지 처리합니다.</div>
+</div></section>
+
+<section id="step-J">
+<div class="container">
+<div class="section-num">J</div>
+<h2>개별 URL 수집 — fetch</h2>
+<p class="lede">URL 하나(웹페이지 또는 유튜브 자막)를 즉시 raw/로 가져옵니다. urllib → chromium(SPA) → cloud(Firecrawl/Bright Data) 순서로 자동 캐스케이드하며 SSRF 가드가 내부 주소를 차단합니다.</p>
+<div class="block-label">웹페이지 가져오기 — omw fetch</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw fetch https://example.com/article
+omw fetch https://youtu.be/VIDEO_ID
+omw fetch https://example.com/spa --backend chromium
+omw fetch https://example.com/article --today 2026-06-01</pre></div>
+<div class="callout"><code>--backend</code>는 <code>auto</code>(기본) · <code>urllib</code> · <code>chromium</code> · <code>cloud</code> 중 하나입니다. <code>auto</code>는 urllib → chromium → cloud 순으로 시도합니다. <code>--today</code>로 수집 날짜를 명시합니다.</div>
+<div class="note"><span class='star'>★ 백엔드 캐스케이드</span> — urllib(기본 HTTP)로 먼저 시도하고, SPA처럼 JS 렌더링이 필요하면 chromium으로, 그래도 실패하면 Firecrawl·Bright Data 클라우드 백엔드로 자동 전환합니다. YouTube URL은 자막(자동 생성 포함)을 추출합니다. 내부 IP·loopback 주소는 SSRF 가드로 차단됩니다.</div>
+</div></section>
+
 <section id="step-부록">
 <div class="container">
 <div class="section-num">부록</div>
 <h2>레퍼런스 표</h2>
-<p class="lede">CLI 13개 서브커맨드·플래그, frontmatter 필드, 페르소나 16종, 팀 9종을 표로 정리합니다. 모든 플래그는 <code>--help</code>로, 출력은 격리 vault에서 실측했습니다.</p>
+<p class="lede">CLI 17개 서브커맨드·플래그, frontmatter 필드, 페르소나 16종, 팀 9종을 표로 정리합니다. 모든 플래그는 <code>--help</code>로, 출력은 격리 vault에서 실측했습니다.</p>
 <div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre></pre></div>
-<div class="block-label">CLI 13개 서브커맨드 · 플래그 (--help 실측)</div><table class="ref-table"><tr><th>서브커맨드</th><th>동작 / 서브-서브커맨드</th><th>주요 플래그</th></tr><tr><td><code>omw status</code></td><td>레지스트리 상태를 JSON으로</td><td>—</td></tr><tr><td><code>omw vault</code></td><td><code>create</code> · <code>list</code> · <code>use</code> · <code>forget</code></td><td><code>--mode {memo,wiki}</code> · <code>--type {markdown,obsidian}</code> · <code>--location</code></td></tr><tr><td><code>omw lint</code></td><td>결정론 vault health 검사</td><td><code>--vault</code></td></tr><tr><td><code>omw fields</code></td><td>frontmatter + 인라인 <code>key:: value</code> 표시</td><td><code>relpath</code> · <code>--vault</code></td></tr><tr><td><code>omw links</code></td><td><code>suggest [relpath]</code> · <code>link</code></td><td><code>--to &lt;slug&gt;</code> · <code>--vault</code></td></tr><tr><td><code>omw review</code></td><td><code>due</code> · <code>done</code></td><td><code>--grade {pass,needs-work}</code> · <code>--today</code> · <code>--scheduled-only</code> · <code>--vault</code></td></tr><tr><td><code>omw supersede</code></td><td>페이지를 superseded로 표시</td><td><code>relpath</code> · <code>--by &lt;slug&gt;</code> · <code>--vault</code></td></tr><tr><td><code>omw schema</code></td><td><code>list</code> · <code>show &lt;type&gt;</code></td><td><code>--vault</code> (오버라이드 적용)</td></tr><tr><td><code>omw search</code></td><td>외부 provider 웹 검색</td><td><code>query</code> · <code>--provider</code> · <code>--limit</code></td></tr><tr><td><code>omw serve</code></td><td>로컬 읽기 전용 쿼리 API (포트 8765)</td><td><code>--host</code> · <code>--port</code> · <code>--vault</code> · <code>--limit</code></td></tr><tr><td><code>omw setup</code></td><td><code>vault·hosts·search·serve·personas·tts·import</code></td><td><code>--noninteractive</code> · <code>--generate-token</code> · <code>--enable</code> · <code>--main</code> · <code>--host</code> · …</td></tr><tr><td><code>omw import</code></td><td>폴더 / Obsidian / Notion 가져오기</td><td><code>--source {folder,obsidian,notion}</code> · <code>--src-dir</code> · <code>--notion-id</code> · <code>--layer {raw,wiki}</code> · <code>--vault</code></td></tr><tr><td><code>omw doctor</code></td><td>omw 설정 + 설치 건강 검증</td><td>—</td></tr></table><div class="callout" style="margin-top:18px">추론 작업(<code>ingest</code> · <code>query</code> · <code>find</code> · <code>open</code> · <code>edit</code> · <code>move</code> · <code>delete</code> · <code>autoresearch</code> · <code>persona-*</code> · <code>dispatch</code> · <code>team</code> · <code>team-run</code> · <code>swarm-monitor</code>)은 <strong>Claude / Codex / Gemini 세션</strong>에서 자연어로 사용합니다 — CLI에서 호출하면 "needs a Claude session" 안내가 출력됩니다.</div>
+<div class="block-label">CLI 17개 서브커맨드 · 플래그 (--help 실측)</div><table class="ref-table"><tr><th>서브커맨드</th><th>동작 / 서브-서브커맨드</th><th>주요 플래그</th></tr><tr><td><code>omw status</code></td><td>레지스트리 상태를 JSON으로</td><td>—</td></tr><tr><td><code>omw vault</code></td><td><code>create</code> · <code>list</code> · <code>use</code> · <code>forget</code></td><td><code>--mode {memo,wiki}</code> · <code>--type {markdown,obsidian}</code> · <code>--location</code></td></tr><tr><td><code>omw lint</code></td><td>결정론 vault health 검사</td><td><code>--vault</code></td></tr><tr><td><code>omw fields</code></td><td>frontmatter + 인라인 <code>key:: value</code> 표시</td><td><code>relpath</code> · <code>--vault</code></td></tr><tr><td><code>omw links</code></td><td><code>suggest [relpath]</code> · <code>link</code></td><td><code>--to &lt;slug&gt;</code> · <code>--vault</code></td></tr><tr><td><code>omw review</code></td><td><code>due</code> · <code>done</code></td><td><code>--grade {pass,needs-work}</code> · <code>--today</code> · <code>--scheduled-only</code> · <code>--vault</code></td></tr><tr><td><code>omw supersede</code></td><td>페이지를 superseded로 표시</td><td><code>relpath</code> · <code>--by &lt;slug&gt;</code> · <code>--vault</code></td></tr><tr><td><code>omw schema</code></td><td><code>list</code> · <code>show &lt;type&gt;</code></td><td><code>--vault</code> (오버라이드 적용)</td></tr><tr><td><code>omw search</code></td><td>외부 provider 웹 검색</td><td><code>query</code> · <code>--provider</code> · <code>--limit</code></td></tr><tr><td><code>omw serve</code></td><td>로컬 읽기 전용 쿼리 API (포트 8765)</td><td><code>--host</code> · <code>--port</code> · <code>--vault</code> · <code>--limit</code></td></tr><tr><td><code>omw setup</code></td><td><code>vault·hosts·search·serve·personas·tts·import</code></td><td><code>--noninteractive</code> · <code>--generate-token</code> · <code>--enable</code> · <code>--main</code> · <code>--host</code> · …</td></tr><tr><td><code>omw import</code></td><td>폴더 / Obsidian / Notion 가져오기</td><td><code>--source {folder,obsidian,notion}</code> · <code>--src-dir</code> · <code>--notion-id</code> · <code>--layer {raw,wiki}</code> · <code>--vault</code></td></tr><tr><td><code>omw doctor</code></td><td>omw 설정 + 설치 건강 검증</td><td>—</td></tr><tr><td><code>omw view</code></td><td>활성 vault·페이지·검색을 Obsidian/Logseq URI 스킴으로 열기</td><td><code>[relpath]</code> · <code>--search Q</code> · <code>--viewer {obsidian,logseq}</code> · <code>--print</code></td></tr><tr><td><code>omw visibility</code></td><td><code>get &lt;relpath&gt;</code> · <code>set &lt;relpath…&gt; {public,private}</code></td><td><code>relpath</code> (다중 가능) · <code>public|private</code></td></tr><tr><td><code>omw inbox</code></td><td><code>add</code> · <code>list</code> · <code>remove</code> · <code>run</code></td><td><code>url</code> · <code>--done</code>(list)</td></tr><tr><td><code>omw fetch</code></td><td>URL 하나(웹페이지·유튜브 자막)를 raw/로 즉시 수집</td><td><code>url</code> · <code>--backend {auto,urllib,chromium,cloud}</code> · <code>--today YYYY-MM-DD</code></td></tr></table><div class="callout" style="margin-top:18px">추론 작업(<code>ingest</code> · <code>query</code> · <code>find</code> · <code>open</code> · <code>edit</code> · <code>move</code> · <code>delete</code> · <code>autoresearch</code> · <code>persona-*</code> · <code>dispatch</code> · <code>team</code> · <code>team-run</code> · <code>swarm-monitor</code>)은 <strong>Claude / Codex / Gemini 세션</strong>에서 자연어로 사용합니다 — CLI에서 호출하면 "needs a Claude session" 안내가 출력됩니다.</div>
 </div></section>
 </main>
 

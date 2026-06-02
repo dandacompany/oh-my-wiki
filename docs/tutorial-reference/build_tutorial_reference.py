@@ -493,11 +493,147 @@ SECTIONS: list[dict] = [
             },
         ],
     ),
+    # ── G. 뷰어 연동 (view · setup viewer) ───────────────────────────────────
+    dict(
+        num="G",
+        title="뷰어 연동 — Obsidian · Logseq",
+        lede="활성 vault·페이지·검색 결과를 Obsidian 또는 Logseq에서 URI 스킴으로 직접 엽니다. "
+        "플러그인 설치 없이 동작하며, <code>omw setup viewer</code>로 기본 뷰어를 저장하고 "
+        "설정 스캐폴드를 생성합니다.",
+        commands=[
+            {
+                "label": "기본 뷰어 설정 — omw setup viewer",
+                "bar": "terminal",
+                "text": "omw setup viewer",
+                "callout": "기본 뷰어(obsidian 또는 logseq)를 <code>~/.omw/config.yaml</code>에 저장하고, "
+                "<code>.obsidian/</code> 또는 <code>logseq/</code> 설정 스캐폴드를 생성합니다.",
+            },
+            {
+                "label": "페이지 열기 — omw view",
+                "bar": "terminal",
+                "text": "omw view                                          # 활성 vault를 뷰어로\n"
+                "omw view wiki/concepts/llm-wiki.md               # 특정 페이지를 뷰어로\n"
+                "omw view --search \"compounding knowledge\"         # 검색 결과를 뷰어로\n"
+                "omw view --viewer logseq                          # 뷰어 일회성 지정\n"
+                "omw view wiki/concepts/llm-wiki.md --print        # URI만 출력 (열지 않음)",
+                "callout": "<code>--viewer</code>를 생략하면 <code>omw setup viewer</code>에서 저장한 기본값을 사용합니다. "
+                "<code>--print</code>는 앱을 실행하지 않고 URI만 stdout에 출력해 자동화에 활용합니다.",
+            },
+            {
+                "kind": "note",
+                "text": "<span class='star'>★ URI 스킴</span> — "
+                "Obsidian은 <code>obsidian://open?vault=…&file=…</code>, "
+                "Logseq는 <code>logseq://graph/…?page=…</code> 형식을 사용합니다. "
+                "두 앱 모두 URI 스킴을 지원하므로 별도 플러그인이 불필요합니다.",
+            },
+        ],
+    ),
+    # ── H. 공개 여부 (visibility) ─────────────────────────────────────────────
+    dict(
+        num="H",
+        title="공개 여부 — visibility",
+        lede="페이지별로 공개(public)·비공개(private) 여부를 설정합니다. "
+        "기본값은 private이며, <code>omw serve</code>는 public 페이지만 노출합니다(secure-by-default).",
+        commands=[
+            {
+                "label": "공개 여부 조회 — omw visibility get",
+                "bar": "terminal",
+                "text": "omw visibility get wiki/concepts/llm-wiki.md",
+                "callout": "해당 페이지의 현재 공개 여부를 출력합니다.",
+            },
+            {
+                "label": "공개 여부 설정 — omw visibility set",
+                "bar": "terminal",
+                "text": "omw visibility set wiki/concepts/llm-wiki.md public\n"
+                "omw visibility set wiki/concepts/old-method.md wiki/concepts/draft.md private",
+                "callout": "여러 <code>relpath</code>를 동시에 지정할 수 있습니다. "
+                "마지막 인수가 <code>public</code> 또는 <code>private</code>입니다. "
+                "<code>omw serve</code>는 <code>public</code>으로 설정된 페이지만 <code>POST /query</code>로 노출합니다.",
+            },
+            {
+                "kind": "note",
+                "text": "<span class='star'>★ secure-by-default</span> — "
+                "새 페이지의 기본값은 <strong>private</strong>입니다. "
+                "공개 API나 메신저 봇에 노출하려면 <code>omw visibility set &lt;relpath&gt; public</code>으로 "
+                "명시적으로 설정해야 합니다.",
+            },
+        ],
+    ),
+    # ── I. 받은함 (inbox) ─────────────────────────────────────────────────────
+    dict(
+        num="I",
+        title="받은함 — inbox",
+        lede="URL을 큐에 모아 일괄 수집합니다. 브라우저를 읽다 흥미로운 링크를 발견하면 "
+        "<code>add</code>로 쌓아 두고, 나중에 <code>run</code>으로 한 번에 raw/로 가져옵니다.",
+        commands=[
+            {
+                "label": "URL 큐에 추가 — omw inbox add",
+                "bar": "terminal",
+                "text": "omw inbox add https://example.com/article\n"
+                "omw inbox add https://youtu.be/dQw4w9WgXcQ",
+                "callout": "URL을 받은함 큐에 등록합니다. 즉시 수집하지 않습니다.",
+            },
+            {
+                "label": "큐 조회 — omw inbox list",
+                "bar": "terminal",
+                "text": "omw inbox list           # 대기 중인 URL 목록\n"
+                "omw inbox list --done    # 처리된 항목 포함",
+            },
+            {
+                "label": "항목 제거 — omw inbox remove",
+                "bar": "terminal",
+                "text": "omw inbox remove https://example.com/article",
+            },
+            {
+                "label": "일괄 수집 — omw inbox run",
+                "bar": "terminal",
+                "text": "omw inbox run",
+                "callout": "큐에 있는 URL을 순서대로 가져와 <code>raw/</code> 레이어에 저장합니다. "
+                "LLM 추론 없이 원본 그대로 저장하는 결정론 수집입니다.",
+            },
+            {
+                "kind": "note",
+                "text": "<span class='star'>★ LLM 없음</span> — "
+                "<code>omw inbox run</code>은 <strong>LLM 없이</strong> 원본을 그대로 raw/에 저장합니다. "
+                "이후 세션에서 <code>ingest</code>를 사용하면 LLM이 요약·페이지 생성까지 처리합니다.",
+            },
+        ],
+    ),
+    # ── J. 개별 URL 수집 (fetch) ──────────────────────────────────────────────
+    dict(
+        num="J",
+        title="개별 URL 수집 — fetch",
+        lede="URL 하나(웹페이지 또는 유튜브 자막)를 즉시 raw/로 가져옵니다. "
+        "urllib → chromium(SPA) → cloud(Firecrawl/Bright Data) 순서로 자동 캐스케이드하며 "
+        "SSRF 가드가 내부 주소를 차단합니다.",
+        commands=[
+            {
+                "label": "웹페이지 가져오기 — omw fetch",
+                "bar": "terminal",
+                "text": "omw fetch https://example.com/article\n"
+                "omw fetch https://youtu.be/VIDEO_ID\n"
+                "omw fetch https://example.com/spa --backend chromium\n"
+                "omw fetch https://example.com/article --today 2026-06-01",
+                "callout": "<code>--backend</code>는 <code>auto</code>(기본) · <code>urllib</code> · "
+                "<code>chromium</code> · <code>cloud</code> 중 하나입니다. "
+                "<code>auto</code>는 urllib → chromium → cloud 순으로 시도합니다. "
+                "<code>--today</code>로 수집 날짜를 명시합니다.",
+            },
+            {
+                "kind": "note",
+                "text": "<span class='star'>★ 백엔드 캐스케이드</span> — "
+                "urllib(기본 HTTP)로 먼저 시도하고, SPA처럼 JS 렌더링이 필요하면 chromium으로, "
+                "그래도 실패하면 Firecrawl·Bright Data 클라우드 백엔드로 자동 전환합니다. "
+                "YouTube URL은 자막(자동 생성 포함)을 추출합니다. "
+                "내부 IP·loopback 주소는 SSRF 가드로 차단됩니다.",
+            },
+        ],
+    ),
     # ── 부록 ─────────────────────────────────────────────────────────────────
     dict(
         num="부록",
         title="레퍼런스 표",
-        lede="CLI 13개 서브커맨드·플래그, frontmatter 필드, 페르소나 16종, 팀 9종을 표로 정리합니다. "
+        lede="CLI 17개 서브커맨드·플래그, frontmatter 필드, 페르소나 16종, 팀 9종을 표로 정리합니다. "
         "모든 플래그는 <code>--help</code>로, 출력은 격리 vault에서 실측했습니다.",
         commands=[{"after_cli_table": True}],
         after="__CLI_TABLE__",
@@ -517,7 +653,7 @@ def _header(cells: list[str]) -> str:
 
 
 CLI_TABLE = (
-    '<div class="block-label">CLI 13개 서브커맨드 · 플래그 (--help 실측)</div>'
+    '<div class="block-label">CLI 17개 서브커맨드 · 플래그 (--help 실측)</div>'
     '<table class="ref-table">'
     + _header(["서브커맨드", "동작 / 서브-서브커맨드", "주요 플래그"])
     + _row(["<code>omw status</code>", "레지스트리 상태를 JSON으로", "—"])
@@ -593,6 +729,34 @@ CLI_TABLE = (
         ]
     )
     + _row(["<code>omw doctor</code>", "omw 설정 + 설치 건강 검증", "—"])
+    + _row(
+        [
+            "<code>omw view</code>",
+            "활성 vault·페이지·검색을 Obsidian/Logseq URI 스킴으로 열기",
+            "<code>[relpath]</code> · <code>--search Q</code> · <code>--viewer {obsidian,logseq}</code> · <code>--print</code>",
+        ]
+    )
+    + _row(
+        [
+            "<code>omw visibility</code>",
+            "<code>get &lt;relpath&gt;</code> · <code>set &lt;relpath…&gt; {public,private}</code>",
+            "<code>relpath</code> (다중 가능) · <code>public|private</code>",
+        ]
+    )
+    + _row(
+        [
+            "<code>omw inbox</code>",
+            "<code>add</code> · <code>list</code> · <code>remove</code> · <code>run</code>",
+            "<code>url</code> · <code>--done</code>(list)",
+        ]
+    )
+    + _row(
+        [
+            "<code>omw fetch</code>",
+            "URL 하나(웹페이지·유튜브 자막)를 raw/로 즉시 수집",
+            "<code>url</code> · <code>--backend {auto,urllib,chromium,cloud}</code> · <code>--today YYYY-MM-DD</code>",
+        ]
+    )
     + "</table>"
     + '<div class="callout" style="margin-top:18px">'
     "추론 작업(<code>ingest</code> · <code>query</code> · <code>find</code> · <code>open</code> · "
@@ -801,9 +965,9 @@ OVERVIEW_DESIGN = {
     "components": [
         (
             "⌨️",
-            "omw CLI (13개)",
+            "omw CLI (17개)",
             "결정론 ops — status · vault · lint · fields · links · review · supersede · "
-            "schema · search · serve · setup · import · doctor",
+            "schema · search · serve · setup · import · doctor · view · visibility · inbox · fetch",
         ),
         (
             "💬",
@@ -845,11 +1009,11 @@ def body() -> str:
     <span class="hero-badge">oh-my-wiki · v3 · 전체 기능 레퍼런스</span>
     <h1>oh-my-wiki 전체 기능<br>레퍼런스</h1>
     <p class="tagline">Claude Code · Codex · Gemini 세션에서 자연어로 위키를 키우고,
-    <code>omw</code> CLI 13개 서브커맨드로 결정론 작업을 실행합니다. 기능 영역 6개 + 부록 표 4종.
+    <code>omw</code> CLI 17개 서브커맨드로 결정론 작업을 실행합니다. 기능 영역 10개 + 부록 표 4종.
     모든 플래그는 <code>--help</code>로, 출력은 격리 vault에서 실측했습니다.</p>
     <dl class="meta-grid">
       <div><dt>표면</dt><dd>omw CLI + omw 스킬</dd></div>
-      <div><dt>CLI 서브커맨드</dt><dd>13개</dd></div>
+      <div><dt>CLI 서브커맨드</dt><dd>17개</dd></div>
       <div><dt>페르소나 · 팀</dt><dd>16 · 9</dd></div>
       <div><dt>페이지 타입</dt><dd>13개 스키마</dd></div>
     </dl>

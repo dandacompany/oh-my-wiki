@@ -822,10 +822,71 @@ SECTIONS: list[dict] = [
         ],
     ),
     dict(
+        num="STEP 10",
+        title="Obsidian · Logseq에서 열기",
+        lede="<code>omw setup viewer</code>로 기본 뷰어를 지정하고, "
+        "<code>omw view</code>로 활성 vault·페이지·검색 결과를 URI 스킴으로 바로 엽니다. "
+        "플러그인 설치 없이 동작합니다.",
+        commands=[
+            {
+                "label": "기본 뷰어 설정 (최초 1회)",
+                "bar": "terminal",
+                "text": "omw setup viewer",
+                "callout": "obsidian 또는 logseq 중 기본 뷰어를 고르고 설정 스캐폴드를 생성합니다. "
+                "선택한 값은 <code>~/.omw/config.yaml</code>에 저장됩니다.",
+            },
+            {
+                "label": "페이지·검색을 뷰어로 열기",
+                "bar": "terminal",
+                "text": "omw view                                       # 활성 vault\n"
+                "omw view wiki/concepts/llm-wiki.md            # 특정 페이지\n"
+                "omw view --search \"compounding knowledge\"      # 검색 결과\n"
+                "omw view wiki/concepts/llm-wiki.md --print    # URI만 출력",
+                "callout": "<code>--viewer logseq</code>으로 뷰어를 일회성으로 바꿀 수 있습니다. "
+                "<code>--print</code>는 앱을 실행하지 않고 URI를 stdout에 출력합니다.",
+            },
+            {
+                "kind": "note",
+                "text": "<span class='star'>★ 공개 여부</span> — "
+                "페이지를 메신저 API(<code>omw serve</code>)로 노출하려면 먼저 "
+                "<code>omw visibility set wiki/concepts/llm-wiki.md public</code>으로 공개 설정이 필요합니다. "
+                "기본값은 <strong>private</strong>이므로 명시적으로 설정하지 않으면 노출되지 않습니다.",
+            },
+        ],
+    ),
+    dict(
+        num="STEP 11",
+        title="웹에서 가져오기",
+        lede="URL 하나를 즉시 raw/로 가져오거나(<code>omw fetch</code>), "
+        "여러 URL을 쌓아 두었다가 한 번에 수집합니다(<code>omw inbox</code>). "
+        "두 방법 모두 LLM 없이 원본 그대로 저장합니다.",
+        commands=[
+            {
+                "label": "URL 즉시 수집 — omw fetch",
+                "bar": "terminal",
+                "text": "omw fetch https://example.com/article\n"
+                "omw fetch https://youtu.be/VIDEO_ID\n"
+                "omw fetch https://example.com/spa --backend chromium",
+                "callout": "기본 백엔드(<code>auto</code>)는 urllib → chromium → cloud 순으로 시도합니다. "
+                "유튜브 URL은 자막을 추출합니다. 내부 IP는 SSRF 가드로 차단됩니다.",
+            },
+            {
+                "label": "받은함에 URL 쌓기 — omw inbox add / run",
+                "bar": "terminal",
+                "text": "omw inbox add https://example.com/article-1\n"
+                "omw inbox add https://example.com/article-2\n"
+                "omw inbox list           # 대기 URL 확인\n"
+                "omw inbox run            # 큐 전체를 raw/로 일괄 수집",
+                "callout": "<code>run</code>은 큐에 쌓인 URL을 순서대로 가져와 <code>raw/</code>에 저장합니다. "
+                "수집 후 세션에서 <code>ingest</code>를 실행하면 LLM이 요약·페이지 생성까지 처리합니다.",
+            },
+        ],
+    ),
+    dict(
         num="레퍼런스",
         title="마무리 / 다음 단계",
-        lede="전체 6부 레퍼런스는 영어·한국어 튜토리얼에 있습니다. "
-        "13개 omw 명령어는 직접 실행하는 정리·관리 작업을, 생각이 필요한 작업은 AI 세션이 맡습니다.",
+        lede="전체 레퍼런스는 영어·한국어 튜토리얼에 있습니다. "
+        "17개 omw 명령어는 직접 실행하는 정리·관리 작업을, 생각이 필요한 작업은 AI 세션이 맡습니다.",
         commands=[
             {
                 "after_marker": True,  # marker; rendered via section 'after'
@@ -844,8 +905,12 @@ SECTIONS: list[dict] = [
 <tr><td><code>omw links</code></td><td>엔티티 자동 링크: suggest · link</td></tr>
 <tr><td><code>omw fields</code></td><td>페이지의 frontmatter + 인라인 key:: value 필드 표시</td></tr>
 <tr><td><code>omw import</code></td><td>폴더 / Obsidian vault / Notion export 가져오기</td></tr>
-<tr><td><code>omw setup</code></td><td>대화형 마법사: vault · 검색 · persona · TTS</td></tr>
+<tr><td><code>omw setup</code></td><td>대화형 마법사: vault · 검색 · persona · TTS · viewer</td></tr>
 <tr><td><code>omw doctor</code></td><td>omw 설정 + 설치 건강 상태 검증</td></tr>
+<tr><td><code>omw view</code></td><td>활성 vault·페이지·검색을 Obsidian/Logseq URI 스킴으로 열기</td></tr>
+<tr><td><code>omw visibility</code></td><td>페이지 공개 여부 조회(get) · 설정(set public|private)</td></tr>
+<tr><td><code>omw inbox</code></td><td>URL 큐 관리: add · list · remove · run(일괄 수집)</td></tr>
+<tr><td><code>omw fetch</code></td><td>URL 하나를 raw/로 즉시 수집 (urllib→chromium→cloud 캐스케이드)</td></tr>
 </table>
 <div class="callout" style="margin-top:24px">
 추론 작업(<code>ingest</code> · <code>query</code> · <code>find</code> · <code>edit</code> ·
@@ -913,7 +978,7 @@ def body() -> str:
       <div><dt>쓰는 방법</dt><dd>명령어 + 말로 부탁</dd></div>
       <div><dt>호스트</dt><dd>Claude Code · Codex · Gemini</dd></div>
       <div><dt>동작 방식</dt><dd>제안 → 확인 → 실행</dd></div>
-      <div><dt>CLI 명령어</dt><dd>13개</dd></div>
+      <div><dt>CLI 명령어</dt><dd>17개</dd></div>
     </dl>
   </div>
 </header>
