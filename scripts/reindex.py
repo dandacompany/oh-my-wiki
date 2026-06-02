@@ -66,7 +66,6 @@ def _scan(
     incremental: bool,
 ) -> dict:
     registry.init_db(db_path)  # idempotent; guarantees the links table on old vaults
-    known = _existing_mtimes(db_path, vault_id) if incremental else {}
     schemas = schema.load_schemas(vault_path=vault_path)
     exempt = set(links.META_RELPATHS)
     schema_issues: list[dict] = []
@@ -74,10 +73,13 @@ def _scan(
     fts_conn = None
     if fts.fts5_available():
         fts_conn = registry.connect(db_path)
-        fts.ensure_fts(fts_conn)
+        migrated = fts.ensure_fts(fts_conn)
+        if migrated:
+            incremental = False  # one-time: rebuilt FTS must be fully repopulated
         if not incremental:
             fts.clear_vault(fts_conn, vault_id=vault_id)
         fts_conn.commit()
+    known = _existing_mtimes(db_path, vault_id) if incremental else {}
     for path in vault_path.rglob("*.md"):
         if any(part in {".trash", ".obsidian", ".git"} for part in path.parts):
             continue
@@ -118,7 +120,8 @@ def _scan(
             try:
                 fts.index_note(fts_conn, vault_id=vault_id, relpath=rel,
                                title=meta.get("title"), summary=meta.get("summary"),
-                               tags=[str(t) for t in tags], body=body)
+                               tags=[str(t) for t in tags], body=body,
+                               visibility=meta.get("visibility") or "private")
                 fts_conn.commit()
             except Exception:
                 pass  # FTS is an optional auxiliary index; never abort indexing
