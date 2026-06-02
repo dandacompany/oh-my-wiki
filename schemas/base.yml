@@ -10,3 +10,4 @@ required_sections: []
 allowed_values:
   confidence: [high, medium, low]
   status: [draft, inbox, processed, raw, superseded, meta]
+  visibility: [public, private]

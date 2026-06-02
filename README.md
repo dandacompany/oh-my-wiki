@@ -188,7 +188,7 @@ The 13 CLI subcommands:
 | `vault`     | Create, list, use, forget vaults                                     |
 | `lint`      | Structural health check (frontmatter + links)                        |
 | `search`    | Web search via the configured external provider (brave/tavily/exa/…) |
-| `serve`     | Local retrieve-only HTTP query API (port 8765)                       |
+| `serve`     | Local retrieve-only HTTP query API (port 8765) — public pages only   |
 | `schema`    | List / inspect page-type schemas                                     |
 | `supersede` | Mark a page superseded by a newer one                                |
 | `review`    | Spaced-repetition review queue (due / done)                          |
@@ -197,6 +197,11 @@ The 13 CLI subcommands:
 | `import`    | Import an existing folder as a vault                                 |
 | `setup`     | Interactive setup wizard                                             |
 | `doctor`    | Verify install health                                                |
+
+> **Visibility (secure-by-default):** `omw serve` returns only pages with
+> `visibility: public` in their frontmatter. Pages without the field are treated as
+> private and never served. Publish pages explicitly with
+> `omw visibility set <relpath...> public`.
 
 The skill also exposes natural-language ops via your AI session: `ingest`, `query`, `autoresearch`, `find`, `edit`, `move`, `delete`, and persona invocations (`translate`, `polish`, `summarize`, `scaffold`, `fact-check`, `consistency-check`, `build glossary`).
 

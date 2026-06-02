@@ -27,6 +27,10 @@ Always invoke this before doing anything else:
 >    `omw` CLI — `omw status`, `omw vault list`, `omw vault create <name> --mode wiki`,
 >    `omw vault use <name>`, `omw lint`, `omw schema list`, `omw supersede <relpath> --by <slug>`,
 >    `omw review due`, `omw serve` (the retrieve-only messenger query API — see `references/messenger-api.md`).
+>    **Visibility (secure-by-default):** `omw serve` returns only pages with
+>    `visibility: public` in their frontmatter. Pages without the field are treated as
+>    private and never served. Publish pages explicitly with
+>    `omw visibility set <relpath...> public`.
 >    Page-type conventions (required frontmatter fields + sections) live in `schemas/<type>.yml`;
 >    a vault may override or add types via `<vault>/schemas/` (inspect with `omw schema show <type>`).
 >    Page-trust conventions: `confidence: high|medium|low`; a retired page carries
