@@ -90,7 +90,10 @@ echo "    ✅ Python ${PY_VER}"
 
 # ---------- 2. pip install ----------
 echo "==> [2/5] pip install -e \"${PKG_TARGET}\""
-( cd "$REPO_ROOT" && python3 -m pip install -e "$PKG_TARGET" --quiet )
+if ! ( cd "$REPO_ROOT" && python3 -m pip install -e "$PKG_TARGET" --quiet ); then
+  echo "    pip install hit an externally-managed environment (PEP 668); retrying with --break-system-packages" >&2
+  ( cd "$REPO_ROOT" && python3 -m pip install --break-system-packages -e "$PKG_TARGET" --quiet )
+fi
 echo "    ✅ package installed (editable)"
 
 # ---------- 3. Skill symlinks ----------
