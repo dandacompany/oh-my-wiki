@@ -3,9 +3,11 @@
 **Mode:** wiki. **Underlying:** `omw inbox add|list|run|remove`, `omw fetch <url>` (deterministic CLI).
 
 ## When to use
+
 The user drops one or more URLs (articles, papers, YouTube links) to capture later, or says "process my inbox". Fetching is deterministic (no LLM); summary/entity synthesis happens afterward via the normal `ingest` flow.
 
 ## Flow
+
 1. **Add** each URL: `omw inbox add <url>` (dedups by normalized URL; YouTube canonicalized by video id).
 2. **Review** the queue: `omw inbox list`.
 3. **Run** the batch: `omw inbox run` (fetches each → saves to `raw/` → marks `fetched`/`failed`). Report the `{fetched, failed}` summary to the user.
@@ -16,4 +18,5 @@ The user drops one or more URLs (articles, papers, YouTube links) to capture lat
 5. After `run`, the new `raw/` docs are ready. Offer to **ingest** them (summary + entities + concepts) via the normal `ingest` procedure — one raw doc at a time, propose→confirm as usual.
 
 ## Single URL
+
 For a one-off, `omw fetch <url>` fetches + saves raw immediately (no queue), then run `ingest` on it.

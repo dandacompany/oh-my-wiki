@@ -4,16 +4,16 @@ Every note in a oh-my-wiki vault starts with YAML frontmatter. Missing or malfor
 
 ## Common fields (all layers)
 
-| Field     | Type                | Required    | Notes                                                                       |
-| --------- | ------------------- | ----------- | --------------------------------------------------------------------------- |
-| `title`   | string              | yes         | Used as primary search signal.                                              |
-| `date`    | string (YYYY-MM-DD) | yes         | Creation date.                                                              |
-| `type`    | enum                | yes         | `article` \| `link` \| `note` \| `paper` \| `video` \| `book` \| `doc`      |
-| `tags`    | YAML list           | yes         | Must be `[a, b, c]`, never a string.                                        |
-| `summary` | string              | recommended | One-sentence summary.                                                       |
-| `status`     | enum                | optional    | `inbox` \| `processed` \| `archived` (memo) / `raw` \| `meta` (wiki layers)                                                                                                          |
+| Field        | Type                | Required    | Notes                                                                                                                                                                                           |
+| ------------ | ------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`      | string              | yes         | Used as primary search signal.                                                                                                                                                                  |
+| `date`       | string (YYYY-MM-DD) | yes         | Creation date.                                                                                                                                                                                  |
+| `type`       | enum                | yes         | `article` \| `link` \| `note` \| `paper` \| `video` \| `book` \| `doc`                                                                                                                          |
+| `tags`       | YAML list           | yes         | Must be `[a, b, c]`, never a string.                                                                                                                                                            |
+| `summary`    | string              | recommended | One-sentence summary.                                                                                                                                                                           |
+| `status`     | enum                | optional    | `inbox` \| `processed` \| `archived` (memo) / `raw` \| `meta` (wiki layers)                                                                                                                     |
 | `visibility` | enum                | optional    | `public` \| `private`. Default `private`. Only affects `omw serve`: the local retrieve-only API exposes **only** `visibility: public` pages. In-session `query`/`find` ignore it (full access). |
-| `source`     | string (URL)        | optional    | Used at ingest time.                                                                                                                                                                  |
+| `source`     | string (URL)        | optional    | Used at ingest time.                                                                                                                                                                            |
 
 ## wiki-mode layer-specific fields
 
