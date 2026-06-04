@@ -1,0 +1,96 @@
+"""Install the OMW skill bundle into agent skill systems (claude/codex/hermes/gemini).
+
+Hybrid: claude/codex/gemini delegate to the `skills` CLI (skills.sh) — global `skills`
+if on PATH, else `npx -y skills`; on any failure, fall back to a direct copy of the
+local bundle into the agent's skills dir. hermes always direct-copies because its
+installer accepts only a single SKILL.md URL (incomplete for OMW's multi-file skill).
+Pure stdlib.
+"""
+from __future__ import annotations
+
+import shutil
+import subprocess
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SKILL_ID = "dandacompany/oh-my-wiki@oh-my-wiki"
+
+_AGENT_BINS = {"claude": "claude", "codex": "codex", "hermes": "hermes", "gemini": "gemini"}
+_SKILLS_AGENT = {"claude": "claude-code", "codex": "codex", "gemini": "gemini"}
+_SKILLS_DIR = {
+    "claude": Path.home() / ".claude" / "skills",
+    "codex": Path.home() / ".codex" / "skills",
+    "hermes": Path.home() / ".hermes" / "skills",
+    "gemini": Path.home() / ".gemini" / "skills",
+}
+_BUNDLE = ["SKILL.md", "commands", "references", "schemas", "personas",
+           "scripts", "bin", "assets"]
+_ORDER = ("claude", "codex", "hermes", "gemini")
+
+
+def detect_agents() -> list[str]:
+    """Installed subset of the supported agents, in stable order."""
+    return [a for a in _ORDER if shutil.which(_AGENT_BINS[a])]
+
+
+def _copy_bundle(dest_skills_dir, *, repo_root=REPO_ROOT) -> Path:
+    """Copy the OMW bundle into <dest_skills_dir>/oh-my-wiki/ (idempotent)."""
+    dest = Path(dest_skills_dir) / "oh-my-wiki"
+    if dest.exists():
+        shutil.rmtree(dest)
+    dest.mkdir(parents=True, exist_ok=True)
+    for member in _BUNDLE:
+        src = Path(repo_root) / member
+        if not src.exists():
+            continue
+        if src.is_dir():
+            shutil.copytree(src, dest / member,
+                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info"))
+        else:
+            shutil.copyfile(src, dest / member)
+    return dest
+
+
+def _skills_cli_prefix():
+    """argv prefix for the skills CLI, or None if neither `skills` nor `npx` is present."""
+    if shutil.which("skills"):
+        return ["skills"]
+    if shutil.which("npx"):
+        return ["npx", "-y", "skills"]
+    return None
+
+
+def _install_via_skills_cli(agent, *, timeout=300) -> bool:
+    prefix = _skills_cli_prefix()
+    if prefix is None:
+        return False
+    cmd = prefix + ["add", SKILL_ID, "-y", "--copy", "-a", _SKILLS_AGENT[agent]]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False
+    return proc.returncode == 0
+
+
+def install(agent, *, repo_root=REPO_ROOT, use_skills_cli=True) -> dict:
+    """Install OMW into one agent's skill system. Returns a result dict."""
+    if agent not in _AGENT_BINS:
+        return {"agent": agent, "ok": False, "method": None, "dest": None, "detail": "unknown agent"}
+    if agent == "hermes":
+        dest = _copy_bundle(_SKILLS_DIR["hermes"], repo_root=repo_root)
+        return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest)}
+    if use_skills_cli and _install_via_skills_cli(agent):
+        return {"agent": agent, "ok": True, "method": "skills-cli", "dest": None}
+    dest = _copy_bundle(_SKILLS_DIR[agent], repo_root=repo_root)
+    return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest)}
+
+
+def install_many(agents, *, repo_root=REPO_ROOT, use_skills_cli=True) -> list[dict]:
+    """Install into each agent, isolating per-agent failures."""
+    results = []
+    for a in agents:
+        try:
+            results.append(install(a, repo_root=repo_root, use_skills_cli=use_skills_cli))
+        except Exception as exc:  # one failure must not abort the rest
+            results.append({"agent": a, "ok": False, "method": None, "dest": None, "detail": str(exc)})
+    return results
