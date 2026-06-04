@@ -549,6 +549,9 @@ def _cmd_setup(args) -> int:
             token=args.token, src_dir=args.src_dir, noninteractive=args.noninteractive)
     if args.section == "viewer":
         return setup_wizard.setup_viewer(viewer=args.viewer, noninteractive=args.noninteractive)
+    if args.section == "agents":
+        agents = [s.strip() for s in args.agents.split(",") if s.strip()] if args.agents else None
+        return setup_wizard.setup_agents(agents=agents, noninteractive=args.noninteractive)
     return setup_wizard.run(
         section=args.section,
         noninteractive=args.noninteractive,
@@ -724,7 +727,7 @@ def build_parser() -> argparse.ArgumentParser:
     pset = sub.add_parser("setup", help="Interactive setup wizard (run after install).")
     pset.add_argument(
         "section", nargs="?",
-        choices=["vault", "hosts", "search", "serve", "personas", "tts", "import", "viewer"], default=None,
+        choices=["vault", "hosts", "search", "serve", "personas", "tts", "import", "viewer", "agents"], default=None,
     )
     pset.add_argument(
         "--noninteractive", action="store_true",
@@ -747,6 +750,8 @@ def build_parser() -> argparse.ArgumentParser:
     pset.add_argument("--src-dir", dest="src_dir", default=None)
     pset.add_argument("--viewer", choices=["obsidian", "logseq"], default=None,
                       help="viewer for `omw setup viewer` (default obsidian)")
+    pset.add_argument("--agents", default=None,
+                      help="comma-separated agents for `omw setup agents` (claude,codex,hermes,gemini)")
     pset.set_defaults(func=_cmd_setup)
 
     pimp = sub.add_parser("import", help="Import folder/Obsidian/Notion into a vault.")

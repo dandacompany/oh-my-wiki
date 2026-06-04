@@ -275,3 +275,30 @@ def test_prompt_password_fallback_uses_getpass(monkeypatch):
     monkeypatch.setattr(builtins, "input", lambda *a: (_ for _ in ()).throw(AssertionError("input() leaks secret")))
     assert sw._prompt("password", "API key") == "secret-x"
     assert "API key" in called["msg"]
+
+
+def test_setup_agents_noninteractive_installs_detected(monkeypatch, capsys):
+    import scripts.setup_wizard as sw
+    import scripts.agent_skills as ask
+    monkeypatch.setattr(ask, "detect_agents", lambda: ["codex", "hermes"])
+    seen = {}
+    monkeypatch.setattr(ask, "install_many",
+                        lambda agents, **k: seen.update({"agents": agents}) or
+                        [{"agent": a, "ok": True, "method": "copy"} for a in agents])
+    rc = sw.setup_agents(agents=["codex", "hermes"], noninteractive=True)
+    assert rc == 0
+    assert seen["agents"] == ["codex", "hermes"]
+    out = capsys.readouterr().out
+    assert "codex" in out and "hermes" in out
+
+
+def test_setup_agents_skips_uninstalled(monkeypatch, capsys):
+    import scripts.setup_wizard as sw
+    import scripts.agent_skills as ask
+    monkeypatch.setattr(ask, "detect_agents", lambda: ["codex"])
+    monkeypatch.setattr(ask, "install_many",
+                        lambda agents, **k: [{"agent": a, "ok": True, "method": "copy"} for a in agents])
+    rc = sw.setup_agents(agents=["codex", "gemini"], noninteractive=True)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "gemini" in out and "skipped" in out

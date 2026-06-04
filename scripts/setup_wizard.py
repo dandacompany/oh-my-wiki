@@ -323,6 +323,36 @@ def setup_viewer(*, viewer: str | None = None, vault: str | None = None,
     return 0
 
 
+def setup_agents(*, agents: list[str] | None = None, noninteractive: bool = False) -> int:
+    """Install the OMW skill into selected agents' skill systems."""
+    from scripts import agent_skills
+    detected = agent_skills.detect_agents()
+    interactive = (not noninteractive) and sys.stdin.isatty()
+    if agents is None:
+        if not detected:
+            print("no agents detected (claude/codex/hermes/gemini) — skipping skill install.")
+            return 0
+        if interactive:
+            picked = _prompt("checkbox", "Install OMW skill into which agents?", choices=detected)
+            agents = picked if picked is not None else detected
+        else:
+            agents = detected
+    targets, skipped = [], []
+    for a in agents:
+        (targets if (not detected or a in detected) else skipped).append(a)
+    for a in skipped:
+        print(f"  - {a}: not installed, skipped")
+    if not targets:
+        print("agents setup skipped — no selected agent is installed.")
+        return 0
+    results = agent_skills.install_many(targets)
+    for r in results:
+        mark = "✓" if r.get("ok") else "✗"
+        detail = f" ({r['detail']})" if r.get("detail") else ""
+        print(f"  {mark} {r['agent']} [{r.get('method') or '—'}]{detail}")
+    return 0 if all(r.get("ok") for r in results) else 1
+
+
 def run_all(*, noninteractive: bool = False, base_dir=None) -> int:
     """Top-level interactive wizard: walk every section in order with per-step skip.
 
@@ -339,6 +369,7 @@ def run_all(*, noninteractive: bool = False, base_dir=None) -> int:
         ("personas", lambda: setup_personas(noninteractive=noninteractive, base_dir=base_dir)),
         ("import", lambda: setup_import(noninteractive=noninteractive)),
         ("viewer", lambda: setup_viewer(noninteractive=noninteractive)),
+        ("agents", lambda: setup_agents(noninteractive=noninteractive)),
     ]
     for name, fn in steps:
         try:
