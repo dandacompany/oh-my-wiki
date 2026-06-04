@@ -260,3 +260,18 @@ def test_setup_import_interactive_stores_notion_key(monkeypatch):
     assert rc == 0
     assert config.read_secret("NOTION_API_KEY") == "nkey-123"
     assert config.load_config()["import"]["default_src"] == "~/notes"
+
+
+def test_prompt_password_fallback_uses_getpass(monkeypatch):
+    import builtins, getpass, scripts.setup_wizard as sw
+    real_import = builtins.__import__
+    def no_questionary(name, *a, **k):
+        if name == "questionary":
+            raise ImportError("no questionary")
+        return real_import(name, *a, **k)
+    monkeypatch.setattr(builtins, "__import__", no_questionary)
+    called = {}
+    monkeypatch.setattr(getpass, "getpass", lambda msg="": called.update({"msg": msg}) or "secret-x")
+    monkeypatch.setattr(builtins, "input", lambda *a: (_ for _ in ()).throw(AssertionError("input() leaks secret")))
+    assert sw._prompt("password", "API key") == "secret-x"
+    assert "API key" in called["msg"]

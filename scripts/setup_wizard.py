@@ -113,6 +113,13 @@ def _prompt(kind: str, message: str, *, choices=None, default=None):
         if kind == "checkbox":
             raw = input(f"{message} (comma-separated, blank = all): ").strip()
             return [s.strip() for s in raw.split(",") if s.strip()] if raw else list(choices or [])
+        if kind == "password":
+            import getpass
+            try:
+                return getpass.getpass(f"{message}: ") or default
+            except (OSError, EOFError):
+                ans = input(f"{message}: ").strip()
+                return ans or default
         suffix = f" [{default}]" if default else ""
         ans = input(f"{message}{suffix}: ").strip()
         return ans or default
@@ -152,11 +159,7 @@ def setup_search(*, noninteractive: bool = False, provider: str | None = None,
     for field, env_var in _PROVIDER_SECRETS[provider]:
         val = supplied.get(field)
         if interactive and not val:
-            try:
-                import questionary  # type: ignore
-                val = questionary.password(f"{field} (blank to defer)").ask() or None
-            except Exception:
-                val = input(f"{field} (blank to defer): ").strip() or None
+            val = _prompt("password", f"{field} (blank to defer)") or None
         if val:
             config.set_secret(env_var, val)
         else:
