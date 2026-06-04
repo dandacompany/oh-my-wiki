@@ -45,10 +45,11 @@ def test_auto_escalates_to_cloud_when_html_thin(monkeypatch):
 
 def test_redirect_to_blocked_url_is_rejected():
     import urllib.request
-    from scripts.fetch_errors import FetchError
     h = fetch._SSRFSafeRedirectHandler()
     req = urllib.request.Request("https://example.com/")
-    with pytest.raises(FetchError):
+    # A redirect to a blocked host is the same SSRF event as a blocked initial
+    # URL → must surface as SSRFBlocked (not a generic FetchError).
+    with pytest.raises(SSRFBlocked):
         h.redirect_request(req, None, 301, "Moved", {},
                            "http://169.254.169.254/latest/meta-data/")
 

@@ -60,3 +60,20 @@ def test_fetch_cloud_no_provider_clean_error(tmp_path, monkeypatch, capsys):
     rc = omw_cli.main(["fetch", "https://example.com/a", "--backend", "cloud"])
     assert rc == 1  # clean error, not a traceback
     assert "error:" in capsys.readouterr().err
+
+
+def test_fetch_save_failure_clean_error(tmp_path, monkeypatch, capsys):
+    # fetch succeeds but persisting the raw doc fails (e.g. disk/SMB write error)
+    # → must be a clean `error:` + exit 1, not a Python traceback.
+    _seed(tmp_path)
+    from scripts import fetch, ingest
+    monkeypatch.setattr(fetch, "fetch_url", lambda url, *, html_backend="auto": {
+        "text": "body text", "title": "T", "content_type": "text/plain",
+        "backend": "urllib", "source_url": url})
+
+    def boom_save(*a, **k):
+        raise OSError("disk full")
+    monkeypatch.setattr(ingest, "save_raw", boom_save)
+    rc = omw_cli.main(["fetch", "https://example.com/a"])
+    assert rc == 1
+    assert "error:" in capsys.readouterr().err

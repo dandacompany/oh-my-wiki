@@ -21,7 +21,7 @@ class _SSRFSafeRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Re-validate every redirect target through the SSRF guard before following."""
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         if urls.is_blocked_url(newurl):
-            raise FetchError(f"SSRF: redirect to blocked URL: {newurl}")
+            raise SSRFBlocked(f"redirect to blocked URL: {newurl}")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 

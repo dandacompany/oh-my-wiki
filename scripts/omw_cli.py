@@ -368,6 +368,7 @@ def _cmd_inbox(args) -> int:
 
 
 def _cmd_fetch(args) -> int:
+    import sqlite3
     from datetime import date
     from scripts import fetch, ingest, reindex, search
     from scripts.fetch_errors import FetchError
@@ -384,10 +385,14 @@ def _cmd_fetch(args) -> int:
     except (FetchError, search.SearchError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    relpath = ingest.save_raw(db, vault_id=vault["id"], content=res["text"], ext="md",
-                              title=res["title"] or args.url,
-                              date_str=args.today or date.today().isoformat())
-    reindex.incremental(db, vault_id=vault["id"])
+    try:
+        relpath = ingest.save_raw(db, vault_id=vault["id"], content=res["text"], ext="md",
+                                  title=res["title"] or args.url,
+                                  date_str=args.today or date.today().isoformat())
+        reindex.incremental(db, vault_id=vault["id"])
+    except (OSError, sqlite3.Error) as exc:
+        print(f"error: saving fetched content failed: {exc}", file=sys.stderr)
+        return 1
     print(json.dumps({"raw_relpath": relpath, "title": res["title"],
                       "backend": res["backend"], "source_url": res["source_url"]},
                      ensure_ascii=False, indent=2))
