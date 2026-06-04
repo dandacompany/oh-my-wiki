@@ -23,8 +23,6 @@ _SKILLS_DIR = {
     "hermes": Path.home() / ".hermes" / "skills",
     "gemini": Path.home() / ".gemini" / "skills",
 }
-_BUNDLE = ["SKILL.md", "commands", "references", "schemas", "personas",
-           "scripts", "bin", "assets"]
 _ORDER = ("claude", "codex", "hermes", "gemini")
 
 
@@ -33,21 +31,27 @@ def detect_agents() -> list[str]:
     return [a for a in _ORDER if shutil.which(_AGENT_BINS[a])]
 
 
+_EXCLUDE = {
+    "tests", "docs", "docker", ".git", ".github", "node_modules",
+    "__pycache__", ".pytest_cache", ".agents", "skills-lock.json", ".DS_Store",
+}
+
+
 def _copy_bundle(dest_skills_dir, *, repo_root=REPO_ROOT) -> Path:
-    """Copy the OMW bundle into <dest_skills_dir>/oh-my-wiki/ (idempotent)."""
+    """Copy the OMW skill (all repo entries except dev/VCS cruft) into
+    <dest_skills_dir>/oh-my-wiki/. Idempotent (rmtree then copy)."""
     dest = Path(dest_skills_dir) / "oh-my-wiki"
     if dest.exists():
         shutil.rmtree(dest)
     dest.mkdir(parents=True, exist_ok=True)
-    for member in _BUNDLE:
-        src = Path(repo_root) / member
-        if not src.exists():
+    ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info")
+    for src in sorted(Path(repo_root).iterdir()):
+        if src.name in _EXCLUDE or src.name.endswith(".egg-info"):
             continue
         if src.is_dir():
-            shutil.copytree(src, dest / member,
-                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info"))
+            shutil.copytree(src, dest / src.name, ignore=ignore)
         else:
-            shutil.copyfile(src, dest / member)
+            shutil.copyfile(src, dest / src.name)
     return dest
 
 

@@ -22,6 +22,21 @@ def test_copy_bundle_includes_skill_md_excludes_tests(tmp_path):
     assert not (out / "tests").exists()
 
 
+def test_copy_bundle_includes_backends_excludes_dev(tmp_path):
+    repo = tmp_path / "repo"
+    (repo / "backends").mkdir(parents=True)
+    (repo / "tests").mkdir()
+    (repo / "docs").mkdir()
+    (repo / "SKILL.md").write_text("x")
+    (repo / "backends" / "codex.json").write_text("{}")
+    (repo / "tests" / "t.py").write_text("y")
+    out = ask._copy_bundle(tmp_path / "skills", repo_root=repo)
+    assert (out / "backends" / "codex.json").is_file()  # runtime model catalog must ship
+    assert (out / "SKILL.md").is_file()
+    assert not (out / "tests").exists()
+    assert not (out / "docs").exists()
+
+
 def test_install_hermes_uses_copy(tmp_path, monkeypatch):
     repo = tmp_path / "repo"; (repo).mkdir(); (repo / "SKILL.md").write_text("x")
     monkeypatch.setitem(ask._SKILLS_DIR, "hermes", tmp_path / "h" / "skills")
