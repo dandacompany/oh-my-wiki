@@ -9,6 +9,7 @@ from pathlib import Path
 from scripts.viewers.base import VaultRef, Viewer, quote_value
 
 _CORE_PLUGINS = [
+    "file-explorer", "switcher", "command-palette", "outline", "bookmarks",
     "graph", "backlink", "outgoing-link", "page-preview",
     "global-search", "properties", "tag-pane",
 ]

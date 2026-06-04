@@ -232,3 +232,14 @@ def test_run_invalid_configured_viewer_errors(tmp_path, monkeypatch):
     monkeypatch.setattr(view.config, "load_config", lambda: {"viewer": {"default": "roam"}})
     args = SimpleNamespace(page=None, search=None, viewer=None, vault=None, print=True)
     assert view.run(args) == 1
+
+
+def test_obsidian_scaffold_enables_navigation_plugins(tmp_path):
+    from scripts.viewers.obsidian import ObsidianViewer
+    from scripts.viewers.base import VaultRef
+    import json
+    ref = VaultRef(root=tmp_path, name=tmp_path.name)
+    ObsidianViewer().scaffold_config(ref)
+    cp = json.loads((tmp_path / ".obsidian" / "core-plugins.json").read_text())
+    for plugin in ("file-explorer", "switcher", "command-palette"):
+        assert plugin in cp, f"{plugin} missing — vault would be unbrowsable in Obsidian"
