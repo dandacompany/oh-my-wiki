@@ -27,7 +27,7 @@ Always invoke this before doing anything else:
 >    `omw` CLI — `omw status`, `omw vault list`, `omw vault create <name> --mode wiki`,
 >    `omw vault use <name>`, `omw lint`, `omw schema list`, `omw supersede <relpath> --by <slug>`,
 >    `omw review due`, `omw serve` (the retrieve-only messenger query API — see `references/messenger-api.md`),
->    `omw view [page] [--search Q] [--viewer obsidian|logseq] [--vault] [--print]` (open vault/page/search in Obsidian or Logseq via URI scheme; companion: `omw setup viewer`),
+>    `omw view [page] [--search Q] [--viewer obsidian|logseq] [--vault <name>] [--print]` (open vault/page/search in Obsidian or Logseq via URI scheme; companion: `omw setup viewer`),
 >    `omw visibility get <relpath>` / `omw visibility set <relpath...> public|private` (per-page visibility management),
 >    `omw inbox add <url>` / `omw inbox list` / `omw inbox remove <url>` / `omw inbox run` (queue URLs then batch-fetch into `raw/`),
 >    `omw fetch <url> [--backend auto|urllib|chromium|cloud] [--vault] [--today YYYY-MM-DD]` (fetch one URL or YouTube transcript into `raw/`, tiered urllib → chromium → cloud, SSRF-guarded).
@@ -61,6 +61,7 @@ Parse the JSON output. Fields:
 - `vault_count` (int)
 - `active` (`null` or `{name, path, type, mode}`)
 - `needs` (`"setup"` | `"select"` | `"op"`)
+- `confirm_target` (bool — `true` when 2+ vaults are registered; see Multi-vault write guard)
 - `vaults` (array of `{name, mode}`)
 
 ## Step 2 — Route by `needs`
@@ -101,6 +102,7 @@ These hold across all commands. Each `commands/<op>.md` repeats the relevant one
 - **`vault-forget` never touches files** — only the registry row.
 - **Inferred targets are stated**, then confirmed: "방금 작성한 X 메모 말씀이시죠?"
 - **No silent fallbacks**: if a vault path is missing on disk, report it and stop. Don't auto-`forget`.
+- **Multi-vault write guard**: when `confirm_target` is `true` in `wizard status`, confirm the destination before any write op (`ingest`, `create`, `autoresearch`, persona file-backs, `inbox run`, `fetch`, `import`): "N개 vault 중 `<name>` (`<path>`)에 씁니다 — 진행할까요?". Skip the confirmation if the same vault was already confirmed earlier in this session; reset the confirmation state after any `vault-use` switch.
 - **SMB-mounted vaults** (e.g. `/Volumes/...`): use `rsync -rlpt` rather than `cp`. Never `cp -a` on SMB.
 - **Recommended option goes first** in any AskUserQuestion list and is suffixed with `(추천)` / `(recommended)`.
 
