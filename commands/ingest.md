@@ -7,6 +7,8 @@
 
 Call `python3 -m scripts.wizard status` first. Refuse if `active.mode != "wiki"`. Suggest `vault-use <wiki-vault>` or `vault-setup` if not.
 
+If `confirm_target` is `true` (2+ vaults registered), confirm the destination with the user before writing — "N개 vault 중 `<name>` (`<path>`)에 씁니다 — 진행할까요?" — unless this vault was already confirmed in this session (see SKILL.md Multi-vault write guard).
+
 ## Input branches
 
 Detect the source type from user input:

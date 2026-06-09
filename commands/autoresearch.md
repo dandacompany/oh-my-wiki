@@ -8,6 +8,8 @@
 
 Active vault must be wiki-mode. Run `python3 -m scripts.wizard status` first. If active vault is memo-mode, suggest `vault-use <wiki-vault>` or `vault-setup` to create one.
 
+If `confirm_target` is `true` (2+ vaults registered), confirm the destination with the user before file-back — "N개 vault 중 `<name>` (`<path>`)에 씁니다 — 진행할까요?" — unless this vault was already confirmed in this session (see SKILL.md Multi-vault write guard).
+
 If Bright Data MCP is unavailable, fall back to user-pasted source content for each claim.
 
 ## Flow
