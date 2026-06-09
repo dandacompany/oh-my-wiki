@@ -23,7 +23,14 @@
 
 2. Show a summary and confirm.
 
-3. On confirm, run:
+3. **Decide activation.** If this is the first vault (`wizard status` showed
+   `vault_count == 0`), the new vault becomes active automatically. Otherwise
+   ask via AskUserQuestion: "새 vault `<name>`를 active로 전환할까요? (현재
+   active: `<old-name>`)" — 2 options: **전환 (추천)** / **현재 active 유지**.
+   If the user keeps the current vault, register the new one inactive and
+   mention `vault-use <name>` for later switching.
+
+4. On confirm, run:
 
 ```python
 from pathlib import Path
@@ -36,16 +43,21 @@ root = Path('<resolved-location>')
 root.mkdir(parents=True, exist_ok=True)
 adapters.get_adapter('<type>', vault_name='<name>').init_vault(root, '<mode>')
 vault = registry.add_vault(db, name='<name>', path=root, type_='<type>', mode='<mode>')
-registry.set_active(db, '<name>')
+activate = True  # False when the user kept the current active vault in step 3
+if activate:
+    registry.set_active(db, '<name>')
 reindex.full(db, vault_id=vault['id'])
 print(dict(vault))
 ```
 
-4. Confirm to the user: vault registered, set active, indexed N notes.
+5. Confirm to the user: vault registered, indexed N notes. If activated, state
+   the switch explicitly: "active: `<old>` → `<new>`". If not activated, state
+   that the active vault is unchanged.
 
 ## Post-conditions
 
-- New row in `vaults` table; `is_active = 1` (others demoted).
+- New row in `vaults` table. First vault, or user chose 전환 → `is_active = 1`
+  (others demoted). User kept the current active → `is_active = 0`.
 - Folder scaffolded: `inbox/` for memo; `raw/`, `wiki/{summaries,entities,concepts,comparisons,syntheses}/`, `wiki/index.md`, `wiki/log.md` for wiki. `.trash/` always.
 - Initial `reindex.full` runs (idempotent on an empty vault — count = 0).
 
