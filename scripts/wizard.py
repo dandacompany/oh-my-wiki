@@ -23,7 +23,7 @@ def status(db_path: Path) -> dict:
     if not db_path.exists():
         # Already migrated once? Treat as clean.
         if (paths.omw_home() / "registry.db.migrated").exists():
-            return {"vault_count": 0, "active": None, "needs": "setup"}
+            return {"vault_count": 0, "active": None, "needs": "setup", "confirm_target": False}
         # Detect a legacy registry to offer migration.
         for old in paths.legacy_registry_candidates():
             if old.exists():
@@ -37,8 +37,9 @@ def status(db_path: Path) -> dict:
                     "legacy_path": str(old),
                     "legacy_vault_count": len(vaults),
                     "vaults": vaults,
+                    "confirm_target": False,
                 }
-        return {"vault_count": 0, "active": None, "needs": "setup"}
+        return {"vault_count": 0, "active": None, "needs": "setup", "confirm_target": False}
     vaults = registry.list_vaults(db_path)
     active = registry.get_active(db_path)
     if not vaults:
@@ -56,6 +57,7 @@ def status(db_path: Path) -> dict:
             "mode": active["mode"],
         } if active else None,
         "needs": needs,
+        "confirm_target": len(vaults) > 1,
         "vaults": [{"name": v["name"], "mode": v["mode"]} for v in vaults],
     }
 

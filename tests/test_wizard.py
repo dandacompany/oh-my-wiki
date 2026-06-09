@@ -12,6 +12,31 @@ def test_status_zero_vaults(tmp_db):
     assert out["vault_count"] == 0
     assert out["active"] is None
     assert out["needs"] == "setup"
+    assert out["confirm_target"] is False
+
+
+def test_status_confirm_target_false_with_one_vault(tmp_db, tmp_path):
+    registry.init_db(tmp_db)
+    p = tmp_path / "v"; p.mkdir()
+    registry.add_vault(tmp_db, name="v", path=p, type_="markdown", mode="wiki")
+    registry.set_active(tmp_db, "v")
+    out = wizard.status(tmp_db)
+    assert out["confirm_target"] is False
+
+
+def test_status_confirm_target_true_with_two_vaults(tmp_db, tmp_path):
+    registry.init_db(tmp_db)
+    for n in ("a", "b"):
+        p = tmp_path / n; p.mkdir()
+        registry.add_vault(tmp_db, name=n, path=p, type_="markdown", mode="wiki")
+    registry.set_active(tmp_db, "a")
+    out = wizard.status(tmp_db)
+    assert out["confirm_target"] is True
+
+
+def test_status_confirm_target_false_when_no_db(tmp_path):
+    out = wizard.status(tmp_path / "missing.db")
+    assert out["confirm_target"] is False
 
 
 def test_status_one_active(tmp_db, tmp_path):
