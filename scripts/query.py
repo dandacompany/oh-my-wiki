@@ -15,8 +15,13 @@ def write_synthesis(
     citations: list[str],
     tags: list[str],
     date_str: str,
+    summary: str | None = None,
 ) -> str:
-    """Write a synthesis page under wiki/syntheses/. Returns relpath."""
+    """Write a synthesis page under wiki/syntheses/. Returns relpath.
+
+    `summary` (if given) lands in frontmatter — it lifts search/recall ranking
+    (the FTS scorer weights summary heavily) and feeds the index/hot cache.
+    """
     conn = registry.connect(db_path)
     try:
         row = conn.execute(
@@ -38,6 +43,8 @@ def write_synthesis(
         "status": "processed",
         "citations": list(citations),
     }
+    if summary:
+        meta["summary"] = summary
     abs_path = root / relpath
     abs_path.parent.mkdir(parents=True, exist_ok=True)
     abs_path.write_text(frontmatter.dump(meta, body), encoding="utf-8")

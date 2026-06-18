@@ -8,6 +8,7 @@ Pure stdlib.
 """
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -64,16 +65,31 @@ def _skills_cli_prefix():
     return None
 
 
-def _install_via_skills_cli(agent, *, timeout=300) -> bool:
+_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
+
+
+def _parse_skills_cli_dest(stdout: str) -> str | None:
+    """Pull the install path the skills CLI prints (a line like '→ <path>')."""
+    for raw in stdout.splitlines():
+        line = _ANSI_RE.sub("", raw).strip().lstrip("│").strip()
+        if line.startswith("→") and "/" in line:
+            return line[1:].strip()
+    return None
+
+
+def _install_via_skills_cli(agent, *, timeout=300) -> tuple[bool, str | None]:
+    """Returns (ok, dest_path). dest_path is the install location if parseable."""
     prefix = _skills_cli_prefix()
     if prefix is None:
-        return False
+        return False, None
     cmd = prefix + ["add", SKILL_ID, "-y", "--copy", "-a", _SKILLS_AGENT[agent]]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-        return False
-    return proc.returncode == 0
+        return False, None
+    if proc.returncode != 0:
+        return False, None
+    return True, _parse_skills_cli_dest(getattr(proc, "stdout", "") or "")
 
 
 def install(agent, *, repo_root=REPO_ROOT, use_skills_cli=True) -> dict:
@@ -83,8 +99,10 @@ def install(agent, *, repo_root=REPO_ROOT, use_skills_cli=True) -> dict:
     if agent == "hermes":
         dest = _copy_bundle(_SKILLS_DIR["hermes"], repo_root=repo_root)
         return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest)}
-    if use_skills_cli and _install_via_skills_cli(agent):
-        return {"agent": agent, "ok": True, "method": "skills-cli", "dest": None}
+    if use_skills_cli:
+        ok, dest = _install_via_skills_cli(agent)
+        if ok:
+            return {"agent": agent, "ok": True, "method": "skills-cli", "dest": dest}
     dest = _copy_bundle(_SKILLS_DIR[agent], repo_root=repo_root)
     return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest)}
 

@@ -48,21 +48,24 @@ def run(
     mode: str = "wiki",
     type_: str = "markdown",
     location: str = "global",
+    in_wizard: bool = False,
 ) -> int:
     interactive = (not noninteractive) and sys.stdin.isatty()
     if interactive:
-        return _run_interactive(name, mode, type_, location)
+        return _run_interactive(name, mode, type_, location, in_wizard=in_wizard)
     ensure_home()
     _ensure_vault(name, mode, type_, location)
     _write_config(name)
     print(json.dumps(
-        {"setup": "ok", "default_vault": name, "home": str(omw_home())},
+        {"setup": "ok", "default_vault": name,
+         "vault_path": str(resolve_vault_root(name, location)), "home": str(omw_home())},
         ensure_ascii=False,
     ))
     return 0
 
 
-def _run_interactive(name: str, mode: str, type_: str, location: str) -> int:
+def _run_interactive(name: str, mode: str, type_: str, location: str,
+                     *, in_wizard: bool = False) -> int:
     try:
         import questionary  # type: ignore
 
@@ -80,10 +83,17 @@ def _run_interactive(name: str, mode: str, type_: str, location: str) -> int:
     ensure_home()
     _ensure_vault(name, mode, type_, location)
     _write_config(name)
-    print(
-        f"setup complete — vault '{name}' at {omw_home()}. "
-        f"Search/persona/TTS sections: configure later with 'omw setup search' (coming soon)."
-    )
+    vault_path = resolve_vault_root(name, location)
+    if in_wizard:
+        # The top-level wizard continues into search/serve/tts/... right after this,
+        # so don't tell the user to "configure later" — just confirm the vault.
+        print(f"✓ vault '{name}' ({mode}/{type_}) at {vault_path}")
+    else:
+        print(
+            f"setup complete — vault '{name}' ({mode}/{type_}) at {vault_path}. "
+            f"Configure search/persona/TTS sections anytime with 'omw setup search' / "
+            f"'omw setup personas' / 'omw setup tts'."
+        )
     return 0
 
 
@@ -120,6 +130,14 @@ def _prompt(kind: str, message: str, *, choices=None, default=None):
             except (OSError, EOFError):
                 ans = input(f"{message}: ").strip()
                 return ans or default
+        if kind == "select":
+            # No questionary arrow-UI: show all choices so the user knows the options
+            # (e.g. that 'skip' is available), not just the default.
+            opts = "/".join(str(c) for c in (choices or []))
+            prompt = f"{message} ({opts})" if opts else message
+            suffix = f" [{default}]" if default else ""
+            ans = input(f"{prompt}{suffix}: ").strip()
+            return ans or default
         suffix = f" [{default}]" if default else ""
         ans = input(f"{message}{suffix}: ").strip()
         return ans or default
@@ -350,7 +368,54 @@ def setup_agents(*, agents: list[str] | None = None, noninteractive: bool = Fals
         mark = "✓" if r.get("ok") else "✗"
         detail = f" ({r['detail']})" if r.get("detail") else ""
         print(f"  {mark} {r['agent']} [{r.get('method') or '—'}]{detail}")
+        if r.get("dest"):
+            print(f"      → {r['dest']}")
+    if any(r.get("method") == "skills-cli" and (r.get("dest") or "").find(".agents/skills") >= 0
+           for r in results):
+        print("  note: 프로젝트 로컬(.agents/skills)에 설치됐습니다 — 해당 폴더에서 "
+              "codex/claude를 실행해야 스킬이 인식됩니다.")
     return 0 if all(r.get("ok") for r in results) else 1
+
+
+def setup_recall(*, mode: str | None = None, hosts: list[str] | None = None,
+                 base_dir=None, noninteractive: bool = False) -> int:
+    """Configure auto wiki-recall: set recall.mode and inject the host-agnostic
+    Tier-1 guidance block into each host's instruction file (CLAUDE.md/AGENTS.md/
+    GEMINI.md). Host-neutral by design — not Claude-only."""
+    from pathlib import Path
+    from scripts import config, persona_export, recall
+    choices = ["auto", "advisory", "off"]
+    interactive = (not noninteractive) and sys.stdin.isatty()
+    if interactive and mode is None:
+        mode = _prompt("select", "Wiki recall mode", choices=choices, default="auto") or "auto"
+    mode = mode or "auto"
+    if mode not in choices:
+        print(f"error: unknown recall mode {mode!r}; choose from {choices}", file=sys.stderr)
+        return 1
+    if interactive and hosts is None:
+        hosts = _prompt("checkbox", "Inject recall guidance into hosts",
+                        choices=list(persona_export.HOST_FILES)) or None
+    if hosts is None:
+        hosts = list(persona_export.HOST_FILES)
+    config.set_config("recall.mode", mode)
+    if mode == "off":
+        print("recall disabled (recall.mode=off). Re-run `omw setup recall` to enable.")
+        return 0
+    base = Path(base_dir) if base_dir else Path.cwd()
+    block = recall.render_recall_block(mode)
+    written = []
+    for host in hosts:
+        if host not in persona_export.HOST_FILES:
+            print(f"  - {host}: unknown host, skipped")
+            continue
+        path = base / persona_export.HOST_FILES[host]
+        recall.upsert_block(path, block)
+        written.append(path)
+    print(f"✓ recall mode '{mode}'; guidance injected into "
+          f"{', '.join(p.name for p in written) or '(none)'}.")
+    print("  (Claude Code Tier-2 자동 주입은 settings.json UserPromptSubmit 훅으로 "
+          "`omw recall prompt`을 연결하세요 — references/auto-recall-hook-design.md 참고.)")
+    return 0
 
 
 def run_all(*, noninteractive: bool = False, base_dir=None) -> int:
@@ -362,7 +427,7 @@ def run_all(*, noninteractive: bool = False, base_dir=None) -> int:
     banner.render()   # animated when interactive TTY; static/suppressed otherwise
     first_error = 0
     steps = [
-        ("vault", lambda: run(noninteractive=noninteractive)),
+        ("vault", lambda: run(noninteractive=noninteractive, in_wizard=True)),
         ("search", lambda: setup_search(noninteractive=noninteractive)),
         ("serve", lambda: setup_serve(noninteractive=noninteractive)),
         ("tts", lambda: setup_tts(noninteractive=noninteractive)),
@@ -370,6 +435,7 @@ def run_all(*, noninteractive: bool = False, base_dir=None) -> int:
         ("import", lambda: setup_import(noninteractive=noninteractive)),
         ("viewer", lambda: setup_viewer(noninteractive=noninteractive)),
         ("agents", lambda: setup_agents(noninteractive=noninteractive)),
+        ("recall", lambda: setup_recall(noninteractive=noninteractive, base_dir=base_dir)),
     ]
     for name, fn in steps:
         try:
@@ -393,6 +459,16 @@ def doctor() -> int:
         for v in vaults:
             mark = "*" if v["is_active"] else " "
             print(f"  {mark} {v['name']} ({v['mode']}/{v['type']}) {v['path']}")
+        # Sandbox advisory: project-local vaults index into the GLOBAL registry
+        # (~/.omw), which lives outside an agent's workspace-write sandbox — so
+        # reindex can fail with "readonly database" without an approval/escalation.
+        from pathlib import Path as _P
+        cwd = _P.cwd()
+        proj = [v for v in vaults if str(v["path"]).startswith(str(cwd))]
+        if proj and not str(db).startswith(str(cwd)):
+            print(f"  ! registry lives at {db} (outside this folder). Agents with a "
+                  f"workspace-write sandbox may hit 'readonly database' on reindex —\n"
+                  f"    approve the write, or set OMW_HOME to a path inside the workspace.")
     else:
         print("  no vaults registered — run: omw setup")
     import scripts.fetch_chromium as _fc
@@ -400,4 +476,10 @@ def doctor() -> int:
     chromium = "ok" if _fc.available() else "missing (pip install playwright && playwright install chromium — for SPA pages)"
     print(f"fetch yt-dlp:  {ytdlp}")
     print(f"fetch chromium: {chromium}")
+    try:
+        import questionary  # noqa: F401
+        wizard_ui = "ok"
+    except Exception:
+        wizard_ui = "missing (pip install 'oh-my-wiki[wizard]' — arrow-key setup UI; falls back to plain text)"
+    print(f"wizard UI:     {wizard_ui}")
     return 0
