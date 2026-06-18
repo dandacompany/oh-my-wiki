@@ -71,9 +71,10 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
 def _parse_skills_cli_dest(stdout: str) -> str | None:
     """Pull the install path the skills CLI prints (a line like '→ <path>')."""
     for raw in stdout.splitlines():
-        line = _ANSI_RE.sub("", raw).strip().lstrip("│").strip()
+        line = _ANSI_RE.sub("", raw).strip().strip("│").strip()
         if line.startswith("→") and "/" in line:
-            return line[1:].strip()
+            # trailing box-border chars (e.g. "  │") can ride along — strip them too
+            return line[1:].strip().rstrip("│ \t").strip()
     return None
 
 

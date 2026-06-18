@@ -53,6 +53,25 @@ def _active(db):
     return registry.get_active(db)
 
 
+def _strip_josa(token: str) -> str:
+    """Drop a trailing Korean postposition so 'ARIMA와'/'평가지표를' match the index.
+    Only Hangul-ending tokens, and only when ≥2 chars remain."""
+    import re
+    if not re.search(r"[가-힣]$", token):
+        return token
+    from scripts.text_match import _JOSA
+    for j in sorted(_JOSA, key=len, reverse=True):
+        if token.endswith(j) and len(token) - len(j) >= 2:
+            return token[: -len(j)]
+    return token
+
+
+def normalize_query(text: str) -> str:
+    """Josa-normalize a free-text prompt for FTS recall (the index tokenizer is
+    plain — natural Korean prompts attach josa that would otherwise miss)."""
+    return " ".join(_strip_josa(t) for t in (text or "").split())
+
+
 def _hits(text: str, top_k: int) -> list[dict]:
     from scripts import search_index
     from scripts.paths import registry_path
@@ -63,7 +82,7 @@ def _hits(text: str, top_k: int) -> list[dict]:
     if not v:
         return []
     try:
-        return search_index.query(db, vault_id=v["id"], query=text, limit=top_k)
+        return search_index.query(db, vault_id=v["id"], query=normalize_query(text), limit=top_k)
     except Exception:
         return []
 

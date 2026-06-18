@@ -52,7 +52,7 @@ def test_parse_skills_cli_dest_extracts_path():
         "\x1b[?25l│\n"
         "◇  Installed 1 skill\n"
         "│  ✓ oh-my-wiki (copied)\n"
-        "│    → ~/work/proj/.agents/skills/oh-my-wiki\n"
+        "│    → ~/work/proj/.agents/skills/oh-my-wiki  │\n"  # trailing box border
         "└  Done!\n"
     )
     assert agent_skills._parse_skills_cli_dest(out) == "~/work/proj/.agents/skills/oh-my-wiki"
@@ -205,6 +205,16 @@ def test_wire_host_is_idempotent_and_preserves(tmp_path):
     # second run is a no-op
     changed2, detail2 = recall.wire_host("claude", config_path=cfg)
     assert changed2 is False and "already wired" in detail2
+
+
+def test_recall_normalize_query_strips_josa():
+    from scripts import recall
+    assert recall._strip_josa("ARIMA와") == "ARIMA"
+    assert recall._strip_josa("평가지표를") == "평가지표"
+    assert recall._strip_josa("수요예측에서") == "수요예측"
+    assert recall._strip_josa("prophet") == "prophet"   # no Hangul tail
+    assert recall._strip_josa("가") == "가"             # too short after strip
+    assert recall.normalize_query("수요예측에서 ARIMA와 Prophet 차이를") == "수요예측 ARIMA Prophet 차이"
 
 
 def test_wire_host_creates_config_when_absent(tmp_path):
