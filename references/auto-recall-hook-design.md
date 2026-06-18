@@ -127,3 +127,65 @@ recall:
 - [ ] `hooks/hooks.json`에 `user_prompt_submit` 엔트리 추가(있는 호스트).
 - [ ] `omw setup recall` 섹션(모드 선택) + `omw setup agents`가 AGENTS.md에 recall 가이드 블록 주입.
 - [ ] 문서: SKILL.md / README에 recall 동작 설명.
+
+---
+
+## 10. 설정 가능한 검색 전략 (계획 — 2026-06-18 합의, 미구현)
+
+> 동기: josa 같은 손코딩은 "LLM 없이 결정론으로 검색"하기 때문에 필요하다. 품질을
+> 올리는 길은 regex를 더 늘리는 게 아니라 **임베딩** 또는 **LLM**이다. 단, 무엇이
+> 옳은지 확신이 없으므로 **모두 구현해 사용자가 모드를 고르게** 한다. 아래는 그
+> 설정 구조의 합의안(네이밍 확정). 엔진 구현은 후속.
+
+### 두 개의 독립 축
+
+혼동을 줄이기 위해 **언제 개입(trigger)** 과 **어떻게 검색(strategy)** 을 분리한다.
+
+**축 1 — `mode` (trigger, 기존):** `off` | `advisory`(훅은 넛지, 인루프 LLM이 검색) | `auto`(훅이 미리 긁어 주입)
+
+**축 2 — `strategy` (검색 방법, 신규):**
+
+| 값          | 종류   | 설명                                                                    |
+| ----------- | ------ | ----------------------------------------------------------------------- |
+| `fts`       | 결정론 | 키워드 가중 랭커(현행) + josa 정규화. 싸고 오프라인. **현재 구현됨**    |
+| `embedding` | 결정론 | 의미 벡터 검색. josa/복합어/동의어를 규칙 없이 처리. (인덱서+벡터 필요) |
+| `hybrid`    | 결정론 | `fts` + `embedding` 랭크 융합                                           |
+| `llm`       | LLM    | LLM 주도. 하위 모드 `llm.submode`로 분기                                |
+
+**`llm.submode` (strategy=llm일 때만):**
+
+- `route` — **LLM이 상황을 보고 `fts`/`embedding`/`hybrid` 중 무엇을 적용할지 판단**해 그 결정론 백엔드를 호출(라우터).
+- `generative` — **LLM이 생성형으로 직접 후보를 읽고 관련성을 판단·처리**(가장 강력, 가장 비쌈).
+
+### 설정 스키마 (backward compatible — 기존 `mode` 유지, `strategy` 추가)
+
+```yaml
+recall:
+  mode: auto # off | advisory | auto        (언제)
+  strategy: fts # fts | embedding | hybrid | llm (어떻게)
+  llm:
+    submode: route # route | generative           (strategy=llm일 때만)
+  min_score: 1.0 # fts/embedding 임계
+  top_k: 3
+```
+
+### 두 축의 상호작용 (비용 가드)
+
+`strategy=llm` × `mode=auto` = **프롬프트마다 별도 LLM 호출**(비쌈/느림). 반대로
+`mode=advisory`면 이미 도는 에이전트가 곧 그 LLM이라 **추가 비용 0**. 권장 짝:
+
+| mode       | 권장 strategy                  | 이유                                    |
+| ---------- | ------------------------------ | --------------------------------------- |
+| `auto`     | `fts` / `embedding` / `hybrid` | 결정론, 매 프롬프트 호출해도 쌈         |
+| `advisory` | `llm`(route/generative)        | 인루프 에이전트가 수행 → 추가 비용 없음 |
+
+→ `omw setup recall`에서 두 축을 고르게 하고, **비싼 조합(auto+llm) 선택 시 경고**만 띄운다(차단하지 않음 — 사용자 자유).
+
+### 구현 로드맵 (확정 후)
+
+- [ ] config 2축 분리: `recall.strategy`(+`llm.submode`) 추가, 기본 `fts`(현행 동작 보존), 미구현 전략은 `fts`로 graceful fallback + "planned" 안내.
+- [ ] `embedding` 백엔드: 임베딩 인덱서(볼트 내부 저장) + 벡터 검색. 모델 의존성 선택형.
+- [ ] `hybrid` 랭크 융합(RRF 등).
+- [ ] `llm.route`(분류 1콜) / `llm.generative`(후보 read+판정).
+- [ ] `omw setup recall`에 strategy/submode 선택 + 비용 가드 경고.
+- [ ] josa 정규화는 `fts` 전략 내부 옵션으로 흡수(`embedding`/`llm`은 불필요).
