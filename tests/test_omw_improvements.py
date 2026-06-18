@@ -217,6 +217,35 @@ def test_recall_normalize_query_strips_josa():
     assert recall.normalize_query("수요예측에서 ARIMA와 Prophet 차이를") == "수요예측 ARIMA Prophet 차이"
 
 
+def test_recall_effective_strategy_falls_back(capsys):
+    from scripts import recall
+    assert recall.effective_strategy("fts") == "fts"
+    assert recall.effective_strategy("embedding") == "fts"   # planned → fts
+    assert recall.effective_strategy("hybrid") == "fts"
+    assert recall.effective_strategy("nonsense") == "fts"
+    err = capsys.readouterr().err
+    assert "planned" in err  # the implemented-but-not-yet strategies announce fallback
+
+
+def test_recall_cost_warning_only_for_auto_llm():
+    from scripts import recall
+    assert recall.cost_warning("auto", "llm") is not None
+    assert recall.cost_warning("advisory", "llm") is None
+    assert recall.cost_warning("auto", "fts") is None
+
+
+def test_recall_cfg_reads_strategy_and_submode(tmp_path, monkeypatch):
+    import os
+    from scripts import config, recall
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / "home"))
+    config.set_config("recall.mode", "advisory")
+    config.set_config("recall.strategy", "llm")
+    config.set_config("recall.llm.submode", "generative")
+    cfg = recall._cfg()
+    assert cfg["mode"] == "advisory" and cfg["strategy"] == "llm" and cfg["llm_submode"] == "generative"
+    os.environ.pop("OMW_HOME", None)
+
+
 def test_wire_host_creates_config_when_absent(tmp_path):
     import json
     from scripts import recall

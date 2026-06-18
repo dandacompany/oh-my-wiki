@@ -377,30 +377,58 @@ def setup_agents(*, agents: list[str] | None = None, noninteractive: bool = Fals
     return 0 if all(r.get("ok") for r in results) else 1
 
 
-def setup_recall(*, mode: str | None = None, hosts: list[str] | None = None,
+def setup_recall(*, mode: str | None = None, strategy: str | None = None,
+                 submode: str | None = None, hosts: list[str] | None = None,
                  base_dir=None, noninteractive: bool = False) -> int:
-    """Configure auto wiki-recall: set recall.mode and inject the host-agnostic
-    Tier-1 guidance block into each host's instruction file (CLAUDE.md/AGENTS.md/
-    GEMINI.md). Host-neutral by design — not Claude-only."""
+    """Configure auto wiki-recall (two axes):
+      mode     — trigger: off | advisory | auto
+      strategy — retrieval: fts | embedding | hybrid | llm (+ llm.submode)
+    Sets config and injects the host-agnostic Tier-1 guidance block into each
+    host's instruction file. Host-neutral by design — not Claude-only.
+    Unimplemented strategies are selectable now and fall back to fts at runtime."""
     from pathlib import Path
     from scripts import config, persona_export, recall
     choices = ["auto", "advisory", "off"]
     interactive = (not noninteractive) and sys.stdin.isatty()
     if interactive and mode is None:
-        mode = _prompt("select", "Wiki recall mode", choices=choices, default="auto") or "auto"
+        mode = _prompt("select", "Wiki recall mode (trigger)", choices=choices, default="auto") or "auto"
     mode = mode or "auto"
     if mode not in choices:
         print(f"error: unknown recall mode {mode!r}; choose from {choices}", file=sys.stderr)
         return 1
+    config.set_config("recall.mode", mode)
+    if mode == "off":
+        print("recall disabled (recall.mode=off). Re-run `omw setup recall` to enable.")
+        return 0
+    # Axis 2 — retrieval strategy (only fts implemented; others planned/fallback).
+    if interactive and strategy is None:
+        strategy = _prompt("select", "Retrieval strategy", choices=list(recall.STRATEGIES),
+                           default="fts") or "fts"
+    strategy = strategy or "fts"
+    if strategy not in recall.STRATEGIES:
+        print(f"error: unknown strategy {strategy!r}; choose from {list(recall.STRATEGIES)}", file=sys.stderr)
+        return 1
+    config.set_config("recall.strategy", strategy)
+    if strategy == "llm":
+        if interactive and submode is None:
+            submode = _prompt("select", "LLM submode", choices=list(recall.LLM_SUBMODES),
+                              default="route") or "route"
+        submode = submode or "route"
+        if submode not in recall.LLM_SUBMODES:
+            print(f"error: unknown llm submode {submode!r}; choose from {list(recall.LLM_SUBMODES)}",
+                  file=sys.stderr)
+            return 1
+        config.set_config("recall.llm.submode", submode)
+    if strategy not in recall._IMPLEMENTED_STRATEGIES:
+        print(f"  note: strategy '{strategy}'는 아직 미구현(계획) — 런타임에 'fts'로 폴백합니다.")
+    warn = recall.cost_warning(mode, strategy)
+    if warn:
+        print(f"  {warn}")
     if interactive and hosts is None:
         hosts = _prompt("checkbox", "Inject recall guidance into hosts",
                         choices=list(persona_export.HOST_FILES)) or None
     if hosts is None:
         hosts = list(persona_export.HOST_FILES)
-    config.set_config("recall.mode", mode)
-    if mode == "off":
-        print("recall disabled (recall.mode=off). Re-run `omw setup recall` to enable.")
-        return 0
     base = Path(base_dir) if base_dir else Path.cwd()
     block = recall.render_recall_block(mode)
     written = []

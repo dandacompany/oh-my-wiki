@@ -563,8 +563,8 @@ def _cmd_setup(args) -> int:
     if args.section == "recall":
         hosts = [s.strip() for s in args.host.split(",") if s.strip()] if args.host else None
         return setup_wizard.setup_recall(
-            mode=args.provider, hosts=hosts, base_dir=args.base_dir,
-            noninteractive=args.noninteractive,
+            mode=args.provider, strategy=args.strategy, submode=args.submode,
+            hosts=hosts, base_dir=args.base_dir, noninteractive=args.noninteractive,
         )
     return setup_wizard.run(
         section=args.section,
@@ -771,6 +771,10 @@ def build_parser() -> argparse.ArgumentParser:
                       help="viewer for `omw setup viewer` (default obsidian)")
     pset.add_argument("--agents", default=None,
                       help="comma-separated agents for `omw setup agents` (claude,codex,hermes,gemini)")
+    pset.add_argument("--strategy", choices=["fts", "embedding", "hybrid", "llm"], default=None,
+                      help="retrieval strategy for `omw setup recall`")
+    pset.add_argument("--submode", choices=["route", "generative"], default=None,
+                      help="llm submode for `omw setup recall` (when --strategy llm)")
     pset.set_defaults(func=_cmd_setup)
 
     pimp = sub.add_parser("import", help="Import folder/Obsidian/Notion into a vault.")

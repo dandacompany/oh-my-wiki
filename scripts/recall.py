@@ -17,10 +17,38 @@ from __future__ import annotations
 import sys
 
 MARKER = "omw-recall"
+
+#: retrieval strategies (축 2). Only `fts` is implemented; the rest are planned
+#: and fall back to `fts` (see references/auto-recall-hook-design.md §10).
+STRATEGIES = ("fts", "embedding", "hybrid", "llm")
+LLM_SUBMODES = ("route", "generative")
+_IMPLEMENTED_STRATEGIES = {"fts"}
+
 # min_score=1.0: the FTS scorer ranks on frontmatter (title/tags/summary/relpath),
 # not body — so ~1.0 means at least one meaningful token hit. Pages with a good
 # `summary` rank higher; bump min_score if recall feels noisy.
-_DEFAULTS = {"mode": "auto", "min_score": 1.0, "top_k": 3, "snippet_chars": 280}
+_DEFAULTS = {"mode": "auto", "strategy": "fts", "llm_submode": "route",
+             "min_score": 1.0, "top_k": 3, "snippet_chars": 280}
+
+
+def effective_strategy(strategy: str) -> str:
+    """Resolve the configured strategy to one that's implemented. Unimplemented
+    strategies (embedding/hybrid/llm) gracefully fall back to fts with a stderr
+    note — so users can already *select* the mode before the engines land."""
+    if strategy in _IMPLEMENTED_STRATEGIES:
+        return strategy
+    if strategy in STRATEGIES:
+        print(f"omw recall: strategy '{strategy}' is planned, not implemented yet "
+              f"— using 'fts'. (references/auto-recall-hook-design.md §10)", file=sys.stderr)
+    return "fts"
+
+
+def cost_warning(mode: str, strategy: str) -> str | None:
+    """Flag the expensive combination: an LLM call on every prompt."""
+    if mode == "auto" and strategy == "llm":
+        return ("주의: mode=auto + strategy=llm은 매 프롬프트마다 별도 LLM 호출이라 비용/지연이 큽니다. "
+                "advisory 모드(인루프 에이전트가 수행, 추가 비용 0)를 권장합니다.")
+    return None
 
 # Short acknowledgements / continuations that should never trigger recall.
 _ACK = {
@@ -36,9 +64,10 @@ def _cfg() -> dict:
     except Exception:
         raw = {}
     out = dict(_DEFAULTS)
-    for k in _DEFAULTS:
+    for k in ("mode", "strategy", "min_score", "top_k", "snippet_chars"):
         if k in raw:
             out[k] = raw[k]
+    out["llm_submode"] = (raw.get("llm") or {}).get("submode", _DEFAULTS["llm_submode"])
     return out
 
 
@@ -123,6 +152,9 @@ def prompt(text: str | None) -> str:
     if is_trivial(text):
         return ""
 
+    # Resolve the configured retrieval strategy. Today every strategy routes to the
+    # fts backend (embedding/hybrid/llm fall back here until their engines land).
+    effective_strategy(cfg.get("strategy", "fts"))
     hits = _hits(text, int(cfg["top_k"]))
     strong = [h for h in hits if (h.get("score") or 0) >= float(cfg["min_score"])]
 
