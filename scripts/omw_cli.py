@@ -489,6 +489,14 @@ def _cmd_view(args) -> int:
     return view.run(args)
 
 
+def _cmd_recall(args) -> int:
+    from scripts import recall
+    out = recall.preamble() if args.action == "preamble" else recall.prompt(args.text)
+    if out:
+        print(out)
+    return 0
+
+
 def _cmd_serve(args) -> int:
     from scripts import config, paths, server
     token = config.read_secret("OMW_SERVE_TOKEN")
@@ -552,6 +560,12 @@ def _cmd_setup(args) -> int:
     if args.section == "agents":
         agents = [s.strip() for s in args.agents.split(",") if s.strip()] if args.agents else None
         return setup_wizard.setup_agents(agents=agents, noninteractive=args.noninteractive)
+    if args.section == "recall":
+        hosts = [s.strip() for s in args.host.split(",") if s.strip()] if args.host else None
+        return setup_wizard.setup_recall(
+            mode=args.provider, hosts=hosts, base_dir=args.base_dir,
+            noninteractive=args.noninteractive,
+        )
     return setup_wizard.run(
         section=args.section,
         noninteractive=args.noninteractive,
@@ -724,10 +738,15 @@ def build_parser() -> argparse.ArgumentParser:
     pvw.add_argument("--print", action="store_true", help="print the URI instead of launching")
     pvw.set_defaults(func=_cmd_view)
 
+    prc = sub.add_parser("recall", help="Wiki recall for agent hooks (preamble/prompt). See setup recall.")
+    prc.add_argument("action", choices=["preamble", "prompt"])
+    prc.add_argument("--text", default=None, help="prompt text (default: read stdin)")
+    prc.set_defaults(func=_cmd_recall)
+
     pset = sub.add_parser("setup", help="Interactive setup wizard (run after install).")
     pset.add_argument(
         "section", nargs="?",
-        choices=["vault", "hosts", "search", "serve", "personas", "tts", "import", "viewer", "agents"], default=None,
+        choices=["vault", "hosts", "search", "serve", "personas", "tts", "import", "viewer", "agents", "recall"], default=None,
     )
     pset.add_argument(
         "--noninteractive", action="store_true",

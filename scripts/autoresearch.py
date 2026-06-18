@@ -130,6 +130,17 @@ def should_stop(session_dir: Path) -> tuple[bool, str]:
     return (False, "in_progress")
 
 
+def _derive_summary(body: str, *, cap: int = 240) -> str:
+    """First real prose paragraph of the synthesis body (skips headings/blank/markers),
+    truncated. Used as frontmatter `summary` so the page ranks in search/recall."""
+    for para in (body or "").split("\n\n"):
+        line = " ".join(para.split())
+        if not line or line.startswith("#") or line.startswith("**Claim"):
+            continue
+        return line[:cap].rstrip() + ("…" if len(line) > cap else "")
+    return ""
+
+
 def file_back(
     db_path: Path,
     *,
@@ -159,6 +170,7 @@ def file_back(
         citations=citations,
         tags=tags,
         date_str=date_str,
+        summary=_derive_summary(body),
     )
     slug = relpath.removeprefix("wiki/syntheses/").removesuffix(".md")
     ingest.update_index(

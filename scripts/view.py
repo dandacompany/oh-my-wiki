@@ -93,6 +93,8 @@ def run(args) -> int:
     else:
         if not viewer.available():
             print(f"note: {viewer_name} may not be installed; opening URI anyway", file=sys.stderr)
+        for line in viewer.preflight(vault):
+            print(f"note: {line}" if not line.startswith(" ") else line, file=sys.stderr)
         try:
             launch(uri)
         except (FileNotFoundError, OSError):

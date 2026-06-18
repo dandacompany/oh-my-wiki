@@ -54,3 +54,8 @@ class Viewer:
     def scaffold_config(self, vault: VaultRef) -> tuple[list[Path], list[str]]:
         """Write viewer config into the vault. Returns (written_paths, hints)."""
         raise NotImplementedError
+
+    def preflight(self, vault: VaultRef) -> list[str]:
+        """Optional checks run just before launching (e.g. app-side registration).
+        Returns advisory hint strings; default no-op."""
+        return []
