@@ -168,3 +168,50 @@ def test_write_synthesis_includes_summary(tmp_path):
     meta, _ = frontmatter.parse((root / rel).read_text(encoding="utf-8"))
     assert meta.get("summary") == "요약 문장"
     os.environ.pop("OMW_HOME", None)
+
+
+# --- host hook wiring (claude/codex/gemini all share the schema) ---------------------
+
+def test_prompt_from_stdin_extracts_json_prompt():
+    from scripts import recall
+    assert recall._prompt_from_stdin('{"prompt": "수요 예측 평가지표"}') == "수요 예측 평가지표"
+    assert recall._prompt_from_stdin('{"session_id":"x","user_prompt":"hello there"}') == "hello there"
+    assert recall._prompt_from_stdin("raw text fallback here") == "raw text fallback here"
+    assert recall._prompt_from_stdin('{"unrelated": 1}') == ""
+
+
+def test_wire_host_is_idempotent_and_preserves(tmp_path):
+    import json
+    from scripts import recall
+    cfg = tmp_path / "settings.json"
+    cfg.write_text(json.dumps({
+        "mcpServers": {"x": {"command": "y"}},
+        "hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "existing.sh"}]}]},
+    }), encoding="utf-8")
+
+    changed, _ = recall.wire_host("claude", config_path=cfg)
+    assert changed is True
+    data = json.loads(cfg.read_text(encoding="utf-8"))
+    # preserved unrelated config + existing hook
+    assert data["mcpServers"]["x"]["command"] == "y"
+    cmds = [h["command"] for g in data["hooks"]["SessionStart"] for h in g["hooks"]]
+    assert "existing.sh" in cmds
+    assert any("recall preamble" in c for c in cmds)
+    assert any("recall prompt" in h["command"]
+               for g in data["hooks"]["UserPromptSubmit"] for h in g["hooks"])
+    # backup written
+    assert cfg.with_suffix(".json.omw-bak").exists()
+
+    # second run is a no-op
+    changed2, detail2 = recall.wire_host("claude", config_path=cfg)
+    assert changed2 is False and "already wired" in detail2
+
+
+def test_wire_host_creates_config_when_absent(tmp_path):
+    import json
+    from scripts import recall
+    cfg = tmp_path / "sub" / "hooks.json"
+    changed, _ = recall.wire_host("codex", config_path=cfg)
+    assert changed is True and cfg.is_file()
+    data = json.loads(cfg.read_text(encoding="utf-8"))
+    assert "UserPromptSubmit" in data["hooks"] and "SessionStart" in data["hooks"]

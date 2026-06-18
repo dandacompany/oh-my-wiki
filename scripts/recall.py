@@ -68,13 +68,38 @@ def _hits(text: str, top_k: int) -> list[dict]:
         return []
 
 
+#: stdin JSON keys host UserPromptSubmit hooks use to carry the user's prompt.
+_PROMPT_KEYS = ("prompt", "user_prompt", "current_prompt", "message", "text", "input")
+
+
+def _prompt_from_stdin(raw: str) -> str:
+    """Host UserPromptSubmit hooks pipe a JSON payload on stdin; extract the prompt.
+    Falls back to the raw string if it isn't JSON (manual `echo ... | omw recall`)."""
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    if raw[0] in "{[":
+        try:
+            import json
+            obj = json.loads(raw)
+            if isinstance(obj, dict):
+                for k in _PROMPT_KEYS:
+                    val = obj.get(k)
+                    if isinstance(val, str) and val.strip():
+                        return val
+                return ""  # JSON payload but no recognizable prompt field
+        except (ValueError, TypeError):
+            pass
+    return raw
+
+
 def prompt(text: str | None) -> str:
     """Per-prompt recall. Returns injectable context (possibly empty)."""
     cfg = _cfg()
     if cfg["mode"] == "off":
         return ""
     if text is None:
-        text = sys.stdin.read() if not sys.stdin.isatty() else ""
+        text = _prompt_from_stdin(sys.stdin.read()) if not sys.stdin.isatty() else ""
     text = text or ""
     if is_trivial(text):
         return ""
@@ -148,6 +173,80 @@ def upsert_block(md_path, block: str) -> None:
         new = text + sep + block + "\n"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(new, encoding="utf-8")
+
+
+#: Each supported host reads command hooks from this JSON file, all sharing the
+#: Claude-style schema: {"hooks": {<Event>: [{"hooks": [{"type","command",...}]}]}}.
+def host_hook_configs() -> dict:
+    from pathlib import Path
+    home = Path.home()
+    return {
+        "claude": home / ".claude" / "settings.json",
+        "codex": home / ".codex" / "hooks.json",
+        "gemini": home / ".gemini" / "settings.json",
+    }
+
+
+def _omw_bin() -> str:
+    import shutil
+    return shutil.which("omw") or "omw"
+
+
+def _recall_hook_specs() -> dict:
+    """event -> (command, statusMessage). Marked by the 'omw recall' substring for idempotency."""
+    omw = _omw_bin()
+    return {
+        "SessionStart": (f'"{omw}" recall preamble', "omw wiki preamble"),
+        "UserPromptSubmit": (f'"{omw}" recall prompt', "omw wiki recall"),
+    }
+
+
+def _event_has_recall(entries: list) -> bool:
+    """True if any hook in this event is already an `omw recall …` invocation
+    (path/quoting-agnostic — matches the `recall preamble|prompt` subcommand)."""
+    for group in entries or []:
+        for h in (group or {}).get("hooks", []):
+            cmd = (h or {}).get("command", "")
+            if "recall" in cmd and ("preamble" in cmd or "prompt" in cmd):
+                return True
+    return False
+
+
+def wire_host(host: str, *, config_path=None) -> tuple[bool, str]:
+    """Idempotently merge recall SessionStart+UserPromptSubmit hooks into a host
+    config (JSON). Preserves all existing content. Returns (changed, detail)."""
+    import json
+    from pathlib import Path
+    path = Path(config_path) if config_path else host_hook_configs().get(host)
+    if path is None:
+        return False, f"unknown host {host!r}"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (OSError, ValueError) as e:
+        return False, f"unreadable {path}: {e}"
+    if not isinstance(data, dict):
+        return False, f"unexpected config shape in {path}"
+    hooks = data.setdefault("hooks", {})
+    added = []
+    for event, (command, status) in _recall_hook_specs().items():
+        entries = hooks.setdefault(event, [])
+        if _event_has_recall(entries):
+            continue
+        entries.append({"hooks": [{"type": "command", "command": command,
+                                   "timeout": 5, "statusMessage": status}]})
+        added.append(event)
+    if not added:
+        return False, f"already wired ({path})"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():  # one-shot backup before first mutation
+            bak = path.with_suffix(path.suffix + ".omw-bak")
+            if not bak.exists():
+                bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    except OSError as e:
+        return False, f"write failed {path}: {e}"
+    return True, f"wired {'+'.join(added)} → {path}"
 
 
 def main(argv=None) -> int:

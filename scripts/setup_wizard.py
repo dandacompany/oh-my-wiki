@@ -409,12 +409,16 @@ def setup_recall(*, mode: str | None = None, hosts: list[str] | None = None,
             print(f"  - {host}: unknown host, skipped")
             continue
         path = base / persona_export.HOST_FILES[host]
-        recall.upsert_block(path, block)
+        recall.upsert_block(path, block)     # Tier 1: guidance in instruction file
         written.append(path)
     print(f"✓ recall mode '{mode}'; guidance injected into "
           f"{', '.join(p.name for p in written) or '(none)'}.")
-    print("  (Claude Code Tier-2 자동 주입은 settings.json UserPromptSubmit 훅으로 "
-          "`omw recall prompt`을 연결하세요 — references/auto-recall-hook-design.md 참고.)")
+    # Tier 2: wire the host's native SessionStart + UserPromptSubmit hooks (global config).
+    for host in hosts:
+        if host not in recall.host_hook_configs():
+            continue
+        changed, detail = recall.wire_host(host)
+        print(f"  {'✓' if changed else '–'} {host} hooks: {detail}")
     return 0
 
 

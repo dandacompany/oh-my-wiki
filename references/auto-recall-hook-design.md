@@ -1,10 +1,16 @@
 # 설계 제안: omw 자동 위키 recall 훅 (auto-recall)
 
-> 상태: **1차 구현됨** (엔진 + Tier1 호스트 배선 + 매니페스트). Tier2 Claude settings.json 자동 배선은 후속. 2026-06-18.
-> 구현: `scripts/recall.py`(`omw recall preamble|prompt`), `omw setup recall`(CLAUDE/AGENTS/GEMINI 가이드 주입 + `recall.mode`), `hooks/hooks.json`의 `user_prompt_submit`.
-> 교차호스트 검증 결과: 기존 `hooks.json`은 어느 호스트에도 자동 배선돼 있지 않았다(plugin.json hooks 필드 없음) — 즉 "Claude 전용"이 아니라 "미배선". recall은 호스트 중립 엔진 + 호스트별 번역으로 설계.
-> 목표: 에이전트(Claude Code / Codex)가 **스스로 omw 위키를 검색·활용**하도록 만든다.
-> 트리거 의도: (a) 새/모르는 세션 시작, (b) 사용자가 과거 맥락을 요청, (c) 에이전트가 "정보가 부족하다"고 자가 판단할 때.
+> 상태: **구현 완료** (엔진 + Tier1 + Tier2 호스트 네이티브 훅 배선 + 매니페스트). 2026-06-18.
+> 구현: `scripts/recall.py`(`omw recall preamble|prompt`, stdin JSON 프롬프트 추출, `wire_host`), `omw setup recall`(Tier1 가이드 주입 + `recall.mode` + Tier2 훅 배선), `hooks/hooks.json`의 `user_prompt_submit`.
+> **세 호스트 모두 동일한 훅 스키마**(`{"hooks": {<Event>: [{"hooks":[{"type":"command","command":...}]}]}}`)를 씀:
+>
+> - Claude Code → `~/.claude/settings.json`
+> - Codex → `~/.codex/hooks.json`
+> - Gemini CLI → `~/.gemini/settings.json`
+>   `wire_host`가 `SessionStart`(→`omw recall preamble`)+`UserPromptSubmit`(→`omw recall prompt`)를 멱등 병합(기존 보존, `.omw-bak` 백업). UserPromptSubmit는 stdin JSON에서 프롬프트 필드를 추출한다.
+>   교차호스트 검증 결과: 기존 `hooks/hooks.json`은 어느 호스트에도 자동 배선돼 있지 않았다(plugin.json hooks 필드 없음) — 즉 "Claude 전용"이 아니라 "미배선". recall은 호스트 중립 엔진 + 호스트별 번역으로 설계.
+>   목표: 에이전트(Claude Code / Codex)가 **스스로 omw 위키를 검색·활용**하도록 만든다.
+>   트리거 의도: (a) 새/모르는 세션 시작, (b) 사용자가 과거 맥락을 요청, (c) 에이전트가 "정보가 부족하다"고 자가 판단할 때.
 
 ---
 
