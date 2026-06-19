@@ -122,6 +122,46 @@ SECTIONS: list[dict] = [
                 "운영합니다. 테스트·CI·다중 환경 격리에 유용합니다.</li>"
                 "</ul>",
             },
+            {
+                "label": "프롬프트별 recall — omw setup recall",
+                "bar": "terminal",
+                "text": "omw setup recall",
+                "prose": "<strong>프롬프트별 recall</strong>은 물어보는 순간 AI 에이전트가 활성 위키를 "
+                "자동으로 참고하게 만듭니다. <code>omw find</code>를 직접 실행하지 않아도 됩니다. "
+                "<code>omw setup</code> 마법사의 한 섹션이기도 합니다.",
+                "callout": "모드를 설정하고, <code>CLAUDE.md</code>·<code>AGENTS.md</code>·"
+                "<code>GEMINI.md</code>에 안내 블록을 주입하며, 각 호스트의 네이티브 훅"
+                "(<strong>SessionStart + UserPromptSubmit</strong>)을 Claude Code·Codex·Gemini CLI에 "
+                "연결합니다. host-neutral — 엔진 하나를 호스트별로 번역합니다.",
+            },
+            {
+                "label": "설정 두 축 — recall.mode (언제) · recall.strategy (어떻게)",
+                "bar": "config",
+                "text": "recall.mode      auto       # 프롬프트마다 검색 → <omw-recall> 블록 주입\n"
+                "                 advisory   # 훅은 권유만, 세션 내 에이전트가 직접 omw find (추가 비용 없음)\n"
+                "                 off\n\n"
+                "recall.strategy  fts        # 키워드 + 한국어 조사 정규화 (현재 구현)\n"
+                "                 embedding  # (예정)\n"
+                "                 hybrid     # (예정)\n"
+                "                 llm        # (예정, 출시 전까지 fts로 폴백 — 지금도 선택 가능)",
+                "callout": "<code>mode</code>는 <strong>언제</strong> 위키를 참고할지, "
+                "<code>strategy</code>는 <strong>어떻게</strong> 후보를 찾을지를 정합니다.",
+            },
+            {
+                "label": "auto 모드에서 프롬프트에 주입되는 블록 예시",
+                "bar": "omw-recall",
+                "text": "<omw-recall> 활성 omw 위키에 관련 페이지가 있습니다 — 답변의 근거/출처로 활용하세요:\n"
+                "- Demand Forecasting — wiki/syntheses/demand-forecasting.md [arima,prophet] (score 1.9)\n"
+                "</omw-recall>",
+                "callout": "제목·경로·태그·인용 점수가 함께 들어가, 에이전트가 곧바로 출처로 인용할 수 있습니다.",
+            },
+            {
+                "kind": "note",
+                "text": "<span class='star'>★ recall 품질의 비결</span> — "
+                "recall은 좋은 <strong>title·tags·summary</strong> frontmatter에서 나옵니다. "
+                "FTS는 본문이 아니라 이 메타필드로 순위를 매기기 때문입니다. "
+                "<code>autoresearch</code>는 summary를 자동으로 채워 주므로 recall 정확도를 높여 줍니다.",
+            },
         ],
     ),
     # ── B. 볼트 · 수집 ────────────────────────────────────────────────────────

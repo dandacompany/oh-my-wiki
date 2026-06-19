@@ -636,6 +636,52 @@ searches per claim, assigns confidence tags, then drafts a synthesis page at
 All personas follow the **propose → confirm → execute** model. They read your
 files, draft proposals, and show you what will change before writing anything.
 
+### 4.9 Per-prompt recall — your wiki shows up when you need it
+
+A wiki only pays off if it gets _used_. `recall` makes your AI agent consult the
+active wiki automatically, the moment you ask a question — you don't have to
+remember to run `omw find`.
+
+Enable it (it's also a step in the full `omw setup`, or run it on its own):
+
+```
+omw setup recall
+```
+
+This sets a mode, writes a short guidance block into your host instruction files
+(CLAUDE.md / AGENTS.md / GEMINI.md), and wires each host's native hooks
+(`SessionStart` + `UserPromptSubmit`) for Claude Code, Codex, and Gemini CLI.
+omw is host-neutral here: one engine, translated into each host's hook format.
+
+Two axes you can configure:
+
+- `recall.mode` — _when_ it acts:
+  - `auto` — the hook searches the active vault on every prompt and, when a page
+    is relevant, injects an `<omw-recall>` block (title · path · tags · citations)
+    for the agent to ground its answer on.
+  - `advisory` — the hook only nudges; the in-session agent decides whether to
+    run `omw find` itself (no extra cost — the agent is already the LLM).
+  - `off` — disabled.
+- `recall.strategy` — _how_ it retrieves: `fts` (keyword + Korean-josa
+  normalization, implemented today) · `embedding` · `hybrid` · `llm`. The latter
+  three are planned and fall back to `fts` until shipped, so you can already
+  select them.
+
+What you'll see — ask something whose topic is in the wiki (e.g. "compare ARIMA
+and Prophet for demand forecasting") and the agent receives:
+
+```
+<omw-recall> 활성 omw 위키에 관련 페이지가 있습니다 — 답변의 근거/출처로 활용하세요:
+- Demand Forecasting — `wiki/syntheses/demand-forecasting.md` [arima,prophet] (score 1.9)
+</omw-recall>
+```
+
+so its answer cites your own vetted, sourced page instead of guessing.
+
+> Recall quality rides on good `title` / `tags` / `summary` frontmatter — the FTS
+> index ranks on those, not full body text. `autoresearch` fills `summary`
+> automatically; add tags to important pages to make them easy to surface.
+
 ---
 
 ## Part 5 — Reference

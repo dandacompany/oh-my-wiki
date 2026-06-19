@@ -259,8 +259,9 @@ footer .links a{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spa
 <a href="#step-STEP 07"><span class="tag">STEP 07</span>엔티티 자동 링크</a>
 <a href="#step-STEP 08"><span class="tag">STEP 08</span>인라인 필드</a>
 <a href="#step-STEP 09"><span class="tag">STEP 09</span>페르소나 (세션 내, 자연어)</a>
-<a href="#step-STEP 10"><span class="tag">STEP 10</span>Obsidian · Logseq에서 열기</a>
-<a href="#step-STEP 11"><span class="tag">STEP 11</span>웹에서 가져오기</a>
+<a href="#step-STEP 10"><span class="tag">STEP 10</span>프롬프트별 recall</a>
+<a href="#step-STEP 11"><span class="tag">STEP 11</span>Obsidian · Logseq에서 열기</a>
+<a href="#step-STEP 12"><span class="tag">STEP 12</span>웹에서 가져오기</a>
 <a href="#step-레퍼런스"><span class="tag">레퍼런스</span>마무리 / 다음 단계</a>
 </div></nav>
 
@@ -531,6 +532,29 @@ build a glossary for my vault</pre></div>
 <section id="step-STEP 10">
 <div class="container">
 <div class="section-num">STEP 10</div>
+<h2>프롬프트별 recall</h2>
+<p class="lede">물어보는 순간 AI 에이전트가 활성 위키를 자동으로 참고하게 만드는 기능입니다. <code>omw find</code>를 직접 실행하지 않아도, 프롬프트마다 관련 페이지를 찾아 답변의 근거로 끌어옵니다. Claude Code · Codex · Gemini CLI 어디서나 동일하게 동작합니다(엔진 하나, 호스트별로 번역).</p>
+<div class="block-label">recall 켜기 — omw setup recall</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw setup recall</pre></div>
+<div class="callout"><code>omw setup</code> 마법사의 한 섹션이기도 합니다. 모드를 설정하고, <code>CLAUDE.md</code>·<code>AGENTS.md</code>·<code>GEMINI.md</code>에 안내 블록을 주입하며, 각 호스트의 네이티브 훅(<strong>SessionStart + UserPromptSubmit</strong>)을 Claude Code·Codex·Gemini CLI에 연결합니다.</div>
+<div class="block-label">설정 두 축 — recall.mode (언제) · recall.strategy (어떻게)</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">config</span></div><pre>recall.mode      auto       # 프롬프트마다 검색 → &lt;omw-recall&gt; 블록 주입
+                 advisory   # 훅은 권유만, 세션 내 에이전트가 직접 omw find (추가 비용 없음)
+                 off
+
+recall.strategy  fts        # 키워드 + 한국어 조사 정규화 (현재 구현)
+                 embedding  # (예정)
+                 hybrid     # (예정)
+                 llm        # (예정, 출시 전까지 fts로 폴백 — 지금도 선택 가능)</pre></div>
+<div class="callout"><code>mode</code>는 <strong>언제</strong> 위키를 참고할지, <code>strategy</code>는 <strong>어떻게</strong> 후보를 찾을지를 정합니다. <code>auto</code>는 매 프롬프트를 검색하고, <code>advisory</code>는 세션 내 에이전트가 스스로 <code>omw find</code>를 실행하도록 권유만 합니다.</div>
+<div class="block-label">auto 모드에서 프롬프트에 주입되는 블록 예시</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">omw-recall</span></div><pre>&lt;omw-recall&gt; 활성 omw 위키에 관련 페이지가 있습니다 — 답변의 근거/출처로 활용하세요:
+- Demand Forecasting — wiki/syntheses/demand-forecasting.md [arima,prophet] (score 1.9)
+&lt;/omw-recall&gt;</pre></div>
+<div class="callout">제목·경로·태그·인용 점수가 함께 들어가, 에이전트가 곧바로 출처로 인용할 수 있습니다.</div>
+<div class="note"><span class='star'>★ recall 품질의 비결</span> — recall은 좋은 <strong>title·tags·summary</strong> frontmatter에서 나옵니다. FTS는 본문이 아니라 이 메타필드로 순위를 매기기 때문입니다. <code>autoresearch</code>는 summary를 자동으로 채워 주므로 recall 정확도를 높여 줍니다.</div>
+</div></section>
+
+<section id="step-STEP 11">
+<div class="container">
+<div class="section-num">STEP 11</div>
 <h2>Obsidian · Logseq에서 열기</h2>
 <p class="lede"><code>omw setup viewer</code>로 기본 뷰어를 지정하고, <code>omw view</code>로 활성 vault·페이지·검색 결과를 URI 스킴으로 바로 엽니다. 플러그인 설치 없이 동작합니다.</p>
 <div class="block-label">기본 뷰어 설정 (최초 1회)</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw setup viewer</pre></div>
@@ -543,9 +567,9 @@ omw view wiki/concepts/llm-wiki.md --print    # URI만 출력</pre></div>
 <div class="note"><span class='star'>★ 공개 여부</span> — 페이지를 메신저 API(<code>omw serve</code>)로 노출하려면 먼저 <code>omw visibility set wiki/concepts/llm-wiki.md public</code>으로 공개 설정이 필요합니다. 기본값은 <strong>private</strong>이므로 명시적으로 설정하지 않으면 노출되지 않습니다.</div>
 </div></section>
 
-<section id="step-STEP 11">
+<section id="step-STEP 12">
 <div class="container">
-<div class="section-num">STEP 11</div>
+<div class="section-num">STEP 12</div>
 <h2>웹에서 가져오기</h2>
 <p class="lede">URL 하나를 즉시 raw/로 가져오거나(<code>omw fetch</code>), 여러 URL을 쌓아 두었다가 한 번에 수집합니다(<code>omw inbox</code>). 두 방법 모두 LLM 없이 원본 그대로 저장합니다.</p>
 <div class="block-label">URL 즉시 수집 — omw fetch</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw fetch https://example.com/article

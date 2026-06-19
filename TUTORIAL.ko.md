@@ -620,6 +620,49 @@ build a glossary for my vault
 모든 persona는 **제안 → 확인 → 실행** 모델을 따릅니다. 파일을 읽고, 제안 초안을 작성하고,
 무엇이 변경될지 보여준 다음 작성합니다.
 
+### 4.9 프롬프트별 recall — 필요한 순간 위키가 알아서 따라옵니다
+
+위키는 _쓰여야_ 값을 합니다. `recall`은 질문하는 순간 AI 에이전트가 활성 위키를
+자동으로 참고하게 만듭니다 — `omw find`를 직접 떠올려 칠 필요가 없습니다.
+
+활성화(전체 `omw setup`의 한 단계이기도 하고, 단독 실행도 가능):
+
+```
+omw setup recall
+```
+
+이 명령은 모드를 설정하고, 호스트 지침 파일(CLAUDE.md / AGENTS.md / GEMINI.md)에
+짧은 가이드 블록을 넣고, Claude Code·Codex·Gemini CLI 각각의 네이티브 훅
+(`SessionStart` + `UserPromptSubmit`)을 배선합니다. omw는 여기서 호스트 중립적입니다 —
+하나의 엔진을 각 호스트의 훅 포맷으로 번역할 뿐입니다.
+
+설정 가능한 두 축:
+
+- `recall.mode` — _언제_ 작동하나:
+  - `auto` — 매 프롬프트마다 활성 볼트를 검색해, 관련 페이지가 있으면 `<omw-recall>`
+    블록(제목·경로·태그·출처)을 주입해 에이전트가 그 근거로 답하게 합니다.
+  - `advisory` — 훅은 넛지만 주고, 세션 내 에이전트가 직접 `omw find`를 쓸지 판단합니다
+    (이미 그 에이전트가 LLM이므로 추가 비용 0).
+  - `off` — 비활성.
+- `recall.strategy` — _어떻게_ 검색하나: `fts`(키워드 + 한국어 조사 정규화, 현재 구현) ·
+  `embedding` · `hybrid` · `llm`. 뒤 셋은 계획 단계로, 구현 전까지는 `fts`로 폴백하므로
+  지금 선택해 둘 수 있습니다.
+
+예시 — 위키에 있는 주제를 물으면(예: "수요 예측에서 ARIMA와 Prophet 비교") 에이전트는
+다음을 받습니다:
+
+```
+<omw-recall> 활성 omw 위키에 관련 페이지가 있습니다 — 답변의 근거/출처로 활용하세요:
+- Demand Forecasting — `wiki/syntheses/demand-forecasting.md` [arima,prophet] (score 1.9)
+</omw-recall>
+```
+
+그래서 추측 대신 단테님이 검증·출처를 단 페이지를 인용해 답합니다.
+
+> recall 품질은 좋은 `title` / `tags` / `summary` frontmatter에 달려 있습니다 — FTS 인덱스는
+> 본문 전체가 아니라 그 필드들로 랭킹합니다. `autoresearch`는 `summary`를 자동으로 채우니,
+> 중요한 페이지엔 태그를 달아 잘 떠오르게 하세요.
+
 ---
 
 ## Part 5 — 레퍼런스

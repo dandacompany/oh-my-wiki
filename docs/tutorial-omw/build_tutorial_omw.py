@@ -823,6 +823,54 @@ SECTIONS: list[dict] = [
     ),
     dict(
         num="STEP 10",
+        title="프롬프트별 recall",
+        lede="물어보는 순간 AI 에이전트가 활성 위키를 자동으로 참고하게 만드는 기능입니다. "
+        "<code>omw find</code>를 직접 실행하지 않아도, 프롬프트마다 관련 페이지를 찾아 답변의 근거로 끌어옵니다. "
+        "Claude Code · Codex · Gemini CLI 어디서나 동일하게 동작합니다(엔진 하나, 호스트별로 번역).",
+        commands=[
+            {
+                "label": "recall 켜기 — omw setup recall",
+                "bar": "terminal",
+                "text": "omw setup recall",
+                "callout": "<code>omw setup</code> 마법사의 한 섹션이기도 합니다. 모드를 설정하고, "
+                "<code>CLAUDE.md</code>·<code>AGENTS.md</code>·<code>GEMINI.md</code>에 안내 블록을 주입하며, "
+                "각 호스트의 네이티브 훅(<strong>SessionStart + UserPromptSubmit</strong>)을 "
+                "Claude Code·Codex·Gemini CLI에 연결합니다.",
+            },
+            {
+                "label": "설정 두 축 — recall.mode (언제) · recall.strategy (어떻게)",
+                "bar": "config",
+                "text": "recall.mode      auto       # 프롬프트마다 검색 → <omw-recall> 블록 주입\n"
+                "                 advisory   # 훅은 권유만, 세션 내 에이전트가 직접 omw find (추가 비용 없음)\n"
+                "                 off\n\n"
+                "recall.strategy  fts        # 키워드 + 한국어 조사 정규화 (현재 구현)\n"
+                "                 embedding  # (예정)\n"
+                "                 hybrid     # (예정)\n"
+                "                 llm        # (예정, 출시 전까지 fts로 폴백 — 지금도 선택 가능)",
+                "callout": "<code>mode</code>는 <strong>언제</strong> 위키를 참고할지, "
+                "<code>strategy</code>는 <strong>어떻게</strong> 후보를 찾을지를 정합니다. "
+                "<code>auto</code>는 매 프롬프트를 검색하고, <code>advisory</code>는 세션 내 에이전트가 "
+                "스스로 <code>omw find</code>를 실행하도록 권유만 합니다.",
+            },
+            {
+                "label": "auto 모드에서 프롬프트에 주입되는 블록 예시",
+                "bar": "omw-recall",
+                "text": "<omw-recall> 활성 omw 위키에 관련 페이지가 있습니다 — 답변의 근거/출처로 활용하세요:\n"
+                "- Demand Forecasting — wiki/syntheses/demand-forecasting.md [arima,prophet] (score 1.9)\n"
+                "</omw-recall>",
+                "callout": "제목·경로·태그·인용 점수가 함께 들어가, 에이전트가 곧바로 출처로 인용할 수 있습니다.",
+            },
+            {
+                "kind": "note",
+                "text": "<span class='star'>★ recall 품질의 비결</span> — "
+                "recall은 좋은 <strong>title·tags·summary</strong> frontmatter에서 나옵니다. "
+                "FTS는 본문이 아니라 이 메타필드로 순위를 매기기 때문입니다. "
+                "<code>autoresearch</code>는 summary를 자동으로 채워 주므로 recall 정확도를 높여 줍니다.",
+            },
+        ],
+    ),
+    dict(
+        num="STEP 11",
         title="Obsidian · Logseq에서 열기",
         lede="<code>omw setup viewer</code>로 기본 뷰어를 지정하고, "
         "<code>omw view</code>로 활성 vault·페이지·검색 결과를 URI 스킴으로 바로 엽니다. "
@@ -855,7 +903,7 @@ SECTIONS: list[dict] = [
         ],
     ),
     dict(
-        num="STEP 11",
+        num="STEP 12",
         title="웹에서 가져오기",
         lede="URL 하나를 즉시 raw/로 가져오거나(<code>omw fetch</code>), "
         "여러 URL을 쌓아 두었다가 한 번에 수집합니다(<code>omw inbox</code>). "
