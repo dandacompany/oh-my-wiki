@@ -63,14 +63,14 @@ jobs:
         run: |
           # CLI modules respond to --help with exit 0
           python -m scripts.wizard --help > /dev/null
-          python -m scripts.swarm --help > /dev/null
+          python -m scripts.recall --help > /dev/null
           python -m scripts.personas --help > /dev/null
           # personas list emits a non-empty JSON array (structural, no hardcoded count)
           python - <<'PY'
           import json, subprocess, sys
           out = subprocess.check_output([sys.executable, "-m", "scripts.personas", "list"], text=True)
           data = json.loads(out)
-          assert isinstance(data, list) and len(data) >= 16, "expected >=16 personas (9 base + 6 SP1 + orchestrator)"
+          assert isinstance(data, list) and data, "personas list must be a non-empty JSON array"
           print(f"personas: {len(data)} entries")
           PY
           # both plugin manifests are valid JSON
