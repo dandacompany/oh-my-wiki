@@ -74,18 +74,50 @@ def record_use(db_path: Path, *, vault_id: int, relpaths, today: str) -> bool:
     return usage.bump(reindex._vault_path(db_path, vault_id), relpaths, today)
 
 
+def _lint_signals(db_path: Path, vault_id: int) -> dict[str, list[str]]:
+    """relpath -> negative content signals from deterministic lint (best-effort).
+
+    These mean "this page's knowledge looks wrong/outdated" (not mere staleness),
+    so they flag a page even if it was used recently. Final contradiction/stale
+    verdicts are still LLM-judged in commands/lint.md — here we only surface signals.
+    """
+    try:
+        from scripts import wiki_lint
+        rep = wiki_lint.check(db_path, vault_id=vault_id)
+    except Exception:
+        return {}
+    sig: dict[str, list[str]] = {}
+
+    def add(rel, reason):
+        if rel:
+            sig.setdefault(rel, [])
+            if reason not in sig[rel]:
+                sig[rel].append(reason)
+
+    for d in rep.get("dangling_links", []):
+        add(d.get("source"), "broken-link")
+    for c in rep.get("contradiction_candidates", []):
+        add(c.get("page_a"), "contradiction")
+        add(c.get("page_b"), "contradiction")
+    for s in rep.get("stale_claim_candidates", []):
+        add(s.get("relpath"), "stale-claim")
+    return sig
+
+
 def audit(db_path: Path, *, vault_id: int, today: str, apply: bool = False) -> list[dict]:
     """Deterministic freshness audit (report-only unless apply=True).
 
     - `expired` (≥2 intervals overdue, not used recently) → propose confidence demotion + needs_reconfirm
-    - `stale`   (≥1 interval overdue)                     → propose stale flag
-    - `pin: true` pages are exempt; real recent use (usage store) reactivates → no action.
-    Promotion is never automatic — restoring confidence stays with the agent + user
-    (propose → confirm → execute). With apply=True, only writes flags/demotions, then reindexes.
+    - `stale`   (≥1 interval overdue, OR a negative lint signal) → propose stale flag
+    - `pin: true` pages are exempt; real recent use (usage store) reactivates time-staleness.
+    Negative content signals (broken-link / contradiction / stale-claim) flag a page
+    even if recently used. Promotion is never automatic — restoring confidence stays
+    with the agent + user (propose → confirm → execute). apply=True writes flags/demotions, then reindexes.
     """
     from scripts import usage
     root = reindex._vault_path(db_path, vault_id)
     used = usage.last_used(root)
+    lint_sig = _lint_signals(db_path, vault_id)
     out: list[dict] = []
     changed = False
     for md in sorted(root.rglob("*.md")):
@@ -106,7 +138,10 @@ def audit(db_path: Path, *, vault_id: int, today: str, apply: bool = False) -> l
         ratio = overdue_ratio(rv.get("due"), today, interval)
         state = staleness_state(ratio)
         if _used_recently(used.get(rel), today, interval):
-            state = "fresh"  # reactivated by real use
+            state = "fresh"  # reactivated by real use (time-staleness only)
+        signals = lint_sig.get(rel, [])
+        if signals and state in ("fresh", "due", "unscheduled"):
+            state = "stale"  # a content signal flags even a time-fresh page
         if state not in ("stale", "expired"):
             continue
         new_conf = demote(conf) if state == "expired" else conf
@@ -115,7 +150,8 @@ def audit(db_path: Path, *, vault_id: int, today: str, apply: bool = False) -> l
         out.append({
             "relpath": rel, "state": state,
             "overdue_ratio": round(ratio, 2) if ratio is not None else None,
-            "confidence": conf, "proposed_confidence": new_conf, "action": action,
+            "confidence": conf, "proposed_confidence": new_conf,
+            "signals": signals, "action": action,
         })
         if apply:
             if new_conf != conf:
@@ -123,6 +159,8 @@ def audit(db_path: Path, *, vault_id: int, today: str, apply: bool = False) -> l
             if state == "expired":
                 meta["needs_reconfirm"] = True
             meta["stale"] = True
+            if signals:
+                meta["stale_signals"] = signals
             md.write_text(frontmatter.dump(meta, body), encoding="utf-8")
             changed = True
     if apply and changed:

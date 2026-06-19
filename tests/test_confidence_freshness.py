@@ -92,6 +92,25 @@ def test_audit_reports_and_applies(tmp_path):
         os.environ.pop("OMW_HOME", None)
 
 
+def test_audit_lint_signal_flags_fresh_page(tmp_path):
+    # A time-FRESH page (due in the future) that has a broken outbound link
+    # must still be flagged stale via the deterministic lint signal.
+    db, vid, root = _vault(tmp_path)
+    meta = {"title": "P", "type": "concept", "confidence": "high",
+            "review": {"due": "2026-12-01", "interval_days": 90}}
+    body = "# body\n\nsee [gone](./does-not-exist.md)\n"
+    (root / "wiki" / "concepts" / "broken.md").write_text(
+        frontmatter.dump(meta, body), encoding="utf-8")
+    try:
+        rep = review.audit(db, vault_id=vid, today=TODAY, apply=False)
+        by = {r["relpath"]: r for r in rep}
+        hit = by.get("wiki/concepts/broken.md")
+        assert hit is not None and hit["action"] == "flag-stale"
+        assert "broken-link" in hit["signals"]
+    finally:
+        os.environ.pop("OMW_HOME", None)
+
+
 def test_audit_reactivation_by_use(tmp_path):
     db, vid, root = _vault(tmp_path)
     (root / "wiki" / "concepts" / "expired.md").write_text(_page("high", "2025-12-01"), encoding="utf-8")
