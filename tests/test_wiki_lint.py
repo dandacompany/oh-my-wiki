@@ -21,8 +21,14 @@ def broken_wiki(tmp_db, tmp_path):
     vault = registry.add_vault(
         tmp_db, name="bw", path=dest, type_="markdown", mode="wiki"
     )
-    # Force orphan-summary mtime to be 30 days old (passes 7-day grace)
-    old = time.time() - 30 * 86400
+    # Hermetic mtimes: git checkout doesn't preserve mtime and copytree (copy2)
+    # carries the fixture's stored mtime, so on a stale local checkout every page
+    # can exceed the 7-day orphan grace and get mis-flagged. Pin all pages "now",
+    # then age only the one page the orphan test expects to trip.
+    now = time.time()
+    for p in dest.rglob("*.md"):
+        os.utime(p, (now, now))
+    old = now - 30 * 86400  # 30 days old → exceeds the 7-day grace
     os.utime(dest / "wiki/summaries/orphan-summary.md", (old, old))
     reindex.full(tmp_db, vault_id=vault["id"])
     return tmp_db, vault, dest
