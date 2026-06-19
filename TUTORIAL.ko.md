@@ -5,14 +5,14 @@
 이 튜토리얼은 실제 wiki vault를 구축하고 유지하는 과정을 단계별로 안내합니다.
 모든 커맨드 블록은 실제 v3 CLI를 실행한 결과물 그대로입니다.
 자연어 작업(ingest, query, autoresearch, persona)은 Claude Code / Codex / Gemini 세션에서
-입력하는 프롬프트 형태로 표시됩니다 — CLI 출력이 아닙니다.
+입력하는 프롬프트 형태로 표시됩니다. CLI 출력이 아닙니다.
 
 ---
 
 ## Part 1 — 무엇이며, 왜 쓰는가
 
 **oh-my-wiki**는 AI 코딩 에이전트로 구동하는 wiki 규약 및 유지 관리 프레임워크입니다.
-Andrej Karpathy가 "LLM Wiki" Gist에서 설명한 워크플로를 구현합니다: 모든 소스는
+Andrej Karpathy가 "LLM Wiki" Gist에서 설명한 워크플로를 구현합니다. 모든 소스는
 raw 스냅샷, 요약 페이지, 그리고 10–15개의 엔티티 및 개념 페이지 터치로 이어집니다.
 쿼리는 평문 파일 덤프가 아닌 이 구조화된 wiki에서 가져오므로, 답변이 특정 페이지를
 출처로 인용할 수 있습니다.
@@ -36,10 +36,10 @@ oh-my-wiki는 정확히 두 가지 인터페이스를 제공합니다:
 | **`omw` CLI**   | 결정론적 작업 — LLM 없이도 실행 가능 | `omw status`, `omw vault create`, `omw lint`, `omw schema list`, `omw supersede`, `omw review`, `omw links`, `omw fields`, `omw setup`, `omw doctor` |
 | **`omw` skill** | 세션 내 자연어 추론                  | ingest, query, autoresearch, personas, find, edit, move, delete                                                                                      |
 
-모델의 흐름은 이렇습니다: **persona가 제안 → 사용자가 확인 → 결정론적 작업이 실행**.
+모델의 흐름은 이렇습니다. **persona가 제안 → 사용자가 확인 → 결정론적 작업이 실행**.
 Writing persona는 콘텐츠를 분석해 변경 사항을 제안하고, `omw` CLI가 결정론적 출력(링크 삽입,
 supersede 처리, lint 수정)을 실행합니다. 이 구조 덕분에 추론 과정은 투명하고 파일 변경은
-감사 가능합니다.
+감사할 수 있습니다.
 
 ---
 
@@ -122,7 +122,7 @@ omw setup
 
 `omw setup`은 첫 번째 vault, 검색 provider, serve API, persona, import, viewer, agents,
 프롬프트별 recall 설정을 구성하는 대화형 마법사입니다.
-프롬프트에 따라 진행하세요. 빠른 시작을 원하면 기본값을 그대로 받아들이면 됩니다 — 나중에
+프롬프트에 따라 진행하세요. 빠른 시작을 원하면 기본값을 그대로 받아들이면 됩니다. 나중에
 `omw setup vault`나 `omw setup personas`를 다시 실행해 개별 섹션을 조정할 수 있습니다.
 
 ### Step 2 — 상태 확인
@@ -143,7 +143,7 @@ omw status
 ```
 
 `needs: "setup"`은 깨끗한 머신에서 실제 사용자가 보는 화면입니다. (소스 트리에서 실행 중인 경우
-`data/registry.db`가 저장소에 존재하므로 `needs`가 `"migrate"`로 표시됩니다 — 이는 개발 트리에서만
+`data/registry.db`가 저장소에 존재하므로 `needs`가 `"migrate"`로 표시됩니다. 이는 개발 트리에서만
 나타나는 정상적인 동작입니다.)
 
 ### Step 3 — 첫 번째 vault 만들기
@@ -192,7 +192,7 @@ the entities and concepts that appeared get their own pages. 10–15 page touche
 per ingest is normal.
 ```
 
-스킬이 제목, slug, 태그, 저장 위치를 제안합니다 — 확인하면 저장됩니다.
+스킬이 제목, slug, 태그, 저장 위치를 제안합니다. 확인하면 저장됩니다.
 
 ### Step 5 — lint 검사 실행
 
@@ -225,20 +225,20 @@ omw lint
 `links` 키들(`broken`, `orphans`, `index_drift`, `contradictions`,
 `supersedes`, `superseded_unmarked`, `link_suggestions`)은 vault의
 전체적인 구조 건강 상태를 알려줍니다. `drift`는 디스크에 있지만 인덱스에 없는 파일을
-보고하고, `auto_fix_hints`는 문제가 발견될 때 실행 가능한 해결 방법을 제시합니다.
+보고하고, `auto_fix_hints`는 문제가 발견되면 실행할 수 있는 해결 방법을 제시합니다.
 
 ---
 
 ## Part 4 — 시나리오: 실제 wiki 성장시키기
 
-이 섹션은 단일 연속 예제를 통해 진행됩니다. 세 개의 페이지가 있는 `demo` vault를 사용합니다:
+이 섹션은 단일 연속 예제로 진행됩니다. 세 개의 페이지가 있는 `demo` vault를 사용합니다:
 
 - `wiki/entities/andrej-karpathy.md` — Andrej Karpathy의 엔티티 페이지
 - `wiki/concepts/llm-wiki.md` — LLM Wiki 방법론의 개념 페이지
 - `wiki/concepts/old-method.md` — 나중에 폐기할 오래된 페이지
 
 vault는 Part 3에서 생성했습니다. 페이지는 아래에서 세션 내 프롬프트 형태로 보여주는
-ingest 워크플로를 통해 추가됩니다.
+ingest 워크플로로 추가됩니다.
 
 ### 4.1 스키마 — 각 페이지 타입에 필요한 필드는?
 
@@ -283,9 +283,9 @@ omw schema show entity
 
 #### vault별 스키마 오버라이드
 
-vault 디렉토리 안에 `schemas/` 폴더를 만들어 특정 vault에 대한 스키마를 오버라이드하거나
+vault 디렉토리 안에 `schemas/` 폴더를 만들어 특정 vault의 스키마를 오버라이드하거나
 확장할 수 있습니다. `<vault>/schemas/`의 파일이 패키지 루트의 내장 `schemas/`보다 우선합니다.
-이를 통해 공유 기본값을 건드리지 않고 특정 프로젝트에 대해 커스텀 타입을 추가하거나
+이렇게 하면 공유 기본값을 건드리지 않고 특정 프로젝트에 커스텀 타입을 추가하거나
 필드 규칙을 강화할 수 있습니다.
 
 ```
@@ -323,7 +323,7 @@ status:: draft
 ```
 
 이로써 `wiki/concepts/llm-wiki.md`가 작성됩니다. `owner:: dante`와 `status:: draft` 줄에
-주목하세요 — 이것은 인라인 `key:: value` 필드(Dataview 문법)입니다. oh-my-wiki는 이를
+주목하세요. 이것은 인라인 `key:: value` 필드(Dataview 문법)입니다. oh-my-wiki는 이를
 frontmatter 필드와 함께 보존하고 인덱싱합니다.
 
 그런 다음 나중에 폐기할 페이지를 추가합니다:
@@ -341,7 +341,7 @@ structure. It is quick to start but does not scale.
 
 페이지에는 해당 페이지의 근거가 얼마나 충분한지를 나타내는 `confidence` 필드(`high`,
 `medium`, `low`)가 있습니다. 페이지가 더 나은 것으로 대체될 때, 삭제하는 대신
-`superseded`로 표시합니다 — 이렇게 하면 감사 추적이 보존됩니다.
+`superseded`로 표시합니다. 이렇게 하면 감사 추적이 보존됩니다.
 
 `old-method.md`를 `llm-wiki`로 supersede 처리합니다:
 
@@ -369,7 +369,7 @@ superseded_by: llm-wiki
 
 ### 4.4 Review 주기 — wiki 페이지의 간격 반복
 
-모든 페이지는 frontmatter의 `review:` 블록을 통해 다음 재평가 일정을 지정할 수 있습니다.
+모든 페이지는 frontmatter의 `review:` 블록으로 다음 재평가 일정을 지정할 수 있습니다.
 간격은 confidence에 따라 달라집니다:
 
 - `confidence: high` → 90일 간격
@@ -398,7 +398,7 @@ omw review due --today 2026-09-01
 ```
 
 `{relpath, due, interval_days, confidence}` 항목의 목록이 반환됩니다. `review:` 블록이 없는
-페이지는 `due: null`로 표시되며 가장 앞에 정렬됩니다 — 한 번도 검토되지 않았으므로 주의가
+페이지는 `due: null`로 표시되며 가장 앞에 정렬됩니다. 한 번도 검토되지 않았으므로 주의가
 필요합니다.
 
 ### 4.5 웹 검색, vault FTS5, 그리고 로컬 쿼리 API
@@ -406,8 +406,8 @@ omw review due --today 2026-09-01
 #### `omw search` — 외부 웹 검색
 
 `omw search "<query>"`는 외부 검색 provider(brave / tavily / exa / firecrawl /
-brightdata)를 통한 **웹 검색**을 수행합니다. 오픈 웹에서 결과를 가져오는 것으로,
-vault 내부를 검색하는 것이 **아닙니다**.
+brightdata)를 통한 **웹 검색**을 수행합니다. 오픈 웹에서 결과를 가져오며,
+vault 내부를 검색하는 것은 **아닙니다**.
 
 먼저 provider를 설정하세요:
 
@@ -424,7 +424,7 @@ error: no search provider configured — run `omw setup search`
 #### vault 검색 — FTS5 + 세션 내 쿼리
 
 vault는 **SQLite FTS5**(title + summary + tags + body에 대한 BM25)로 인덱싱되며,
-FTS5를 사용할 수 없을 때 토큰 스코어 기반으로 자동 폴백됩니다. 검색 방법:
+FTS5를 사용할 수 없을 때는 토큰 스코어 기반으로 자동 폴백됩니다. 검색 방법:
 
 - **Claude / Codex / Gemini 세션에서**: "내 위키에서 X에 대해 뭐라고 해?"라고 말하면
   스킬이 FTS5로 검색하고 LLM이 결과를 재순위 매깁니다.
@@ -530,7 +530,7 @@ oh-my-wiki는 한국어 형태소를 올바르게 처리합니다. 페이지에 
 [[…|안드레이 카르파시]]가 이 방법을 제안했다.
 ```
 
-조사는 wikilink 괄호 밖에 남겨집니다 — 링크 표시 텍스트는 조사 없는 표준 이름입니다.
+조사는 wikilink 괄호 밖에 남습니다. 링크 표시 텍스트는 조사 없는 표준 이름입니다.
 
 #### Aliases
 
@@ -580,7 +580,7 @@ frontmatter `relations:`와 동일한 방식으로 타입드 엣지 그래프에
 ### 4.8 wiki 유지 관리 persona (세션 내, 자연어)
 
 oh-my-wiki는 Claude Code / Codex / Gemini 세션에서 자연어로 호출하는 다섯 가지 wiki
-유지 관리 persona를 제공합니다. 별도 커맨드가 필요 없습니다 — 스킬이 입력한 내용에 따라
+유지 관리 persona를 제공합니다. 별도 커맨드가 필요 없습니다. 스킬이 입력한 내용에 따라
 적절한 persona로 라우팅합니다. 목록은 wiki-librarian / curator / fact-checker /
 consistency-checker / terminology-manager입니다(Part 5 표 참고).
 
@@ -591,7 +591,7 @@ Claude 세션에서 다음과 같이 말하세요:
 curate my wiki — what pages are most in need of attention?
 ```
 
-**Fact-checker** — 초안을 원자 단위 주장으로 분해하고, 웹 검색을 통해 각각을 검증한 후,
+**Fact-checker** — 초안을 원자 단위 주장으로 분해하고, 웹 검색으로 각각을 검증한 후,
 판정 표(supported / contradicted / partial / unverifiable)가 담긴 형제 리포트를
 `<your-page>.factcheck.md`에 작성합니다. Claude 세션에서 다음과 같이 말하세요:
 
@@ -599,7 +599,7 @@ curate my wiki — what pages are most in need of attention?
 fact-check wiki/concepts/llm-wiki.md
 ```
 
-**Consistency-checker** — 전체 일관성 검사를 실행합니다: 모순, 용어 표류, 오래된 주장.
+**Consistency-checker** — 전체 일관성 검사를 실행합니다. 모순, 용어 표류, 오래된 주장을 점검합니다.
 Claude 세션에서 다음과 같이 말하세요:
 
 ```
@@ -623,7 +623,7 @@ build a glossary for my vault
 ### 4.9 프롬프트별 recall — 필요한 순간 위키가 알아서 따라옵니다
 
 위키는 _쓰여야_ 값을 합니다. `recall`은 질문하는 순간 AI 에이전트가 활성 위키를
-자동으로 참고하게 만듭니다 — `omw find`를 직접 떠올려 칠 필요가 없습니다.
+자동으로 참고하게 만듭니다. `omw find`를 직접 떠올려 칠 필요가 없습니다.
 
 활성화(전체 `omw setup`의 한 단계이기도 하고, 단독 실행도 가능):
 
@@ -633,7 +633,7 @@ omw setup recall
 
 이 명령은 모드를 설정하고, 호스트 지침 파일(CLAUDE.md / AGENTS.md / GEMINI.md)에
 짧은 가이드 블록을 넣고, Claude Code·Codex·Gemini CLI 각각의 네이티브 훅
-(`SessionStart` + `UserPromptSubmit`)을 배선합니다. omw는 여기서 호스트 중립적입니다 —
+(`SessionStart` + `UserPromptSubmit`)을 배선합니다. 여기서 omw는 호스트 중립적입니다.
 하나의 엔진을 각 호스트의 훅 포맷으로 번역할 뿐입니다.
 
 설정 가능한 두 축:
@@ -686,8 +686,8 @@ omw setup recall
 | `omw doctor`    | CLI        | omw 설정 + 설치 건강 상태 검증                                             |
 
 추론 작업(`ingest`, `query`, `find`, `edit`, `autoresearch`, persona)은
-Claude / Codex / Gemini 세션이 필요합니다 — 에이전트 세션에서 자연어로 사용하세요.
-oh-my-wiki는 멀티 스텝 오케스트레이션을 제공하지 않습니다. 이 작업들을 엮어 실행하는 것은
+Claude / Codex / Gemini 세션이 필요합니다. 에이전트 세션에서 자연어로 사용하세요.
+oh-my-wiki는 멀티 스텝 오케스트레이션을 제공하지 않습니다. 이 작업들을 엮어 실행하는 일은
 호스트 AI 에이전트(Claude Code / Codex / Gemini)가 담당합니다.
 
 ### Frontmatter 규약
@@ -740,7 +740,7 @@ contradicts:: [[old-method]]
 - **내장 스키마**: 패키지 루트의 `schemas/<type>.yml` — 13개 타입.
 - **vault별 오버라이드**: `<vault>/schemas/<type>.yml` — 해당 vault에서 내장 스키마보다 우선.
 
-`omw schema show <type>`은 활성 오버라이드가 있는 경우 항상 이를 반영합니다.
+`omw schema show <type>`은 활성 오버라이드가 있으면 항상 이를 반영합니다.
 
 ### `OMW_HOME`
 
@@ -772,11 +772,11 @@ omw setup
 ### Q. `omw status`가 `needs: "setup"` 대신 `needs: "migrate"`를 표시합니다
 
 `needs: "migrate"`는 `omw status`가 스킬 디렉토리(또는 `<cwd>/data/registry.db`)에서
-레거시 `data/registry.db` 파일을 감지했을 때 나타납니다. 이는 `data/registry.db`가
+레거시 `data/registry.db` 파일을 감지했을 때 나타납니다. `data/registry.db`가
 디스크에 존재하는 **소스 트리 체크아웃**에서 발생합니다.
 
-Skills CLI, 마켓플레이스, 또는 `bin/install.sh`를 통해 설치한 실제 사용자는 새 머신에서
-`needs: "setup"`을 봅니다 — `data/`는 .gitignore 처리되어 배포 패키지에 포함되지 않기
+Skills CLI, 마켓플레이스, 또는 `bin/install.sh`로 설치한 실제 사용자는 새 머신에서
+`needs: "setup"`을 봅니다. `data/`는 .gitignore 처리되어 배포 패키지에 포함되지 않기
 때문입니다.
 
 > **참고:** `OMW_HOME` 오버라이드(예: `export OMW_HOME=$(mktemp -d)/.omw`)는 소스 트리에서
@@ -784,7 +784,7 @@ Skills CLI, 마켓플레이스, 또는 `bin/install.sh`를 통해 설치한 실�
 > 독립적으로 `<skill_dir>/data/registry.db`를 스캔하므로, 소스 트리에서는 mktemp 방법으로도
 > `needs: "migrate"`가 반환됩니다.
 
-두 경우 모두 해결 방법은 `omw setup`입니다 — 마법사가 레지스트리를 마이그레이션하거나
+두 경우 모두 해결 방법은 `omw setup`입니다. 마법사가 레지스트리를 마이그레이션하거나
 초기화합니다.
 
 ### Q. oh-my-wiki가 세션에서 자동으로 트리거되지 않습니다
@@ -799,7 +799,7 @@ Skills CLI, 마켓플레이스, 또는 `bin/install.sh`를 통해 설치한 실�
 ### Q. `omw search`에서 오류가 발생하거나 provider가 설정되지 않았습니다
 
 `omw search`는 **웹 검색** 커맨드로, 외부 검색 provider(brave, tavily, exa, firecrawl,
-또는 brightdata)를 쿼리합니다 — vault를 검색하는 것이 아닙니다. provider가 설정되지
+또는 brightdata)를 쿼리합니다. vault를 검색하는 것이 아닙니다. provider가 설정되지
 않은 경우 다음과 같이 표시됩니다:
 
 ```
@@ -825,7 +825,7 @@ python3 -c "import sqlite3; c = sqlite3.connect(':memory:'); c.execute('CREATE V
 brew install sqlite
 ```
 
-폴백 토큰 스코어도 여전히 작동합니다 — 결과를 잃지 않고 BM25 순위 정밀도만 낮아집니다.
+폴백 토큰 스코어도 여전히 작동합니다. 결과를 잃지 않고 BM25 순위 정밀도만 낮아집니다.
 
 ### Q. 두 개의 분리된 wiki를 운영하려면 어떻게 하나요?
 
@@ -856,9 +856,9 @@ export OMW_HOME=~/personal/.omw   omw vault create journal --mode wiki
 
 ### Q. Codex CLI에서의 oh-my-wiki는 Claude Code와 어떻게 다른가요?
 
-동일합니다. SKILL.md는 호스트에 무관합니다 — 동일한 트리거 문구, 동일한 라우팅 로직,
+동일합니다. SKILL.md는 호스트에 무관합니다. 동일한 트리거 문구, 동일한 라우팅 로직,
 동일한 커맨드가 스킬을 발견하는 모든 AI 코딩 에이전트에서 작동합니다. Codex는 때때로
-자동 트리거가 더 보수적입니다. 트리거 문구에서 스킬이 실행되지 않으면
+자동 트리거가 더 보수적입니다. 트리거 문구로 스킬이 실행되지 않으면
 "use the oh-my-wiki skill"이라고 명시적으로 말해 호출하세요.
 
 ### Q. autoresearch는 어떻게 작동하나요?
@@ -891,7 +891,7 @@ cp ~/.omw/vaults/legacy/.trash/20260601-pre-import-meeting-notes.md \
 ### Q. hot cache / 세션 연속성은 어떻게 작동하나요?
 
 각 세션에서 oh-my-wiki는 세션 시작 시 작은 `hot.md` 캐시 파일을 읽고 세션 종료 시
-갱신하므로 세션 간에 컨텍스트를 다시 설명할 필요가 없습니다:
+갱신하므로, 세션 간에 컨텍스트를 다시 설명할 필요가 없습니다:
 
 - wiki 모드 vault: `<vault>/wiki/hot.md`
 - memo 모드 및 기타 모드: `<vault>/hot.md`
