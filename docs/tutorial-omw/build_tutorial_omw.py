@@ -391,7 +391,7 @@ SECTIONS: list[dict] = [
                 "label": "설정 마법사 실행",
                 "bar": "terminal",
                 "text": "omw setup",
-                "callout": "첫 vault, 검색 provider, TTS, persona를 구성하는 대화형 마법사입니다. "
+                "callout": "첫 vault, 검색 provider, persona를 구성하는 대화형 마법사입니다. "
                 "기본값을 그대로 받아들이면 빠르게 시작합니다. 이후 "
                 "<code>omw setup vault</code>·<code>omw setup personas</code>로 개별 섹션을 다시 조정합니다.",
             },
@@ -780,7 +780,7 @@ SECTIONS: list[dict] = [
     dict(
         num="STEP 09",
         title="페르소나 (세션 내, 자연어)",
-        lede="여덟 가지 writing persona를 Claude Code / Codex / Gemini 세션에서 자연어로 호출합니다. "
+        lede="다섯 가지 wiki-maintenance persona를 Claude Code / Codex / Gemini 세션에서 자연어로 호출합니다. "
         "별도 커맨드 없이 입력 내용에 따라 스킬이 적절한 persona로 라우팅합니다.",
         commands=[
             {
@@ -806,9 +806,9 @@ SECTIONS: list[dict] = [
                 "callout": "공백, 고립 페이지, 구조적 취약점을 검토하고 유지 관리 계획을 제안합니다(세션 내).",
             },
             {
-                "label": "Wiki-auditor — in your Claude session, say:",
+                "label": "Consistency-checker / Terminology-manager — in your Claude session, say:",
                 "bar": "ai session",
-                "text": "check my wiki for contradictions\n"
+                "text": "check for contradictions\n"
                 "build a glossary for my vault",
                 "callout": "전체 일관성 검사를 실행합니다. 모순, 용어 표류, 오래된 주장을 점검합니다.",
             },
@@ -817,7 +817,7 @@ SECTIONS: list[dict] = [
                 "text": "<span class='star'>★ 공통 모델</span> — "
                 "모든 persona는 <strong>제안 → 확인 → 실행</strong>을 따릅니다. "
                 "파일을 읽고, 제안 초안을 작성하고, 무엇이 변경될지 보여준 다음 작성합니다. "
-                "전체 목록(translator·polisher·summarizer·scaffolder 포함)은 아래 레퍼런스에 있습니다.",
+                "전체 목록(wiki-librarian·curator·fact-checker·consistency-checker·terminology-manager)은 아래 레퍼런스에 있습니다.",
             },
         ],
     ),
@@ -905,7 +905,7 @@ SECTIONS: list[dict] = [
 <tr><td><code>omw links</code></td><td>엔티티 자동 링크: suggest · link</td></tr>
 <tr><td><code>omw fields</code></td><td>페이지의 frontmatter + 인라인 key:: value 필드 표시</td></tr>
 <tr><td><code>omw import</code></td><td>폴더 / Obsidian vault / Notion export 가져오기</td></tr>
-<tr><td><code>omw setup</code></td><td>대화형 마법사: vault · 검색 · persona · TTS · viewer</td></tr>
+<tr><td><code>omw setup</code></td><td>대화형 마법사: vault · hosts · search · serve · personas · import · viewer · agents · recall</td></tr>
 <tr><td><code>omw doctor</code></td><td>omw 설정 + 설치 건강 상태 검증</td></tr>
 <tr><td><code>omw view</code></td><td>활성 vault·페이지·검색을 Obsidian/Logseq URI 스킴으로 열기</td></tr>
 <tr><td><code>omw visibility</code></td><td>페이지 공개 여부 조회(get) · 설정(set public|private)</td></tr>
@@ -913,8 +913,9 @@ SECTIONS: list[dict] = [
 <tr><td><code>omw fetch</code></td><td>URL 하나를 raw/로 즉시 수집 (urllib→chromium→cloud 캐스케이드)</td></tr>
 </table>
 <div class="callout" style="margin-top:24px">
-추론 작업(<code>ingest</code> · <code>query</code> · <code>find</code> · <code>edit</code> ·
-<code>autoresearch</code> · persona)은 <strong>Claude / Codex / Gemini 세션</strong>에서 자연어로 사용합니다.
+추론 작업(<code>ingest</code> · <code>query</code> · <code>find</code> · <code>open</code> · <code>edit</code> ·
+<code>move</code> · <code>delete</code> · <code>autoresearch</code> · <code>persona-factcheck</code> ·
+<code>persona-consistency</code> · <code>persona-terminology</code>)은 <strong>Claude / Codex / Gemini 세션</strong>에서 자연어로 사용합니다.
 전체 레퍼런스: <a href="../../TUTORIAL.md">TUTORIAL.md (EN)</a> ·
 <a href="../../TUTORIAL.ko.md">TUTORIAL.ko.md (KO)</a>.
 </div>""",

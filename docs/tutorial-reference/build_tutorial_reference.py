@@ -7,8 +7,8 @@ render_block(), render_section() — and defines its OWN SECTIONS / body() / mai
 
 All CLI flags are verified live (`python3 -m scripts.omw_cli <sub> --help`); all
 command outputs are verified live in an isolated `OMW_HOME=$(mktemp -d)/.omw`
-vault, with personal paths masked to ~/.omw. Persona/team/frontmatter tables are
-read from personas/*.md, teams/*.md, schemas/base.yml. Docs only — no product code.
+vault, with personal paths masked to ~/.omw. Persona/frontmatter tables are
+read from personas/*.md, schemas/base.yml. Docs only — no product code.
 """
 import importlib.util
 import pathlib
@@ -82,7 +82,8 @@ SECTIONS: list[dict] = [
                 "text": "omw setup",
                 "callout": "섹션을 순서대로 진행하는 대화형 마법사입니다. 섹션 인자를 주면 한 섹션만 "
                 "다시 조정합니다: <code>vault</code> · <code>hosts</code> · <code>search</code> · "
-                "<code>serve</code> · <code>personas</code> · <code>tts</code> · <code>import</code>. "
+                "<code>serve</code> · <code>personas</code> · <code>import</code> · <code>viewer</code> · "
+                "<code>agents</code> · <code>recall</code>. "
                 "<code>--noninteractive</code>는 플래그·기본값만으로 프롬프트 없이 생성합니다.",
             },
             {
@@ -244,10 +245,10 @@ SECTIONS: list[dict] = [
     # ── D. 작성 (페르소나 · 팀) ──────────────────────────────────────────────
     dict(
         num="D",
-        title="작성 — 페르소나 · 팀",
-        lede="작성·검증·유지 추론은 16종 writing persona가 담당합니다. "
+        title="유지 — 페르소나",
+        lede="위키 유지·검증 추론은 5종 wiki-maintenance persona가 담당합니다. "
         "세션에서 자연어로 호출하면 입력 내용에 따라 스킬이 적절한 persona로 라우팅합니다. "
-        "여러 persona를 묶은 9종 팀 템플릿으로 파이프라인을 한 번에 돌립니다.",
+        "오케스트레이션은 omw가 하지 않습니다 — 다단계 연결은 호스트 AI 에이전트(Claude Code · Codex · Gemini)가 맡습니다.",
         commands=[
             {
                 "kind": "note",
@@ -257,17 +258,17 @@ SECTIONS: list[dict] = [
                 "<ul>"
                 "<li><strong>input_kinds</strong>는 각 persona가 받는 입력(text · file · vault_page) 종류입니다.</li>"
                 "<li><strong>output_kind</strong>는 결과가 어디로 가는지를 나타냅니다 — "
-                "<code>stdout</code>(세션 출력) · <code>new_page</code>(새 페이지) · "
-                "<code>sibling_file</code>·<code>sibling_suffix</code>(형제 파일) · "
-                "<code>inplace</code>(제자리 편집).</li>"
+                "<code>stdout</code>(세션 출력) · "
+                "<code>sibling_suffix</code>(형제 파일).</li>"
                 "</ul>",
             },
             {
-                "label": "Researcher — 세션에서:",
+                "label": "autoresearch — 세션에서:",
                 "bar": "ai session",
                 "text": "autoresearch how does the LLM Wiki pattern compare to Zettelkasten?",
                 "callout": "다라운드 웹 리서치로 출처를 가중하고, 인라인 인용·confidence 태그가 붙은 "
-                "구조화 페이지 초안을 만듭니다. → <code>new_page</code>",
+                "구조화 synthesis 초안을 만들어 저장 전 확인을 요청합니다. → "
+                "<code>wiki/syntheses/&lt;slug&gt;.md</code>",
             },
             {
                 "label": "Fact-checker — 세션에서:",
@@ -278,28 +279,20 @@ SECTIONS: list[dict] = [
                 "<code>&lt;page&gt;.factcheck.md</code>에 작성합니다. → <code>sibling_suffix</code>",
             },
             {
-                "label": "Polisher / Translator / Summarizer — 세션에서:",
+                "label": "Consistency-checker / Wiki-librarian / Curator — 세션에서:",
                 "bar": "ai session",
-                "text": "polish this            # 번역투 제거·문체 정리 (제자리, .trash 백업)\n"
-                "translate this to Korean   # frontmatter·코드블록 보존, 형제 파일 생성\n"
-                "summarize this         # 한 줄 / 한 단락 / 상세 3단 JSON",
-                "callout": "Polisher는 <code>--lang ko</code>에서 korean-prose-polish 규칙을 따릅니다. "
-                "Translator·Fact-checker는 웹 검색 도구(<code>mcp__brightdata__search_engine</code>)를 사용합니다.",
-            },
-            {
-                "label": "Wiki-auditor / Wiki-librarian / Curator — 세션에서:",
-                "bar": "ai session",
-                "text": "check my wiki for contradictions   # auditor: 건강 진단\n"
+                "text": "check for contradictions           # consistency-checker: 건강 진단\n"
                 "build a glossary for my vault      # terminology-manager\n"
                 "curate my wiki                     # index 재정렬 제안",
-                "callout": "auditor는 무엇이 아픈지 진단하고, librarian은 어떻게 고칠지 제안하며"
-                "(교차 링크·고립 해소·병합), curator는 <code>wiki/index.md</code>를 재동기화합니다.",
+                "callout": "consistency-checker는 무엇이 아픈지 진단하고, librarian은 어떻게 고칠지 제안하며"
+                "(교차 링크·고립 해소·병합), curator는 <code>wiki/index.md</code>를 재동기화합니다. "
+                "Fact-checker는 웹 검색 도구(<code>mcp__brightdata__search_engine</code>)를 사용합니다.",
             },
             {
                 "after_persona_table": True,
             },
         ],
-        after="__PERSONA_TABLE__\n__TEAM_TABLE__",
+        after="__PERSONA_TABLE__",
     ),
     # ── E. 유지 (규약 · 신뢰도 · 링크) ───────────────────────────────────────
     dict(
@@ -633,7 +626,7 @@ SECTIONS: list[dict] = [
     dict(
         num="부록",
         title="레퍼런스 표",
-        lede="CLI 17개 서브커맨드·플래그, frontmatter 필드, 페르소나 16종, 팀 9종을 표로 정리합니다. "
+        lede="CLI 17개 서브커맨드·플래그, frontmatter 필드, 페르소나 5종을 표로 정리합니다. "
         "모든 플래그는 <code>--help</code>로, 출력은 격리 vault에서 실측했습니다.",
         commands=[{"after_cli_table": True}],
         after="__CLI_TABLE__",
@@ -717,7 +710,7 @@ CLI_TABLE = (
     + _row(
         [
             "<code>omw setup</code>",
-            "<code>vault·hosts·search·serve·personas·tts·import</code>",
+            "<code>vault·hosts·search·serve·personas·import·viewer·agents·recall</code>",
             "<code>--noninteractive</code> · <code>--generate-token</code> · <code>--enable</code> · <code>--main</code> · <code>--host</code> · …",
         ]
     )
@@ -761,9 +754,10 @@ CLI_TABLE = (
     + '<div class="callout" style="margin-top:18px">'
     "추론 작업(<code>ingest</code> · <code>query</code> · <code>find</code> · <code>open</code> · "
     "<code>edit</code> · <code>move</code> · <code>delete</code> · <code>autoresearch</code> · "
-    "<code>persona-*</code> · <code>dispatch</code> · <code>team</code> · <code>team-run</code> · "
-    "<code>swarm-monitor</code>)은 <strong>Claude / Codex / Gemini 세션</strong>에서 자연어로 "
-    "사용합니다 — CLI에서 호출하면 \"needs a Claude session\" 안내가 출력됩니다."
+    "<code>persona-factcheck</code> · <code>persona-consistency</code> · "
+    "<code>persona-terminology</code>)은 <strong>Claude / Codex / Gemini 세션</strong>에서 자연어로 "
+    "사용합니다 — CLI에서 호출하면 \"needs a Claude session\" 안내가 출력됩니다. "
+    "omw는 오케스트레이션을 제공하지 않습니다 — 다단계 연결은 호스트 AI 에이전트가 직접 처리합니다."
     "</div>"
 )
 
@@ -895,58 +889,9 @@ def _persona_table() -> str:
         )
 
     return (
-        '<div class="block-label">페르소나 16종 (personas/*.md frontmatter)</div>'
+        '<div class="block-label">페르소나 5종 (personas/*.md frontmatter)</div>'
         '<table class="ref-table">'
         + _header(["persona", "역할", "input_kinds", "output_kind"])
-        + "".join(rows)
-        + "</table>"
-    )
-
-
-def _team_table() -> str:
-    import re
-
-    rows = []
-    team_dir = BASE.parent.parent / "teams"
-    for f in sorted(team_dir.glob("*.md")):
-        text = f.read_text(encoding="utf-8")
-        parts = text.split("---")
-        fm = parts[1] if len(parts) >= 3 else ""
-        name_m = re.search(r"(?m)^name:\s*(.+)$", fm)
-        name = name_m.group(1).strip() if name_m else f.stem
-        mode_m = re.search(r"(?m)^mode:\s*(.+)$", fm)
-        mode = mode_m.group(1).strip() if mode_m else "—"
-        # description: may be folded with `>` — gather indented continuation
-        dm = re.search(r"(?m)^description:\s*(.*)$", fm)
-        desc = ""
-        if dm:
-            first = dm.group(1).strip()
-            if first in (">", "|", ">-", "|-"):
-                lines = []
-                for ln in fm[dm.end():].splitlines():
-                    if ln.startswith("  ") or ln.strip() == "":
-                        lines.append(ln.strip())
-                    else:
-                        break
-                desc = " ".join(x for x in lines if x).strip()
-            else:
-                desc = first
-        desc_short = re.split(r"(?<=[.。])\s", desc.strip())[0] if desc else ""
-        if len(desc_short) > 130:
-            desc_short = desc_short[:127] + "…"
-        rows.append(
-            _row(
-                [
-                    f"<code>{esc(name)}</code>",
-                    esc(desc_short),
-                    f"<code>{esc(mode)}</code>" if mode != "—" else "—",
-                ]
-            )
-        )
-    return (
-        '<div class="block-label" style="margin-top:30px">팀 템플릿 9종 (teams/*.md frontmatter)</div>'
-        '<table class="ref-table">'
-        + _header(["team", "목적", "mode"])
         + "".join(rows)
         + "</table>"
     )
@@ -972,8 +917,8 @@ OVERVIEW_DESIGN = {
         (
             "💬",
             "omw 스킬",
-            "세션 내 자연어 추론 — ingest · query · find · edit · autoresearch · "
-            "16 페르소나 · 9 팀",
+            "세션 내 자연어 추론 — ingest · query · find · open · edit · move · delete · "
+            "autoresearch · 5 페르소나",
         ),
     ],
 }
@@ -984,7 +929,6 @@ OVERVIEW_DESIGN = {
 # ─────────────────────────────────────────────────────────────────────────────
 def body() -> str:
     persona_table = _persona_table()
-    team_table = _team_table()
 
     toc_links = "\n".join(
         f'<a href="#step-{s["num"]}"><span class="tag">{esc(s["num"])}</span>{esc(s["title"])}</a>'
@@ -997,7 +941,6 @@ def body() -> str:
         html_s = html_s.replace("__CLI_TABLE__", CLI_TABLE)
         html_s = html_s.replace("__FRONTMATTER_TABLE__", FRONTMATTER_TABLE)
         html_s = html_s.replace("__PERSONA_TABLE__", persona_table)
-        html_s = html_s.replace("__TEAM_TABLE__", team_table)
         rendered.append(html_s)
     sections_html = "\n\n".join(rendered)
 
@@ -1009,12 +952,12 @@ def body() -> str:
     <span class="hero-badge">oh-my-wiki · v3 · 전체 기능 레퍼런스</span>
     <h1>oh-my-wiki 전체 기능<br>레퍼런스</h1>
     <p class="tagline">Claude Code · Codex · Gemini 세션에서 자연어로 위키를 키우고,
-    <code>omw</code> CLI 17개 서브커맨드로 결정론 작업을 실행합니다. 기능 영역 10개 + 부록 표 4종.
+    <code>omw</code> CLI 17개 서브커맨드로 결정론 작업을 실행합니다. 기능 영역 10개 + 부록 표 3종.
     모든 플래그는 <code>--help</code>로, 출력은 격리 vault에서 실측했습니다.</p>
     <dl class="meta-grid">
       <div><dt>표면</dt><dd>omw CLI + omw 스킬</dd></div>
       <div><dt>CLI 서브커맨드</dt><dd>17개</dd></div>
-      <div><dt>페르소나 · 팀</dt><dd>16 · 9</dd></div>
+      <div><dt>페르소나</dt><dd>5종</dd></div>
       <div><dt>페이지 타입</dt><dd>13개 스키마</dd></div>
     </dl>
   </div>
@@ -1044,8 +987,8 @@ def body() -> str:
   <div class="container">
     oh-my-wiki — host-universal LLM 위키 · MIT License<br>
     CLI 플래그는 <code>python3 -m scripts.omw_cli &lt;sub&gt; --help</code>로, 출력은
-    격리 <code>OMW_HOME</code> vault에서 실측했습니다. 페르소나·팀·frontmatter 표는
-    personas/ · teams/ · schemas/ 에서 직접 읽었습니다.
+    격리 <code>OMW_HOME</code> vault에서 실측했습니다. 페르소나·frontmatter 표는
+    personas/ · schemas/ 에서 직접 읽었습니다.
     <div class="links">
       <a href="../../TUTORIAL.ko.md">TUTORIAL.ko.md</a>
       <a href="../../TUTORIAL.md">TUTORIAL.md (EN)</a>

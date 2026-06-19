@@ -1,868 +1,336 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>oh-my-wiki v3 — 따라 하는 위키 셋업</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
-    <style>
-      :root {
-        --sand: #d4c4a8;
-        --stone-100: #f5f3ee;
-        --stone-200: #e8e3d9;
-        --stone-400: #a89876;
-        --stone-500: #8a7a58;
-        --stone-700: #5a4e38;
-        --stone-800: #3e3526;
-        --stone-900: #1f1a10;
-        --moss: #6b7d4f;
-        --cream: #fafaf7;
-        --code-bg-a: #13171b;
-        --code-bg-b: #0e1114;
-      }
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-      html {
-        scroll-behavior: smooth;
-      }
-      body {
-        font-family: "Noto Sans KR", sans-serif;
-        font-weight: 400;
-        font-size: 15.5px;
-        line-height: 1.8;
-        color: var(--stone-800);
-        background: var(--stone-100);
-        -webkit-font-smoothing: antialiased;
-      }
-      a {
-        color: var(--moss);
-        text-decoration: none;
-        border-bottom: 1px solid rgba(107, 125, 79, 0.35);
-      }
-      a:hover {
-        border-bottom-color: var(--moss);
-      }
-      .container {
-        max-width: 880px;
-        margin: 0 auto;
-        padding: 0 28px;
-      }
-      code {
-        font-family: "JetBrains Mono", monospace;
-        font-size: 0.92em;
-        background: var(--stone-200);
-        color: var(--stone-700);
-        padding: 1px 6px;
-        border-radius: 4px;
-      }
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>oh-my-wiki v3 — 따라 하는 위키 셋업</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sand:#d4c4a8;
+  --stone-100:#f5f3ee; --stone-200:#e8e3d9;
+  --stone-400:#a89876; --stone-500:#8a7a58;
+  --stone-700:#5a4e38; --stone-800:#3e3526;
+  --stone-900:#1f1a10;
+  --moss:#6b7d4f; --cream:#fafaf7;
+  --code-bg-a:#13171b; --code-bg-b:#0e1114;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Noto Sans KR',sans-serif;
+  font-weight:400; font-size:15.5px; line-height:1.8;
+  color:var(--stone-800);
+  background:var(--stone-100);
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--moss);text-decoration:none;border-bottom:1px solid rgba(107,125,79,.35)}
+a:hover{border-bottom-color:var(--moss)}
+.container{max-width:880px;margin:0 auto;padding:0 28px}
+code{font-family:'JetBrains Mono',monospace;font-size:.92em;
+  background:var(--stone-200);color:var(--stone-700);
+  padding:1px 6px;border-radius:4px}
 
-      /* ── hero ── */
-      .hero {
-        background: linear-gradient(
-          180deg,
-          var(--stone-200) 0%,
-          var(--stone-100) 100%
-        );
-        border-bottom: 1px solid var(--stone-200);
-        padding: 78px 0 56px;
-      }
-      .hero-inner {
-        max-width: 880px;
-        margin: 0 auto;
-        padding: 0 28px;
-      }
-      .hero-badge {
-        display: inline-block;
-        font-family: "JetBrains Mono", monospace;
-        font-weight: 500;
-        font-size: 11.5px;
-        letter-spacing: 0.4px;
-        text-transform: uppercase;
-        color: var(--stone-500);
-        background: var(--cream);
-        border: 1px solid var(--sand);
-        border-radius: 999px;
-        padding: 5px 13px;
-        margin-bottom: 22px;
-      }
-      .hero h1 {
-        font-family: "Noto Serif KR", serif;
-        font-weight: 900;
-        font-size: clamp(34px, 5vw, 48px);
-        line-height: 1.18;
-        color: var(--stone-900);
-        letter-spacing: -0.5px;
-      }
-      .hero .tagline {
-        margin-top: 18px;
-        font-size: 16px;
-        line-height: 1.8;
-        color: var(--stone-700);
-        max-width: 640px;
-      }
-      .meta-grid {
-        margin-top: 34px;
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 0;
-        border: 1px solid var(--stone-200);
-        border-radius: 8px;
-        overflow: hidden;
-        background: var(--cream);
-      }
-      .meta-grid div {
-        padding: 14px 18px;
-        border-right: 1px solid var(--stone-200);
-        border-bottom: 1px solid var(--stone-200);
-      }
-      .meta-grid dt {
-        font-family: "JetBrains Mono", monospace;
-        font-weight: 500;
-        font-size: 11px;
-        letter-spacing: 0.4px;
-        text-transform: uppercase;
-        color: var(--stone-400);
-      }
-      .meta-grid dd {
-        margin-top: 5px;
-        font-size: 14px;
-        color: var(--stone-800);
-        font-weight: 500;
-      }
+/* ── hero ── */
+.hero{
+  background:
+    linear-gradient(180deg, var(--stone-200) 0%, var(--stone-100) 100%);
+  border-bottom:1px solid var(--stone-200);
+  padding:78px 0 56px;
+}
+.hero-inner{max-width:880px;margin:0 auto;padding:0 28px}
+.hero-badge{
+  display:inline-block;font-family:'JetBrains Mono',monospace;font-weight:500;
+  font-size:11.5px;letter-spacing:.4px;text-transform:uppercase;
+  color:var(--stone-500);background:var(--cream);
+  border:1px solid var(--sand);border-radius:999px;
+  padding:5px 13px;margin-bottom:22px;
+}
+.hero h1{
+  font-family:'Noto Serif KR',serif;font-weight:900;
+  font-size:clamp(34px,5vw,48px);line-height:1.18;
+  color:var(--stone-900);letter-spacing:-.5px;
+}
+.hero .tagline{
+  margin-top:18px;font-size:16px;line-height:1.8;color:var(--stone-700);
+  max-width:640px;
+}
+.meta-grid{
+  margin-top:34px;display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0;
+  border:1px solid var(--stone-200);border-radius:8px;overflow:hidden;
+  background:var(--cream);
+}
+.meta-grid div{padding:14px 18px;border-right:1px solid var(--stone-200);border-bottom:1px solid var(--stone-200)}
+.meta-grid dt{
+  font-family:'JetBrains Mono',monospace;font-weight:500;
+  font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--stone-400);
+}
+.meta-grid dd{margin-top:5px;font-size:14px;color:var(--stone-800);font-weight:500}
 
-      /* ── top nav / TOC ── */
-      nav.toc {
-        position: sticky;
-        top: 0;
-        z-index: 20;
-        background: rgba(245, 243, 238, 0.94);
-        backdrop-filter: saturate(120%);
-        border-bottom: 1px solid var(--stone-200);
-      }
-      nav.toc .toc-inner {
-        max-width: 880px;
-        margin: 0 auto;
-        padding: 11px 28px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px 14px;
-        align-items: center;
-      }
-      nav.toc a {
-        font-family: "JetBrains Mono", monospace;
-        font-weight: 500;
-        font-size: 11px;
-        letter-spacing: 0.3px;
-        text-transform: uppercase;
-        color: var(--stone-500);
-        border-bottom: none;
-      }
-      nav.toc a:hover {
-        color: var(--moss);
-      }
-      nav.toc .tag {
-        color: var(--stone-400);
-        font-weight: 700;
-        margin-right: 4px;
-      }
+/* ── top nav / TOC ── */
+nav.toc{
+  position:sticky;top:0;z-index:20;
+  background:rgba(245,243,238,.94);backdrop-filter:saturate(120%);
+  border-bottom:1px solid var(--stone-200);
+}
+nav.toc .toc-inner{
+  max-width:880px;margin:0 auto;padding:11px 28px;
+  display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;
+}
+nav.toc a{
+  font-family:'JetBrains Mono',monospace;font-weight:500;
+  font-size:11px;letter-spacing:.3px;text-transform:uppercase;
+  color:var(--stone-500);border-bottom:none;
+}
+nav.toc a:hover{color:var(--moss)}
+nav.toc .tag{color:var(--stone-400);font-weight:700;margin-right:4px}
 
-      /* ── overview ── */
-      #overview {
-        padding: 60px 0 8px;
-      }
-      #overview .lede {
-        font-size: 16.5px;
-        line-height: 1.85;
-        color: var(--stone-700);
-        max-width: 680px;
-      }
+/* ── overview ── */
+#overview{padding:60px 0 8px}
+#overview .lede{font-size:16.5px;line-height:1.85;color:var(--stone-700);max-width:680px}
 
-      /* ── section rhythm ── */
-      section {
-        padding: 68px 0;
-        border-top: 1px solid var(--stone-200);
-      }
-      .section-num {
-        font-family: "JetBrains Mono", monospace;
-        font-weight: 500;
-        font-size: 12px;
-        letter-spacing: 4px;
-        text-transform: uppercase;
-        color: var(--stone-400);
-        margin-bottom: 14px;
-      }
-      h2 {
-        font-family: "Noto Serif KR", serif;
-        font-weight: 700;
-        font-size: clamp(22px, 3vw, 30px);
-        line-height: 1.3;
-        color: var(--stone-900);
-        letter-spacing: -0.3px;
-      }
-      p.lede {
-        margin-top: 16px;
-        font-size: 16px;
-        line-height: 1.82;
-        color: var(--stone-700);
-        max-width: 680px;
-      }
-      p.lede + .block,
-      p.lede + .design,
-      p.lede + .note,
-      p.lede + .callout {
-        margin-top: 30px;
-      }
-      .block-label {
-        font-family: "JetBrains Mono", monospace;
-        font-weight: 500;
-        font-size: 11.5px;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
-        color: var(--stone-500);
-        margin: 30px 0 9px;
-      }
-      .prose {
-        margin-top: 14px;
-        font-size: 15px;
-        line-height: 1.82;
-        color: var(--stone-700);
-      }
-      .prose + .block-label {
-        margin-top: 24px;
-      }
+/* ── section rhythm ── */
+section{padding:68px 0;border-top:1px solid var(--stone-200)}
+.section-num{
+  font-family:'JetBrains Mono',monospace;font-weight:500;
+  font-size:12px;letter-spacing:4px;text-transform:uppercase;color:var(--stone-400);
+  margin-bottom:14px;
+}
+h2{
+  font-family:'Noto Serif KR',serif;font-weight:700;
+  font-size:clamp(22px,3vw,30px);line-height:1.3;
+  color:var(--stone-900);letter-spacing:-.3px;
+}
+p.lede{margin-top:16px;font-size:16px;line-height:1.82;color:var(--stone-700);max-width:680px}
+p.lede + .block,p.lede + .design,p.lede + .note,p.lede + .callout{margin-top:30px}
+.block-label{
+  font-family:'JetBrains Mono',monospace;font-weight:500;
+  font-size:11.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--stone-500);
+  margin:30px 0 9px;
+}
+.prose{margin-top:14px;font-size:15px;line-height:1.82;color:var(--stone-700)}
+.prose + .block-label{margin-top:24px}
 
-      /* ── code block (dark terminal card) ── */
-      .block.code {
-        background: linear-gradient(160deg, var(--code-bg-a), var(--code-bg-b));
-        border: 1px solid #20262c;
-        border-radius: 10px;
-        overflow: hidden;
-        box-shadow:
-          0 1px 2px rgba(31, 26, 16, 0.06),
-          0 8px 24px rgba(31, 26, 16, 0.05);
-      }
-      .block.code .bar {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-        padding: 11px 15px;
-        border-bottom: 1px solid #20262c;
-        background: rgba(255, 255, 255, 0.015);
-      }
-      .block.code .dot {
-        width: 11px;
-        height: 11px;
-        border-radius: 50%;
-      }
-      .dot.r {
-        background: #ff5f56;
-      }
-      .dot.y {
-        background: #ffbd2e;
-      }
-      .dot.g {
-        background: #27c93f;
-      }
-      .block.code .bar-label {
-        margin-left: 8px;
-        font-family: "JetBrains Mono", monospace;
-        font-size: 11px;
-        letter-spacing: 0.3px;
-        color: #5d6873;
-        text-transform: lowercase;
-      }
-      .block.code pre {
-        margin: 0;
-        padding: 17px 19px;
-        overflow-x: auto;
-        font-family: "JetBrains Mono", monospace;
-        font-size: 13px;
-        line-height: 1.85;
-        color: #cdd6df;
-      }
-      .block.code pre .c-cmd {
-        color: #9ad08f;
-      }
-      .block.code pre .c-flag {
-        color: #e0c275;
-      }
-      .block.code pre .c-key {
-        color: #82aaff;
-      }
-      .block.code pre .c-str {
-        color: #c3e88d;
-      }
-      .block.code pre .c-cmt {
-        color: #5d6873;
-      }
+/* ── code block (dark terminal card) ── */
+.block.code{
+  background:linear-gradient(160deg,var(--code-bg-a),var(--code-bg-b));
+  border:1px solid #20262c;border-radius:10px;overflow:hidden;
+  box-shadow:0 1px 2px rgba(31,26,16,.06),0 8px 24px rgba(31,26,16,.05);
+}
+.block.code .bar{
+  display:flex;align-items:center;gap:7px;
+  padding:11px 15px;border-bottom:1px solid #20262c;background:rgba(255,255,255,.015);
+}
+.block.code .dot{width:11px;height:11px;border-radius:50%}
+.dot.r{background:#ff5f56}.dot.y{background:#ffbd2e}.dot.g{background:#27c93f}
+.block.code .bar-label{
+  margin-left:8px;font-family:'JetBrains Mono',monospace;font-size:11px;
+  letter-spacing:.3px;color:#5d6873;text-transform:lowercase;
+}
+.block.code pre{
+  margin:0;padding:17px 19px;overflow-x:auto;
+  font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.85;
+  color:#cdd6df;
+}
+.block.code pre .c-cmd{color:#9ad08f}
+.block.code pre .c-flag{color:#e0c275}
+.block.code pre .c-key{color:#82aaff}
+.block.code pre .c-str{color:#c3e88d}
+.block.code pre .c-cmt{color:#5d6873}
 
-      /* ── design block ── */
-      .design {
-        background: var(--cream);
-        border: 1px solid var(--stone-200);
-        border-radius: 12px;
-        padding: 26px 28px 28px;
-      }
-      .design .goal {
-        display: flex;
-        gap: 10px;
-        align-items: flex-start;
-        font-family: "Noto Serif KR", serif;
-        font-weight: 700;
-        font-size: 18px;
-        line-height: 1.5;
-        color: var(--stone-900);
-        padding-bottom: 20px;
-        border-bottom: 1px solid var(--stone-200);
-      }
-      .design .goal .ico {
-        font-size: 18px;
-        line-height: 1.5;
-      }
-      .design .sub-label {
-        font-family: "JetBrains Mono", monospace;
-        font-weight: 500;
-        font-size: 11px;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
-        color: var(--stone-400);
-        margin: 22px 0 12px;
-        display: flex;
-        align-items: center;
-        gap: 7px;
-      }
-      .principles {
-        display: grid;
-        gap: 10px;
-      }
-      .principles .pr {
-        display: flex;
-        gap: 13px;
-        align-items: flex-start;
-        font-size: 14.5px;
-        line-height: 1.7;
-        color: var(--stone-700);
-      }
-      .principles .pr .n {
-        flex: 0 0 auto;
-        width: 23px;
-        height: 23px;
-        border-radius: 6px;
-        background: var(--moss);
-        color: #fff;
-        font-family: "JetBrains Mono", monospace;
-        font-size: 12px;
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-top: 1px;
-      }
-      .components {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 14px;
-      }
-      .components .cmp {
-        background: var(--stone-100);
-        border: 1px solid var(--stone-200);
-        border-radius: 9px;
-        padding: 17px 18px;
-      }
-      .components .cmp .ico {
-        font-size: 22px;
-        display: block;
-        margin-bottom: 9px;
-      }
-      .components .cmp .nm {
-        font-family: "JetBrains Mono", monospace;
-        font-weight: 500;
-        font-size: 13px;
-        color: var(--stone-900);
-        margin-bottom: 6px;
-      }
-      .components .cmp .ds {
-        font-size: 13.5px;
-        line-height: 1.65;
-        color: var(--stone-600, #6b6150);
-      }
+/* ── design block ── */
+.design{
+  background:var(--cream);border:1px solid var(--stone-200);border-radius:12px;
+  padding:26px 28px 28px;
+}
+.design .goal{
+  display:flex;gap:10px;align-items:flex-start;
+  font-family:'Noto Serif KR',serif;font-weight:700;font-size:18px;line-height:1.5;
+  color:var(--stone-900);padding-bottom:20px;border-bottom:1px solid var(--stone-200);
+}
+.design .goal .ico{font-size:18px;line-height:1.5}
+.design .sub-label{
+  font-family:'JetBrains Mono',monospace;font-weight:500;
+  font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--stone-400);
+  margin:22px 0 12px;display:flex;align-items:center;gap:7px;
+}
+.principles{display:grid;gap:10px}
+.principles .pr{
+  display:flex;gap:13px;align-items:flex-start;
+  font-size:14.5px;line-height:1.7;color:var(--stone-700);
+}
+.principles .pr .n{
+  flex:0 0 auto;width:23px;height:23px;border-radius:6px;
+  background:var(--moss);color:#fff;
+  font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;
+  display:flex;align-items:center;justify-content:center;margin-top:1px;
+}
+.components{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.components .cmp{
+  background:var(--stone-100);border:1px solid var(--stone-200);border-radius:9px;
+  padding:17px 18px;
+}
+.components .cmp .ico{font-size:22px;display:block;margin-bottom:9px}
+.components .cmp .nm{
+  font-family:'JetBrains Mono',monospace;font-weight:500;font-size:13px;
+  color:var(--stone-900);margin-bottom:6px;
+}
+.components .cmp .ds{font-size:13.5px;line-height:1.65;color:var(--stone-600,#6b6150)}
 
-      /* ── note (cream memo, moss left border) ── */
-      .note {
-        background: var(--cream);
-        border: 1px solid var(--stone-200);
-        border-left: 3px solid var(--moss);
-        border-radius: 0 9px 9px 0;
-        padding: 18px 22px;
-        font-size: 14.5px;
-        line-height: 1.72;
-        color: var(--stone-700);
-      }
-      .note strong {
-        color: var(--stone-900);
-        font-weight: 700;
-      }
-      .note .star {
-        color: var(--moss);
-        font-weight: 700;
-      }
-      .note ul {
-        margin: 8px 0 0 2px;
-        padding: 0;
-        list-style: none;
-      }
-      .note li {
-        position: relative;
-        padding-left: 18px;
-        margin-top: 5px;
-      }
-      .note li::before {
-        content: "·";
-        position: absolute;
-        left: 4px;
-        color: var(--moss);
-        font-weight: 700;
-      }
+/* ── note (cream memo, moss left border) ── */
+.note{
+  background:var(--cream);border:1px solid var(--stone-200);
+  border-left:3px solid var(--moss);border-radius:0 9px 9px 0;
+  padding:18px 22px;font-size:14.5px;line-height:1.72;color:var(--stone-700);
+}
+.note strong{color:var(--stone-900);font-weight:700}
+.note .star{color:var(--moss);font-weight:700}
+.note ul{margin:8px 0 0 2px;padding:0;list-style:none}
+.note li{position:relative;padding-left:18px;margin-top:5px}
+.note li::before{content:"·";position:absolute;left:4px;color:var(--moss);font-weight:700}
 
-      /* ── callout (after block) ── */
-      .callout {
-        margin-top: 18px;
-        background: var(--cream);
-        border-left: 3px solid var(--moss);
-        border-radius: 0 8px 8px 0;
-        padding: 14px 20px;
-        font-size: 14px;
-        line-height: 1.7;
-        color: var(--stone-700);
-      }
-      .callout strong {
-        color: var(--stone-900);
-      }
+/* ── callout (after block) ── */
+.callout{
+  margin-top:18px;background:var(--cream);
+  border-left:3px solid var(--moss);border-radius:0 8px 8px 0;
+  padding:14px 20px;font-size:14px;line-height:1.7;color:var(--stone-700);
+}
+.callout strong{color:var(--stone-900)}
 
-      /* ── ref table ── */
-      .ref-table {
-        margin-top: 24px;
-        width: 100%;
-        border-collapse: collapse;
-        border: 1px solid var(--stone-200);
-        border-radius: 8px;
-        overflow: hidden;
-        font-size: 13.5px;
-      }
-      .ref-table th,
-      .ref-table td {
-        text-align: left;
-        padding: 9px 14px;
-        border-bottom: 1px solid var(--stone-200);
-        vertical-align: top;
-      }
-      .ref-table th {
-        font-family: "JetBrains Mono", monospace;
-        font-weight: 500;
-        font-size: 11px;
-        letter-spacing: 0.4px;
-        text-transform: uppercase;
-        color: var(--stone-400);
-        background: var(--cream);
-      }
-      .ref-table td code {
-        background: var(--stone-100);
-      }
-      .ref-table tr:last-child td {
-        border-bottom: none;
-      }
+/* ── ref table ── */
+.ref-table{
+  margin-top:24px;width:100%;border-collapse:collapse;
+  border:1px solid var(--stone-200);border-radius:8px;overflow:hidden;font-size:13.5px;
+}
+.ref-table th,.ref-table td{
+  text-align:left;padding:9px 14px;border-bottom:1px solid var(--stone-200);
+  vertical-align:top;
+}
+.ref-table th{
+  font-family:'JetBrains Mono',monospace;font-weight:500;font-size:11px;
+  letter-spacing:.4px;text-transform:uppercase;color:var(--stone-400);
+  background:var(--cream);
+}
+.ref-table td code{background:var(--stone-100)}
+.ref-table tr:last-child td{border-bottom:none}
 
-      /* ── footer ── */
-      footer {
-        border-top: 1px solid var(--stone-200);
-        background: var(--stone-200);
-        padding: 46px 0;
-        margin-top: 8px;
-      }
-      footer .container {
-        font-size: 13.5px;
-        color: var(--stone-500);
-        line-height: 1.8;
-      }
-      footer a {
-        color: var(--stone-700);
-      }
-      footer .links {
-        margin-top: 10px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 18px;
-      }
-      footer .links a {
-        font-family: "JetBrains Mono", monospace;
-        font-size: 12px;
-        letter-spacing: 0.3px;
-      }
+/* ── footer ── */
+footer{
+  border-top:1px solid var(--stone-200);background:var(--stone-200);
+  padding:46px 0;margin-top:8px;
+}
+footer .container{font-size:13.5px;color:var(--stone-500);line-height:1.8}
+footer a{color:var(--stone-700)}
+footer .links{margin-top:10px;display:flex;flex-wrap:wrap;gap:18px}
+footer .links a{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.3px}
 
-      @media (max-width: 640px) {
-        .components {
-          grid-template-columns: 1fr;
-        }
-        .hero {
-          padding: 54px 0 40px;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <header class="hero">
-      <div class="hero-inner">
-        <span class="hero-badge">oh-my-wiki · v3 · 한국어</span>
-        <h1>AI 코딩 에이전트로 운영하는<br />host-universal LLM 위키</h1>
-        <p class="tagline">
-          Claude Code · Codex · Gemini 세션에서 평소 말투로 위키를 키우고,
-          <code>omw</code> 명령어로 정리와 관리를 직접 실행합니다. 모든 명령과
-          출력은 실제 v3 실행 결과 그대로입니다.
-        </p>
-        <dl class="meta-grid">
-          <div>
-            <dt>쓰는 방법</dt>
-            <dd>명령어 + 말로 부탁</dd>
-          </div>
-          <div>
-            <dt>호스트</dt>
-            <dd>Claude Code · Codex · Gemini</dd>
-          </div>
-          <div>
-            <dt>동작 방식</dt>
-            <dd>제안 → 확인 → 실행</dd>
-          </div>
-          <div>
-            <dt>CLI 명령어</dt>
-            <dd>17개</dd>
-          </div>
-        </dl>
-      </div>
-    </header>
+@media(max-width:640px){
+  .components{grid-template-columns:1fr}
+  .hero{padding:54px 0 40px}
+}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner">
+    <span class="hero-badge">oh-my-wiki · v3 · 한국어</span>
+    <h1>AI 코딩 에이전트로 운영하는<br>host-universal LLM 위키</h1>
+    <p class="tagline">Claude Code · Codex · Gemini 세션에서 평소 말투로 위키를 키우고,
+    <code>omw</code> 명령어로 정리와 관리를 직접 실행합니다. 모든 명령과 출력은 실제 v3 실행 결과 그대로입니다.</p>
+    <dl class="meta-grid">
+      <div><dt>쓰는 방법</dt><dd>명령어 + 말로 부탁</dd></div>
+      <div><dt>호스트</dt><dd>Claude Code · Codex · Gemini</dd></div>
+      <div><dt>동작 방식</dt><dd>제안 → 확인 → 실행</dd></div>
+      <div><dt>CLI 명령어</dt><dd>17개</dd></div>
+    </dl>
+  </div>
+</header>
 
-    <nav class="toc">
-      <div class="toc-inner">
-        <a href="#step-STEP 01"><span class="tag">STEP 01</span>설치</a>
-        <a href="#step-STEP 02"><span class="tag">STEP 02</span>첫 위키</a>
-        <a href="#step-STEP 03"
-          ><span class="tag">STEP 03</span>페이지 규약 (스키마)</a
-        >
-        <a href="#step-STEP 04"
-          ><span class="tag">STEP 04</span>신뢰도와 대체</a
-        >
-        <a href="#step-STEP 05"><span class="tag">STEP 05</span>리뷰 주기</a>
-        <a href="#step-STEP 06"
-          ><span class="tag">STEP 06</span>전문 검색 &amp; 메신저 API</a
-        >
-        <a href="#step-STEP 07"
-          ><span class="tag">STEP 07</span>엔티티 자동 링크</a
-        >
-        <a href="#step-STEP 08"><span class="tag">STEP 08</span>인라인 필드</a>
-        <a href="#step-STEP 09"
-          ><span class="tag">STEP 09</span>페르소나 (세션 내, 자연어)</a
-        >
-        <a href="#step-STEP 10"
-          ><span class="tag">STEP 10</span>Obsidian · Logseq에서 열기</a
-        >
-        <a href="#step-STEP 11"
-          ><span class="tag">STEP 11</span>웹에서 가져오기</a
-        >
-        <a href="#step-레퍼런스"
-          ><span class="tag">레퍼런스</span>마무리 / 다음 단계</a
-        >
-      </div>
-    </nav>
+<nav class="toc"><div class="toc-inner">
+<a href="#step-STEP 01"><span class="tag">STEP 01</span>설치</a>
+<a href="#step-STEP 02"><span class="tag">STEP 02</span>첫 위키</a>
+<a href="#step-STEP 03"><span class="tag">STEP 03</span>페이지 규약 (스키마)</a>
+<a href="#step-STEP 04"><span class="tag">STEP 04</span>신뢰도와 대체</a>
+<a href="#step-STEP 05"><span class="tag">STEP 05</span>리뷰 주기</a>
+<a href="#step-STEP 06"><span class="tag">STEP 06</span>전문 검색 &amp; 메신저 API</a>
+<a href="#step-STEP 07"><span class="tag">STEP 07</span>엔티티 자동 링크</a>
+<a href="#step-STEP 08"><span class="tag">STEP 08</span>인라인 필드</a>
+<a href="#step-STEP 09"><span class="tag">STEP 09</span>페르소나 (세션 내, 자연어)</a>
+<a href="#step-STEP 10"><span class="tag">STEP 10</span>Obsidian · Logseq에서 열기</a>
+<a href="#step-STEP 11"><span class="tag">STEP 11</span>웹에서 가져오기</a>
+<a href="#step-레퍼런스"><span class="tag">레퍼런스</span>마무리 / 다음 단계</a>
+</div></nav>
 
-    <main>
-      <section id="overview">
-        <div class="container">
-          <div class="section-num">OVERVIEW</div>
-          <h2>oh-my-wiki를 쓰는 두 가지 방법</h2>
-          <p class="lede">
-            oh-my-wiki는 Andrej Karpathy가 말한 "LLM 위키" 아이디어를 실제로
-            구현한 도구입니다. 자료를 하나 넣으면 원본을 그대로 보관하고, 짧은
-            요약을 만들고, 등장한 인물·개념마다 페이지를 만들어 서로 연결합니다.
-            그리고 이렇게 쌓인 위키를 쓰는 방법은 두 가지입니다.
-          </p>
-          <div class="design">
-            <div class="goal">
-              <span class="ico">🎯</span
-              ><span>oh-my-wiki는 두 가지 방법으로 씁니다.</span>
-            </div>
-            <div class="sub-label">📏 PRINCIPLES</div>
-            <div class="principles">
-              <div class="pr">
-                <span class="n">1</span
-                ><span
-                  >AI가 먼저 제안하고, 당신이 확인하면, 그때 실행됩니다 (제안 →
-                  확인 → 실행).</span
-                >
-              </div>
-              <div class="pr">
-                <span class="n">2</span
-                ><span
-                  >Claude Code·Codex·Gemini 어디서 쓰든 같은 방식, 같은 말투로
-                  동작합니다.</span
-                >
-              </div>
-              <div class="pr">
-                <span class="n">3</span
-                ><span
-                  >무엇이 바뀌는지 늘 눈으로 확인할 수 있고, 당신의 파일은
-                  그대로 남습니다.</span
-                >
-              </div>
-            </div>
-            <div class="sub-label">🧱 COMPONENTS</div>
-            <div class="components">
-              <div class="cmp">
-                <span class="ico">💬</span>
-                <div class="nm">말로 부탁하기 (omw 스킬)</div>
-                <div class="ds">
-                  AI 세션에서 평소 말투로 — 저장·검색·조사·글쓰기를 알아서
-                  처리합니다.
-                </div>
-              </div>
-              <div class="cmp">
-                <span class="ico">⌨️</span>
-                <div class="nm">명령어로 직접 (omw CLI)</div>
-                <div class="ds">
-                  정해진 작업을 정확히 실행 —
-                  설치·셋업·검사·스키마·대체·리뷰·링크·검색 등.
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="block-label" style="margin-top: 34px">
-            기존 방식과 무엇이 다른가
-          </div>
-          <table class="ref-table">
-            <tr>
-              <th>무엇을</th>
-              <th>일반 메모 앱</th>
-              <th>옵시디언만 쓸 때</th>
-              <th>oh-my-wiki</th>
-            </tr>
-            <tr>
-              <td>저장·정리</td>
-              <td>직접 적고 직접 정리</td>
-              <td>직접 적고 직접 정리 (좋은 편집기·그래프뷰 제공)</td>
-              <td>AI가 저장·요약·페이지 생성을 대신</td>
-            </tr>
-            <tr>
-              <td>연결(링크)</td>
-              <td>거의 안 함</td>
-              <td>백링크를 손으로 연결</td>
-              <td>관련 있는 내용을 자동으로 연결</td>
-            </tr>
-            <tr>
-              <td>품질 관리</td>
-              <td>없음</td>
-              <td>없음</td>
-              <td>신뢰도·재검토 주기·대체·사실검증까지</td>
-            </tr>
-            <tr>
-              <td>옵시디언과의 관계</td>
-              <td>—</td>
-              <td>옵시디언 안에서만</td>
-              <td>옵시디언 보관함을 그대로 쓰며 그 위에서 동작 가능</td>
-            </tr>
-          </table>
-          <div class="callout" style="margin-top: 18px">
-            옵시디언을 대체하지 않습니다. 옵시디언이 "지식을 담는 그릇과
-            편집기"라면, oh-my-wiki는 그 위에서
-            <strong>대신 정리해 주는 사서</strong>에 가깝습니다. 글을 어디에
-            둘지(옵시디언·자료실·로컬)는 자유이고, oh-my-wiki는 일관된 규약과
-            관리 도구만 제공합니다.
-          </div>
-        </div>
-      </section>
+<main>
+<section id="overview">
+  <div class="container">
+    <div class="section-num">OVERVIEW</div>
+    <h2>oh-my-wiki를 쓰는 두 가지 방법</h2>
+    <p class="lede">oh-my-wiki는 Andrej Karpathy가 말한 "LLM 위키" 아이디어를 실제로 구현한 도구입니다.
+    자료를 하나 넣으면 원본을 그대로 보관하고, 짧은 요약을 만들고, 등장한 인물·개념마다 페이지를 만들어
+    서로 연결합니다. 그리고 이렇게 쌓인 위키를 쓰는 방법은 두 가지입니다.</p>
+    <div class="design"><div class="goal"><span class="ico">🎯</span><span>oh-my-wiki는 두 가지 방법으로 씁니다.</span></div><div class="sub-label">📏 PRINCIPLES</div><div class="principles"><div class="pr"><span class="n">1</span><span>AI가 먼저 제안하고, 당신이 확인하면, 그때 실행됩니다 (제안 → 확인 → 실행).</span></div><div class="pr"><span class="n">2</span><span>Claude Code·Codex·Gemini 어디서 쓰든 같은 방식, 같은 말투로 동작합니다.</span></div><div class="pr"><span class="n">3</span><span>무엇이 바뀌는지 늘 눈으로 확인할 수 있고, 당신의 파일은 그대로 남습니다.</span></div></div><div class="sub-label">🧱 COMPONENTS</div><div class="components"><div class="cmp"><span class="ico">💬</span><div class="nm">말로 부탁하기 (omw 스킬)</div><div class="ds">AI 세션에서 평소 말투로 — 저장·검색·조사·글쓰기를 알아서 처리합니다.</div></div><div class="cmp"><span class="ico">⌨️</span><div class="nm">명령어로 직접 (omw CLI)</div><div class="ds">정해진 작업을 정확히 실행 — 설치·셋업·검사·스키마·대체·리뷰·링크·검색 등.</div></div></div></div>
+    <div class="block-label" style="margin-top:34px">기존 방식과 무엇이 다른가</div>
+<table class="ref-table">
+<tr><th>무엇을</th><th>일반 메모 앱</th><th>옵시디언만 쓸 때</th><th>oh-my-wiki</th></tr>
+<tr><td>저장·정리</td><td>직접 적고 직접 정리</td><td>직접 적고 직접 정리 (좋은 편집기·그래프뷰 제공)</td><td>AI가 저장·요약·페이지 생성을 대신</td></tr>
+<tr><td>연결(링크)</td><td>거의 안 함</td><td>백링크를 손으로 연결</td><td>관련 있는 내용을 자동으로 연결</td></tr>
+<tr><td>품질 관리</td><td>없음</td><td>없음</td><td>신뢰도·재검토 주기·대체·사실검증까지</td></tr>
+<tr><td>옵시디언과의 관계</td><td>—</td><td>옵시디언 안에서만</td><td>옵시디언 보관함을 그대로 쓰며 그 위에서 동작 가능</td></tr>
+</table>
+<div class="callout" style="margin-top:18px">옵시디언을 대체하지 않습니다. 옵시디언이 "지식을 담는 그릇과 편집기"라면,
+oh-my-wiki는 그 위에서 <strong>대신 정리해 주는 사서</strong>에 가깝습니다. 글을 어디에 둘지(옵시디언·자료실·로컬)는
+자유이고, oh-my-wiki는 일관된 규약과 관리 도구만 제공합니다.</div>
+  </div>
+</section>
 
-      <section id="step-STEP 01">
-        <div class="container">
-          <div class="section-num">STEP 01</div>
-          <h2>설치</h2>
-          <p class="lede">
-            환경에 맞는 경로 하나를 골라 설치합니다. 어떤 경로든 끝나면
-            <code>omw doctor</code>로 연결 상태를 확인합니다.
-          </p>
-          <div class="block-label">PATH A — Skills CLI (Claude Code 권장)</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">bash</span>
-            </div>
-            <pre>
-skills add dandacompany/oh-my-wiki@oh-my-wiki -g -y --copy -a claude-code</pre
-            >
-          </div>
-          <div class="callout">
-            스킬을 <code>~/.claude/skills/</code>에 설치하고
-            <code>oh-my-wiki</code>와 단축 별칭 <code>omw</code> 스킬 이름을
-            함께 등록합니다.
-          </div>
-          <div class="block-label">
-            PATH B — Claude Code 플러그인 마켓플레이스
-          </div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">claude code</span>
-            </div>
-            <pre>
-/plugin marketplace add dandacompany/oh-my-wiki
-/plugin install oh-my-wiki@oh-my-wiki-marketplace</pre
-            >
-          </div>
-          <div class="callout">
-            이후 업데이트는
-            <code>/plugin marketplace update oh-my-wiki-marketplace</code>로
-            진행합니다.
-          </div>
-          <div class="block-label">
-            PATH C — git clone + install script (Codex CLI · 개발자)
-          </div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">bash</span>
-            </div>
-            <pre>
-git clone https://github.com/dandacompany/oh-my-wiki
+<section id="step-STEP 01">
+<div class="container">
+<div class="section-num">STEP 01</div>
+<h2>설치</h2>
+<p class="lede">환경에 맞는 경로 하나를 골라 설치합니다. 어떤 경로든 끝나면 <code>omw doctor</code>로 연결 상태를 확인합니다.</p>
+<div class="block-label">PATH A — Skills CLI (Claude Code 권장)</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">bash</span></div><pre>skills add dandacompany/oh-my-wiki@oh-my-wiki -g -y --copy -a claude-code</pre></div>
+<div class="callout">스킬을 <code>~/.claude/skills/</code>에 설치하고 <code>oh-my-wiki</code>와 단축 별칭 <code>omw</code> 스킬 이름을 함께 등록합니다.</div>
+<div class="block-label">PATH B — Claude Code 플러그인 마켓플레이스</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">claude code</span></div><pre>/plugin marketplace add dandacompany/oh-my-wiki
+/plugin install oh-my-wiki@oh-my-wiki-marketplace</pre></div>
+<div class="callout">이후 업데이트는 <code>/plugin marketplace update oh-my-wiki-marketplace</code>로 진행합니다.</div>
+<div class="block-label">PATH C — git clone + install script (Codex CLI · 개발자)</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">bash</span></div><pre>git clone https://github.com/dandacompany/oh-my-wiki
 cd oh-my-wiki
-bash bin/install.sh</pre
-            >
-          </div>
-          <div class="callout">
-            인스톨러가 Python 3.10+ 확인, <code>pip install -e "."</code>,
-            <code>~/.claude/skills/oh-my-wiki</code>·<code>omw</code> symlink
-            생성(멱등성), <code>pytest -q</code> 검증을 수행합니다. 재실행해도
-            안전하며, <code>--force</code>로 프롬프트 없이 교체합니다.
-          </div>
-          <div class="block-label">설치 확인 — omw doctor</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>omw doctor</pre>
-          </div>
-          <div class="block-label">성공하면 보이는 것 (vault가 있을 때)</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">output</span>
-            </div>
-            <pre>
-omw home:   ~/.omw  ok
+bash bin/install.sh</pre></div>
+<div class="callout">인스톨러가 Python 3.10+ 확인, <code>pip install -e "."</code>, <code>~/.claude/skills/oh-my-wiki</code>·<code>omw</code> symlink 생성(멱등성), <code>pytest -q</code> 검증을 수행합니다. 재실행해도 안전하며, <code>--force</code>로 프롬프트 없이 교체합니다.</div>
+<div class="block-label">설치 확인 — omw doctor</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw doctor</pre></div>
+<div class="block-label">성공하면 보이는 것 (vault가 있을 때)</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">output</span></div><pre>omw home:   ~/.omw  ok
 registry:   ~/.omw/registry.db  ok
-  * demo (wiki/markdown) ~/.omw/vaults/demo</pre
-            >
-          </div>
-          <div class="callout">
-            새 머신에서 <code>omw setup</code> 전이라면
-            <code>missing (run: omw setup)</code>으로 표시됩니다.
-            <code>doctor</code>는 각 컴포넌트를 찾으면 <code>ok</code>를, 없으면
-            무엇이 빠졌는지 보고합니다.
-          </div>
-        </div>
-      </section>
+  * demo (wiki/markdown) ~/.omw/vaults/demo</pre></div>
+<div class="callout">새 머신에서 <code>omw setup</code> 전이라면 <code>missing (run: omw setup)</code>으로 표시됩니다. <code>doctor</code>는 각 컴포넌트를 찾으면 <code>ok</code>를, 없으면 무엇이 빠졌는지 보고합니다.</div>
+</div></section>
 
-      <section id="step-STEP 02">
-        <div class="container">
-          <div class="section-num">STEP 02</div>
-          <h2>첫 위키</h2>
-          <p class="lede">
-            설정 마법사로 첫 vault(위키 보관함)를 만들고, 상태와 lint(검사)로
-            깨끗한 시작점을 확인합니다.
-          </p>
-          <div class="block-label">설정 마법사 실행</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>omw setup</pre>
-          </div>
-          <div class="callout">
-            첫 vault, 검색 provider, TTS, persona를 구성하는 대화형
-            마법사입니다. 기본값을 그대로 받아들이면 빠르게 시작합니다. 이후
-            <code>omw setup vault</code>·<code>omw setup personas</code>로 개별
-            섹션을 다시 조정합니다.
-          </div>
-          <div class="block-label">상태 확인 — omw status</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>omw status</pre>
-          </div>
-          <div class="block-label">성공하면 보이는 것 (깨끗한 머신)</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">json</span>
-            </div>
-            <pre>
-{
+<section id="step-STEP 02">
+<div class="container">
+<div class="section-num">STEP 02</div>
+<h2>첫 위키</h2>
+<p class="lede">설정 마법사로 첫 vault(위키 보관함)를 만들고, 상태와 lint(검사)로 깨끗한 시작점을 확인합니다.</p>
+<div class="block-label">설정 마법사 실행</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw setup</pre></div>
+<div class="callout">첫 vault, 검색 provider, persona를 구성하는 대화형 마법사입니다. 기본값을 그대로 받아들이면 빠르게 시작합니다. 이후 <code>omw setup vault</code>·<code>omw setup personas</code>로 개별 섹션을 다시 조정합니다.</div>
+<div class="block-label">상태 확인 — omw status</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw status</pre></div>
+<div class="block-label">성공하면 보이는 것 (깨끗한 머신)</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">json</span></div><pre>{
   "vault_count": 0,
   "active": null,
   "needs": "setup",
   "vaults": []
-}</pre
-            >
-          </div>
-          <div class="callout">
-            <code>needs: "setup"</code>은 깨끗한 머신의 정상 화면입니다. 소스
-            트리에서 실행하면 <code>data/registry.db</code> 때문에
-            <code>needs</code>가 <code>"migrate"</code>로 표시되며, 이는 개발
-            트리에서만 나타납니다.
-          </div>
-          <div class="block-label">첫 vault 만들기</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>omw vault create demo --mode wiki</pre>
-          </div>
-          <div class="block-label">성공하면 보이는 것</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">json</span>
-            </div>
-            <pre>
-{
+}</pre></div>
+<div class="callout"><code>needs: "setup"</code>은 깨끗한 머신의 정상 화면입니다. 소스 트리에서 실행하면 <code>data/registry.db</code> 때문에 <code>needs</code>가 <code>"migrate"</code>로 표시되며, 이는 개발 트리에서만 나타납니다.</div>
+<div class="block-label">첫 vault 만들기</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw vault create demo --mode wiki</pre></div>
+<div class="block-label">성공하면 보이는 것</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">json</span></div><pre>{
   "created": "demo",
   "path": "~/.omw/vaults/demo",
   "mode": "wiki",
   "type": "markdown"
-}</pre
-            >
-          </div>
-          <div class="block-label">활성 상태 확인 — omw vault list</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">json</span>
-            </div>
-            <pre>
-[
+}</pre></div>
+<div class="block-label">활성 상태 확인 — omw vault list</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">json</span></div><pre>[
   {
     "name": "demo",
     "path": "~/.omw/vaults/demo",
@@ -870,48 +338,16 @@ registry:   ~/.omw/registry.db  ok
     "type": "markdown",
     "is_active": true
   }
-]</pre
-            >
-          </div>
-          <div class="block-label">
-            노트 추가 (Claude / Codex / Gemini 세션에서)
-          </div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">ai session</span>
-            </div>
-            <pre>
-ingest this
+]</pre></div>
+<div class="block-label">노트 추가 (Claude / Codex / Gemini 세션에서)</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">ai session</span></div><pre>ingest this
 
 Andrej Karpathy calls the LLM Wiki a "compounding knowledge artifact". Every
 source gets saved verbatim to raw/, a summary lands at wiki/summaries/, and
 the entities and concepts that appeared get their own pages. 10–15 page touches
-per ingest is normal.</pre
-            >
-          </div>
-          <div class="callout">
-            스킬이 제목, slug, 태그, 저장 위치를 제안합니다. 확인하면
-            저장됩니다.
-          </div>
-          <div class="block-label">lint 검사 — omw lint</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>omw lint</pre>
-          </div>
-          <div class="block-label">성공하면 보이는 것 (문제 없는 vault)</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">json</span>
-            </div>
-            <pre>
-{
+per ingest is normal.</pre></div>
+<div class="callout">스킬이 제목, slug, 태그, 저장 위치를 제안합니다. 확인하면 저장됩니다.</div>
+<div class="block-label">lint 검사 — omw lint</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw lint</pre></div>
+<div class="block-label">성공하면 보이는 것 (문제 없는 vault)</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">json</span></div><pre>{
   "vault_id": 1,
   "vault_path": "~/.omw/vaults/demo",
   "frontmatter_issues": [],
@@ -926,94 +362,22 @@ per ingest is normal.</pre
     "link_suggestions": []
   },
   "auto_fix_hints": []
-}</pre
-            >
-          </div>
-          <div class="note">
-            <span class="star">★ 읽는 법</span> —
-            <strong>frontmatter_issues: []</strong>는 모든 페이지가 필수 필드
-            검사를 통과했다는 뜻입니다.
-            <ul>
-              <li>
-                <strong>links</strong>
-                키들(broken·orphans·index_drift·contradictions·supersedes·superseded_unmarked·link_suggestions)은
-                vault의 구조 건강 상태를 알려줍니다.
-              </li>
-              <li>
-                <strong>drift</strong>는 디스크에 있지만 인덱스에 없는 파일을
-                보고합니다.
-              </li>
-              <li>
-                <strong>auto_fix_hints</strong>는 문제가 발견될 때 실행 가능한
-                해결 방법을 제시합니다.
-              </li>
-            </ul>
-          </div>
-        </div>
-      </section>
+}</pre></div>
+<div class="note"><span class='star'>★ 읽는 법</span> — <strong>frontmatter_issues: []</strong>는 모든 페이지가 필수 필드 검사를 통과했다는 뜻입니다.<ul><li><strong>links</strong> 키들(broken·orphans·index_drift·contradictions·supersedes·superseded_unmarked·link_suggestions)은 vault의 구조 건강 상태를 알려줍니다.</li><li><strong>drift</strong>는 디스크에 있지만 인덱스에 없는 파일을 보고합니다.</li><li><strong>auto_fix_hints</strong>는 문제가 발견될 때 실행 가능한 해결 방법을 제시합니다.</li></ul></div>
+</div></section>
 
-      <section id="step-STEP 03">
-        <div class="container">
-          <div class="section-num">STEP 03</div>
-          <h2>페이지 규약 (스키마)</h2>
-          <p class="lede">
-            글의 종류(인물·개념·논문 등)마다 갖춰야 할 항목이 정해져 있습니다.
-            이 '양식'을 스키마라고 부르며, 덕분에 위키가 한결같이 정돈됩니다.
-            13개 기본 종류를 살펴보고, 그중 entity(대상) 종류를 자세히 봅니다.
-          </p>
-          <div class="note">
-            <span class="star">★ 엔티티(entity)란?</span> — 위키에 등장하는
-            <strong>이름을 가진 고유한 대상</strong>입니다.
-            인물·도구·회사·개념처럼요. 예를 들어 '안드레이 카르파시'(인물)나
-            'LLM 위키'(개념)가 각각 하나의 엔티티이고, 저마다 자기 페이지를
-            가집니다. 다른 글에서 이 이름이 나오면 그 페이지로 자동
-            연결됩니다(STEP 07). <code>entity</code>는 그런 대상 페이지의 한
-            종류이고, 아래에서 그 양식을 살펴봅니다.
-          </div>
-          <div class="block-label">타입 나열 — omw schema list</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>omw schema list</pre>
-          </div>
-          <div class="block-label">13개 타입</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">output</span>
-            </div>
-            <pre>
-article, book, comparison, concept, doc, entity, link, meta, note,
-paper, summary, synthesis, video</pre
-            >
-          </div>
-          <div class="callout">
-            각 항목은 <code>type</code>, <code>required_fields</code>,
-            <code>required_sections</code>, <code>field_types</code>,
-            <code>allowed_values</code>를 가진 스키마 객체입니다.
-          </div>
-          <div class="block-label">
-            entity 타입 상세 — omw schema show entity
-          </div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>omw schema show entity</pre>
-          </div>
-          <div class="block-label">성공하면 보이는 것</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">json</span>
-            </div>
-            <pre>
-{
+<section id="step-STEP 03">
+<div class="container">
+<div class="section-num">STEP 03</div>
+<h2>페이지 규약 (스키마)</h2>
+<p class="lede">글의 종류(인물·개념·논문 등)마다 갖춰야 할 항목이 정해져 있습니다. 이 '양식'을 스키마라고 부르며, 덕분에 위키가 한결같이 정돈됩니다. 13개 기본 종류를 살펴보고, 그중 entity(대상) 종류를 자세히 봅니다.</p>
+<div class="note"><span class='star'>★ 엔티티(entity)란?</span> — 위키에 등장하는 <strong>이름을 가진 고유한 대상</strong>입니다. 인물·도구·회사·개념처럼요. 예를 들어 '안드레이 카르파시'(인물)나 'LLM 위키'(개념)가 각각 하나의 엔티티이고, 저마다 자기 페이지를 가집니다. 다른 글에서 이 이름이 나오면 그 페이지로 자동 연결됩니다(STEP 07). <code>entity</code>는 그런 대상 페이지의 한 종류이고, 아래에서 그 양식을 살펴봅니다.</div>
+<div class="block-label">타입 나열 — omw schema list</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw schema list</pre></div>
+<div class="block-label">13개 타입</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">output</span></div><pre>article, book, comparison, concept, doc, entity, link, meta, note,
+paper, summary, synthesis, video</pre></div>
+<div class="callout">각 항목은 <code>type</code>, <code>required_fields</code>, <code>required_sections</code>, <code>field_types</code>, <code>allowed_values</code>를 가진 스키마 객체입니다.</div>
+<div class="block-label">entity 타입 상세 — omw schema show entity</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw schema show entity</pre></div>
+<div class="block-label">성공하면 보이는 것</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">json</span></div><pre>{
   "type": "entity",
   "required_fields": ["title", "date", "type", "tags"],
   "required_sections": ["## Summary"],
@@ -1028,266 +392,76 @@ paper, summary, synthesis, video</pre
     "confidence": ["high", "medium", "low"],
     "status": ["draft", "inbox", "processed", "raw", "superseded", "meta"]
   }
-}</pre
-            >
-          </div>
-          <div class="callout">
-            모든 entity 페이지는 본문에 <code>## Summary</code> 섹션이 있어야
-            합니다. <code>confidence</code>는 high·medium·low를,
-            <code>status</code>는 <code>allowed_values</code> 목록값을
-            허용합니다.
-          </div>
-          <div class="block-label">vault별 스키마 오버라이드</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">tree</span>
-            </div>
-            <pre>
-~/.omw/vaults/demo/
+}</pre></div>
+<div class="callout">모든 entity 페이지는 본문에 <code>## Summary</code> 섹션이 있어야 합니다. <code>confidence</code>는 high·medium·low를, <code>status</code>는 <code>allowed_values</code> 목록값을 허용합니다.</div>
+<div class="block-label">vault별 스키마 오버라이드</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">tree</span></div><pre>~/.omw/vaults/demo/
 └── schemas/
-    └── entity.yml   ← overrides the built-in entity schema for this vault only</pre
-            >
-          </div>
-          <div class="callout">
-            <code>&lt;vault&gt;/schemas/</code>의 파일이 패키지 루트의 내장
-            <code>schemas/</code>보다 우선합니다. 공유 기본값을 건드리지 않고
-            특정 프로젝트에 커스텀 타입을 추가하거나 필드 규칙을 강화합니다.
-          </div>
-        </div>
-      </section>
+    └── entity.yml   ← overrides the built-in entity schema for this vault only</pre></div>
+<div class="callout"><code>&lt;vault&gt;/schemas/</code>의 파일이 패키지 루트의 내장 <code>schemas/</code>보다 우선합니다. 공유 기본값을 건드리지 않고 특정 프로젝트에 커스텀 타입을 추가하거나 필드 규칙을 강화합니다.</div>
+</div></section>
 
-      <section id="step-STEP 04">
-        <div class="container">
-          <div class="section-num">STEP 04</div>
-          <h2>신뢰도와 대체</h2>
-          <p class="lede">
-            각 페이지에는 그 내용을 얼마나 믿을 수 있는지 나타내는
-            신뢰도(<code>confidence</code>: high·medium·low)를 붙일 수 있습니다.
-            또 더 나은 페이지가 생기면 옛 페이지를 지우지 않고
-            '대체됨(<code>superseded</code>)'으로 표시해 기록을 남깁니다.
-          </p>
-          <div class="note">
-            <span class="star">★ 신뢰도(confidence)는 왜 쓰나요?</span> — 모든
-            메모가 똑같이 확실하지는 않습니다. 직접 검증한 내용도 있고, 한 번
-            듣고 적어 둔 것도 있죠. <strong>high·medium·low</strong>로 그
-            확실함을 표시해 두면, 나중에 무엇을 믿고 인용할지, 무엇을 더 자주
-            다시 들여다볼지 판단하는 기준이 생깁니다. 실제로 다음 단계(리뷰
-            주기)에서 신뢰도가 높은 글은 더 드물게, 낮은 글은 더 자주 다시
-            보도록 자동 조정됩니다.
-          </div>
-          <div class="block-label">old-method.md를 llm-wiki로 supersede</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>omw supersede wiki/concepts/old-method.md --by llm-wiki</pre>
-          </div>
-          <div class="block-label">성공하면 보이는 것</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">json</span>
-            </div>
-            <pre>
-{
+<section id="step-STEP 04">
+<div class="container">
+<div class="section-num">STEP 04</div>
+<h2>신뢰도와 대체</h2>
+<p class="lede">각 페이지에는 그 내용을 얼마나 믿을 수 있는지 나타내는 신뢰도(<code>confidence</code>: high·medium·low)를 붙일 수 있습니다. 또 더 나은 페이지가 생기면 옛 페이지를 지우지 않고 '대체됨(<code>superseded</code>)'으로 표시해 기록을 남깁니다.</p>
+<div class="note"><span class='star'>★ 신뢰도(confidence)는 왜 쓰나요?</span> — 모든 메모가 똑같이 확실하지는 않습니다. 직접 검증한 내용도 있고, 한 번 듣고 적어 둔 것도 있죠. <strong>high·medium·low</strong>로 그 확실함을 표시해 두면, 나중에 무엇을 믿고 인용할지, 무엇을 더 자주 다시 들여다볼지 판단하는 기준이 생깁니다. 실제로 다음 단계(리뷰 주기)에서 신뢰도가 높은 글은 더 드물게, 낮은 글은 더 자주 다시 보도록 자동 조정됩니다.</div>
+<div class="block-label">old-method.md를 llm-wiki로 supersede</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw supersede wiki/concepts/old-method.md --by llm-wiki</pre></div>
+<div class="block-label">성공하면 보이는 것</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">json</span></div><pre>{
   "relpath": "wiki/concepts/old-method.md",
   "status": "superseded",
   "superseded_by": "llm-wiki"
-}</pre
-            >
-          </div>
-          <div class="block-label">old-method.md에 작성되는 frontmatter</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">yaml</span>
-            </div>
-            <pre>
-status: superseded
-superseded_by: llm-wiki</pre
-            >
-          </div>
-          <div class="callout">
-            <code>omw lint</code>는 본문에 "outdated"·"replaced"로 비공식
-            설명되어 있지만 이 필드가 없는 페이지를
-            <code>superseded_unmarked</code> 키 아래에 표시합니다.
-          </div>
-        </div>
-      </section>
+}</pre></div>
+<div class="block-label">old-method.md에 작성되는 frontmatter</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">yaml</span></div><pre>status: superseded
+superseded_by: llm-wiki</pre></div>
+<div class="callout"><code>omw lint</code>는 본문에 "outdated"·"replaced"로 비공식 설명되어 있지만 이 필드가 없는 페이지를 <code>superseded_unmarked</code> 키 아래에 표시합니다.</div>
+</div></section>
 
-      <section id="step-STEP 05">
-        <div class="container">
-          <div class="section-num">STEP 05</div>
-          <h2>리뷰 주기</h2>
-          <p class="lede">
-            각 페이지는 '언제 다시 볼지'를 스스로 기억합니다. 글 맨 위 메타정보
-            영역인 frontmatter의 <code>review:</code> 블록에 적힙니다. 신뢰도가
-            높을수록 간격이 길어집니다. 믿을 만한 내용은 자주 볼 필요가
-            없으니까요. high는 90일, medium은 30일, low는 7일마다 다시
-            검토하도록 안내합니다.
-          </p>
-          <div class="block-label">
-            llm-wiki.md (high-confidence) review 완료 처리
-          </div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>
-omw review done wiki/concepts/llm-wiki.md --grade pass --today 2026-06-01</pre
-            >
-          </div>
-          <div class="block-label">성공하면 보이는 것</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">json</span>
-            </div>
-            <pre>
-{
+<section id="step-STEP 05">
+<div class="container">
+<div class="section-num">STEP 05</div>
+<h2>리뷰 주기</h2>
+<p class="lede">각 페이지는 '언제 다시 볼지'를 스스로 기억합니다. 글 맨 위 메타정보 영역인 frontmatter의 <code>review:</code> 블록에 적힙니다. 신뢰도가 높을수록 간격이 길어집니다. 믿을 만한 내용은 자주 볼 필요가 없으니까요. high는 90일, medium은 30일, low는 7일마다 다시 검토하도록 안내합니다.</p>
+<div class="block-label">llm-wiki.md (high-confidence) review 완료 처리</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw review done wiki/concepts/llm-wiki.md --grade pass --today 2026-06-01</pre></div>
+<div class="block-label">성공하면 보이는 것</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">json</span></div><pre>{
   "relpath": "wiki/concepts/llm-wiki.md",
   "review": { "last": "2026-06-01", "due": "2026-08-30", "interval_days": 90 }
-}</pre
-            >
-          </div>
-          <div class="callout">
-            <code>high</code> confidence → 90일 간격 → 만료일
-            <code>2026-08-30</code>.
-          </div>
-          <div class="block-label">review 대상 조회 (미래 날짜 시뮬레이션)</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>omw review due --today 2026-09-01</pre>
-          </div>
-          <div class="callout">
-            <code>{relpath, due, interval_days, confidence}</code> 목록이
-            반환됩니다. <code>review:</code> 블록이 없는 페이지는
-            <code>due: null</code>로 표시되며 가장 앞에 정렬됩니다. 한 번도
-            검토되지 않았으므로 주의가 필요합니다.
-          </div>
-        </div>
-      </section>
+}</pre></div>
+<div class="callout"><code>high</code> confidence → 90일 간격 → 만료일 <code>2026-08-30</code>.</div>
+<div class="block-label">review 대상 조회 (미래 날짜 시뮬레이션)</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw review due --today 2026-09-01</pre></div>
+<div class="callout"><code>{relpath, due, interval_days, confidence}</code> 목록이 반환됩니다. <code>review:</code> 블록이 없는 페이지는 <code>due: null</code>로 표시되며 가장 앞에 정렬됩니다. 한 번도 검토되지 않았으므로 주의가 필요합니다.</div>
+</div></section>
 
-      <section id="step-STEP 06">
-        <div class="container">
-          <div class="section-num">STEP 06</div>
-          <h2>전문 검색 &amp; 메신저 API</h2>
-          <p class="lede">
-            위키 안의 글을 빠르게 찾는 검색입니다. 제목·요약·태그·본문을 함께
-            살핍니다. 세션에서 자연어로 묻거나, <code>omw serve</code>로 로컬
-            전용 검색 API(<code>POST /query</code>)를 띄워 다른 앱에서 가져올 수
-            있습니다.
-          </p>
-          <div class="block-label">vault 인덱싱 방식</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">fts5</span>
-            </div>
-            <pre>
-title + summary + tags + body  →  SQLite FTS5 (BM25)
-FTS5 미지원 시  →  토큰 스코어 기반 자동 폴백</pre
-            >
-          </div>
-          <div class="callout">
-            세션에서 "내 위키에서 X에 대해 뭐라고 해?"라고 말하면 스킬이 FTS5로
-            검색하고 LLM이 결과를 재순위 매깁니다. <code>omw serve</code>는
-            서버에 LLM 없이 검색만 수행합니다.
-          </div>
-          <div class="block-label">
-            인증 토큰 생성 (~/.omw/.env에 OMW_SERVE_TOKEN으로 저장)
-          </div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>omw setup serve --generate-token</pre>
-          </div>
-          <div class="block-label">서버 시작 — omw serve</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>omw serve</pre>
-          </div>
-          <div class="callout">
-            서버는 <code>http://127.0.0.1:8765</code>(localhost 전용)에서
-            실행됩니다. <code>POST /query</code>는 인증 필요,
-            <code>GET /health</code>는 인증 불필요, <code>GET /query</code>는
-            405를 반환합니다.
-          </div>
-          <div class="block-label">
-            curl — health(인증 없음) + query(POST + bearer)
-          </div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">bash</span>
-            </div>
-            <pre>
-# health (no auth)
+<section id="step-STEP 06">
+<div class="container">
+<div class="section-num">STEP 06</div>
+<h2>전문 검색 &amp; 메신저 API</h2>
+<p class="lede">위키 안의 글을 빠르게 찾는 검색입니다. 제목·요약·태그·본문을 함께 살핍니다. 세션에서 자연어로 묻거나, <code>omw serve</code>로 로컬 전용 검색 API(<code>POST /query</code>)를 띄워 다른 앱에서 가져올 수 있습니다.</p>
+<div class="block-label">vault 인덱싱 방식</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">fts5</span></div><pre>title + summary + tags + body  →  SQLite FTS5 (BM25)
+FTS5 미지원 시  →  토큰 스코어 기반 자동 폴백</pre></div>
+<div class="callout">세션에서 "내 위키에서 X에 대해 뭐라고 해?"라고 말하면 스킬이 FTS5로 검색하고 LLM이 결과를 재순위 매깁니다. <code>omw serve</code>는 서버에 LLM 없이 검색만 수행합니다.</div>
+<div class="block-label">인증 토큰 생성 (~/.omw/.env에 OMW_SERVE_TOKEN으로 저장)</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw setup serve --generate-token</pre></div>
+<div class="block-label">서버 시작 — omw serve</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw serve</pre></div>
+<div class="callout">서버는 <code>http://127.0.0.1:8765</code>(localhost 전용)에서 실행됩니다. <code>POST /query</code>는 인증 필요, <code>GET /health</code>는 인증 불필요, <code>GET /query</code>는 405를 반환합니다.</div>
+<div class="block-label">curl — health(인증 없음) + query(POST + bearer)</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">bash</span></div><pre># health (no auth)
 curl -s http://127.0.0.1:8765/health
 
 # query (POST + bearer token)
 curl -s -X POST http://127.0.0.1:8765/query \
   -H "Authorization: Bearer $OMW_SERVE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"text": "compounding knowledge", "limit": 5}'</pre
-            >
-          </div>
-          <div class="callout">
-            전체 요청/응답 JSON 형식과 Slack·Telegram·Discord 어댑터 스케치는
-            <code>references/messenger-api.md</code>에 있습니다.
-          </div>
-          <div class="note">
-            <span class="star">★ 구분</span> — <strong>omw search</strong>는
-            별개입니다. 외부 provider(brave·tavily·exa·firecrawl·brightdata)를
-            통한 <strong>웹 검색</strong>이며, vault 내부를 검색하지 않습니다.
-            provider 미설정 시 <code>omw setup search</code>를 실행합니다.
-          </div>
-        </div>
-      </section>
+  -d '{"text": "compounding knowledge", "limit": 5}'</pre></div>
+<div class="callout">전체 요청/응답 JSON 형식과 Slack·Telegram·Discord 어댑터 스케치는 <code>references/messenger-api.md</code>에 있습니다.</div>
+<div class="note"><span class='star'>★ 구분</span> — <strong>omw search</strong>는 별개입니다. 외부 provider(brave·tavily·exa·firecrawl·brightdata)를 통한 <strong>웹 검색</strong>이며, vault 내부를 검색하지 않습니다. provider 미설정 시 <code>omw setup search</code>를 실행합니다.</div>
+</div></section>
 
-      <section id="step-STEP 07">
-        <div class="container">
-          <div class="section-num">STEP 07</div>
-          <h2>엔티티 자동 링크</h2>
-          <p class="lede">
-            어떤 글이 다른 대상(엔티티 — 인물·도구·개념 등)을 이름으로만
-            언급하고 연결은 안 걸어 둔 경우, oh-my-wiki가 그 언급을 찾아
-            자동으로 위키 내부 링크(wikilink, <code>[[...]]</code> 형태)를 걸어
-            줍니다.
-          </p>
-          <div class="block-label">링크 없는 언급 감지 — omw links suggest</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>omw links suggest</pre>
-          </div>
-          <div class="block-label">성공하면 보이는 것 (2건)</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">json</span>
-            </div>
-            <pre>
-[
+<section id="step-STEP 07">
+<div class="container">
+<div class="section-num">STEP 07</div>
+<h2>엔티티 자동 링크</h2>
+<p class="lede">어떤 글이 다른 대상(엔티티 — 인물·도구·개념 등)을 이름으로만 언급하고 연결은 안 걸어 둔 경우, oh-my-wiki가 그 언급을 찾아 자동으로 위키 내부 링크(wikilink, <code>[[...]]</code> 형태)를 걸어 줍니다.</p>
+<div class="block-label">링크 없는 언급 감지 — omw links suggest</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw links suggest</pre></div>
+<div class="block-label">성공하면 보이는 것 (2건)</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">json</span></div><pre>[
   {
     "src_relpath": "wiki/concepts/llm-wiki.md",
     "target_slug": "andrej-karpathy",
@@ -1302,100 +476,29 @@ curl -s -X POST http://127.0.0.1:8765/query \
     "mention": "LLM Wiki",
     "position": 88
   }
-]</pre
-            >
-          </div>
-          <div class="callout">
-            <code>llm-wiki.md</code> 위치 145에서 "Andrej Karpathy"가,
-            <code>andrej-karpathy.md</code> 위치 88에서 "LLM Wiki"가 wikilink
-            없이 언급됩니다. 두 경우 모두 vault에 일치하는 페이지가 존재합니다.
-          </div>
-          <div class="block-label">링크 삽입 — omw links link</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>
-omw links link wiki/concepts/llm-wiki.md --to andrej-karpathy</pre
-            >
-          </div>
-          <div class="block-label">성공하면 보이는 것</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">json</span>
-            </div>
-            <pre>
-{
+]</pre></div>
+<div class="callout"><code>llm-wiki.md</code> 위치 145에서 "Andrej Karpathy"가, <code>andrej-karpathy.md</code> 위치 88에서 "LLM Wiki"가 wikilink 없이 언급됩니다. 두 경우 모두 vault에 일치하는 페이지가 존재합니다.</div>
+<div class="block-label">링크 삽입 — omw links link</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw links link wiki/concepts/llm-wiki.md --to andrej-karpathy</pre></div>
+<div class="block-label">성공하면 보이는 것</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">json</span></div><pre>{
   "relpath": "wiki/concepts/llm-wiki.md",
   "target_slug": "andrej-karpathy",
   "mention": "Andrej Karpathy",
   "inserted": "[[andrej-karpathy|Andrej Karpathy]]"
-}</pre
-            >
-          </div>
-          <div class="callout">
-            해당 언급을 <code>[[andrej-karpathy|Andrej Karpathy]]</code>로
-            제자리에서 재작성합니다.
-          </div>
-          <div class="note">
-            <span class="star">★ 한국어 조사 매칭</span> — 본문에
-            <strong>안드레이 카르파시가 이 방법을 제안했다.</strong>처럼 조사
-            <code>가</code>가 이름에 붙어 있어도,
-            <code>omw links suggest</code>가 <code>안드레이 카르파시가</code>를
-            <code>안드레이 카르파시</code> slug와 매칭하고,
-            <code>omw links link</code>는 다음처럼 삽입합니다.
-            <ul>
-              <li>
-                <code>[[…|안드레이 카르파시]]가 이 방법을 제안했다.</code>
-              </li>
-            </ul>
-            조사는 wikilink 괄호 밖에 남고, 표시 텍스트는 조사 없는 표준
-            이름입니다.
-          </div>
-        </div>
-      </section>
+}</pre></div>
+<div class="callout">해당 언급을 <code>[[andrej-karpathy|Andrej Karpathy]]</code>로 제자리에서 재작성합니다.</div>
+<div class="note"><span class='star'>★ 한국어 조사 매칭</span> — 본문에 <strong>안드레이 카르파시가 이 방법을 제안했다.</strong>처럼 조사 <code>가</code>가 이름에 붙어 있어도, <code>omw links suggest</code>가 <code>안드레이 카르파시가</code>를 <code>안드레이 카르파시</code> slug와 매칭하고, <code>omw links link</code>는 다음처럼 삽입합니다.<ul><li><code>[[…|안드레이 카르파시]]가 이 방법을 제안했다.</code></li></ul>조사는 wikilink 괄호 밖에 남고, 표시 텍스트는 조사 없는 표준 이름입니다.</div>
+</div></section>
 
-      <section id="step-STEP 08">
-        <div class="container">
-          <div class="section-num">STEP 08</div>
-          <h2>인라인 필드</h2>
-          <p class="lede">
-            페이지 본문에 Dataview 스타일 인라인 필드 <code>key:: value</code>를
-            넣으면 frontmatter와 함께 파싱·저장·인덱싱됩니다.
-          </p>
-          <div class="block-label">본문 인라인 필드 예시</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">markdown</span>
-            </div>
-            <pre>
-owner:: dante
+<section id="step-STEP 08">
+<div class="container">
+<div class="section-num">STEP 08</div>
+<h2>인라인 필드</h2>
+<p class="lede">페이지 본문에 Dataview 스타일 인라인 필드 <code>key:: value</code>를 넣으면 frontmatter와 함께 파싱·저장·인덱싱됩니다.</p>
+<div class="block-label">본문 인라인 필드 예시</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">markdown</span></div><pre>owner:: dante
 status:: draft
-uses:: [[llm-wiki]]</pre
-            >
-          </div>
-          <div class="block-label">전체 필드 확인 — omw fields</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>omw fields wiki/concepts/llm-wiki.md</pre>
-          </div>
-          <div class="block-label">성공하면 보이는 것</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span><span class="bar-label">json</span>
-            </div>
-            <pre>
-{
+uses:: [[llm-wiki]]</pre></div>
+<div class="block-label">전체 필드 확인 — omw fields</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw fields wiki/concepts/llm-wiki.md</pre></div>
+<div class="block-label">성공하면 보이는 것</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">json</span></div><pre>{
   "relpath": "wiki/concepts/llm-wiki.md",
   "frontmatter": {
     "title": "LLM Wiki",
@@ -1404,329 +507,105 @@ uses:: [[llm-wiki]]</pre
     "tags": ["method"]
   },
   "inline": { "owner": ["dante"], "status": ["draft"] }
-}</pre
-            >
-          </div>
-          <div class="callout">
-            wikilink를 참조하는 관계 키(<code>uses</code>,
-            <code>contradicts</code>, <code>supersedes</code>)는 frontmatter
-            <code>relations:</code>와 똑같이 관계 그래프(무엇이 무엇과 어떻게
-            이어지는지)에 함께 반영됩니다.
-          </div>
-        </div>
-      </section>
+}</pre></div>
+<div class="callout">wikilink를 참조하는 관계 키(<code>uses</code>, <code>contradicts</code>, <code>supersedes</code>)는 frontmatter <code>relations:</code>와 똑같이 관계 그래프(무엇이 무엇과 어떻게 이어지는지)에 함께 반영됩니다.</div>
+</div></section>
 
-      <section id="step-STEP 09">
-        <div class="container">
-          <div class="section-num">STEP 09</div>
-          <h2>페르소나 (세션 내, 자연어)</h2>
-          <p class="lede">
-            여덟 가지 writing persona를 Claude Code / Codex / Gemini 세션에서
-            자연어로 호출합니다. 별도 커맨드 없이 입력 내용에 따라 스킬이 적절한
-            persona로 라우팅합니다.
-          </p>
-          <div class="block-label">
-            Researcher — in your Claude session, say:
-          </div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">ai session</span>
-            </div>
-            <pre>
-autoresearch how does the LLM Wiki pattern compare to Zettelkasten?</pre
-            >
-          </div>
-          <div class="callout">
-            질문을 주장 단위로 분해하고, 주장별 최대 3라운드 검색 후 confidence
-            태그를 부여하며, synthesis 초안을 작성해 저장 전에 확인을
-            요청합니다. → <code>wiki/syntheses/&lt;slug&gt;.md</code>
-          </div>
-          <div class="block-label">
-            Fact-checker — in your Claude session, say:
-          </div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">ai session</span>
-            </div>
-            <pre>fact-check wiki/concepts/llm-wiki.md</pre>
-          </div>
-          <div class="callout">
-            초안을 원자 단위 주장으로 분해해 웹 검색으로 검증하고, 판정
-            표(supported·contradicted·partial·unverifiable)를
-            <code>&lt;page&gt;.factcheck.md</code>에 작성합니다.
-          </div>
-          <div class="block-label">Curator — in your Claude session, say:</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">ai session</span>
-            </div>
-            <pre>
-curate my wiki — what pages are most in need of attention?</pre
-            >
-          </div>
-          <div class="callout">
-            공백, 고립 페이지, 구조적 취약점을 검토하고 유지 관리 계획을
-            제안합니다(세션 내).
-          </div>
-          <div class="block-label">
-            Wiki-auditor — in your Claude session, say:
-          </div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">ai session</span>
-            </div>
-            <pre>
-check my wiki for contradictions
-build a glossary for my vault</pre
-            >
-          </div>
-          <div class="callout">
-            전체 일관성 검사를 실행합니다. 모순, 용어 표류, 오래된 주장을
-            점검합니다.
-          </div>
-          <div class="note">
-            <span class="star">★ 공통 모델</span> — 모든 persona는
-            <strong>제안 → 확인 → 실행</strong>을 따릅니다. 파일을 읽고, 제안
-            초안을 작성하고, 무엇이 변경될지 보여준 다음 작성합니다. 전체
-            목록(translator·polisher·summarizer·scaffolder 포함)은 아래
-            레퍼런스에 있습니다.
-          </div>
-        </div>
-      </section>
+<section id="step-STEP 09">
+<div class="container">
+<div class="section-num">STEP 09</div>
+<h2>페르소나 (세션 내, 자연어)</h2>
+<p class="lede">다섯 가지 wiki-maintenance persona를 Claude Code / Codex / Gemini 세션에서 자연어로 호출합니다. 별도 커맨드 없이 입력 내용에 따라 스킬이 적절한 persona로 라우팅합니다.</p>
+<div class="block-label">Researcher — in your Claude session, say:</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">ai session</span></div><pre>autoresearch how does the LLM Wiki pattern compare to Zettelkasten?</pre></div>
+<div class="callout">질문을 주장 단위로 분해하고, 주장별 최대 3라운드 검색 후 confidence 태그를 부여하며, synthesis 초안을 작성해 저장 전에 확인을 요청합니다. → <code>wiki/syntheses/&lt;slug&gt;.md</code></div>
+<div class="block-label">Fact-checker — in your Claude session, say:</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">ai session</span></div><pre>fact-check wiki/concepts/llm-wiki.md</pre></div>
+<div class="callout">초안을 원자 단위 주장으로 분해해 웹 검색으로 검증하고, 판정 표(supported·contradicted·partial·unverifiable)를 <code>&lt;page&gt;.factcheck.md</code>에 작성합니다.</div>
+<div class="block-label">Curator — in your Claude session, say:</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">ai session</span></div><pre>curate my wiki — what pages are most in need of attention?</pre></div>
+<div class="callout">공백, 고립 페이지, 구조적 취약점을 검토하고 유지 관리 계획을 제안합니다(세션 내).</div>
+<div class="block-label">Consistency-checker / Terminology-manager — in your Claude session, say:</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">ai session</span></div><pre>check for contradictions
+build a glossary for my vault</pre></div>
+<div class="callout">전체 일관성 검사를 실행합니다. 모순, 용어 표류, 오래된 주장을 점검합니다.</div>
+<div class="note"><span class='star'>★ 공통 모델</span> — 모든 persona는 <strong>제안 → 확인 → 실행</strong>을 따릅니다. 파일을 읽고, 제안 초안을 작성하고, 무엇이 변경될지 보여준 다음 작성합니다. 전체 목록(wiki-librarian·curator·fact-checker·consistency-checker·terminology-manager)은 아래 레퍼런스에 있습니다.</div>
+</div></section>
 
-      <section id="step-STEP 10">
-        <div class="container">
-          <div class="section-num">STEP 10</div>
-          <h2>Obsidian · Logseq에서 열기</h2>
-          <p class="lede">
-            <code>omw setup viewer</code>로 기본 뷰어를 지정하고,
-            <code>omw view</code>로 활성 vault·페이지·검색 결과를 URI 스킴으로
-            바로 엽니다. 플러그인 설치 없이 동작합니다.
-          </p>
-          <div class="block-label">기본 뷰어 설정 (최초 1회)</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>omw setup viewer</pre>
-          </div>
-          <div class="callout">
-            obsidian 또는 logseq 중 기본 뷰어를 고르고 설정 스캐폴드를
-            생성합니다. 선택한 값은 <code>~/.omw/config.yaml</code>에
-            저장됩니다.
-          </div>
-          <div class="block-label">페이지·검색을 뷰어로 열기</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>
-omw view                                       # 활성 vault
+<section id="step-STEP 10">
+<div class="container">
+<div class="section-num">STEP 10</div>
+<h2>Obsidian · Logseq에서 열기</h2>
+<p class="lede"><code>omw setup viewer</code>로 기본 뷰어를 지정하고, <code>omw view</code>로 활성 vault·페이지·검색 결과를 URI 스킴으로 바로 엽니다. 플러그인 설치 없이 동작합니다.</p>
+<div class="block-label">기본 뷰어 설정 (최초 1회)</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw setup viewer</pre></div>
+<div class="callout">obsidian 또는 logseq 중 기본 뷰어를 고르고 설정 스캐폴드를 생성합니다. 선택한 값은 <code>~/.omw/config.yaml</code>에 저장됩니다.</div>
+<div class="block-label">페이지·검색을 뷰어로 열기</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw view                                       # 활성 vault
 omw view wiki/concepts/llm-wiki.md            # 특정 페이지
 omw view --search "compounding knowledge"      # 검색 결과
-omw view wiki/concepts/llm-wiki.md --print    # URI만 출력</pre
-            >
-          </div>
-          <div class="callout">
-            <code>--viewer logseq</code>으로 뷰어를 일회성으로 바꿀 수 있습니다.
-            <code>--print</code>는 앱을 실행하지 않고 URI를 stdout에 출력합니다.
-          </div>
-          <div class="note">
-            <span class="star">★ 공개 여부</span> — 페이지를 메신저 API(<code
-              >omw serve</code
-            >)로 노출하려면 먼저
-            <code>omw visibility set wiki/concepts/llm-wiki.md public</code>으로
-            공개 설정이 필요합니다. 기본값은 <strong>private</strong>이므로
-            명시적으로 설정하지 않으면 노출되지 않습니다.
-          </div>
-        </div>
-      </section>
+omw view wiki/concepts/llm-wiki.md --print    # URI만 출력</pre></div>
+<div class="callout"><code>--viewer logseq</code>으로 뷰어를 일회성으로 바꿀 수 있습니다. <code>--print</code>는 앱을 실행하지 않고 URI를 stdout에 출력합니다.</div>
+<div class="note"><span class='star'>★ 공개 여부</span> — 페이지를 메신저 API(<code>omw serve</code>)로 노출하려면 먼저 <code>omw visibility set wiki/concepts/llm-wiki.md public</code>으로 공개 설정이 필요합니다. 기본값은 <strong>private</strong>이므로 명시적으로 설정하지 않으면 노출되지 않습니다.</div>
+</div></section>
 
-      <section id="step-STEP 11">
-        <div class="container">
-          <div class="section-num">STEP 11</div>
-          <h2>웹에서 가져오기</h2>
-          <p class="lede">
-            URL 하나를 즉시 raw/로 가져오거나(<code>omw fetch</code>), 여러
-            URL을 쌓아 두었다가 한 번에 수집합니다(<code>omw inbox</code>). 두
-            방법 모두 LLM 없이 원본 그대로 저장합니다.
-          </p>
-          <div class="block-label">URL 즉시 수집 — omw fetch</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>
-omw fetch https://example.com/article
+<section id="step-STEP 11">
+<div class="container">
+<div class="section-num">STEP 11</div>
+<h2>웹에서 가져오기</h2>
+<p class="lede">URL 하나를 즉시 raw/로 가져오거나(<code>omw fetch</code>), 여러 URL을 쌓아 두었다가 한 번에 수집합니다(<code>omw inbox</code>). 두 방법 모두 LLM 없이 원본 그대로 저장합니다.</p>
+<div class="block-label">URL 즉시 수집 — omw fetch</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw fetch https://example.com/article
 omw fetch https://youtu.be/VIDEO_ID
-omw fetch https://example.com/spa --backend chromium</pre
-            >
-          </div>
-          <div class="callout">
-            기본 백엔드(<code>auto</code>)는 urllib → chromium → cloud 순으로
-            시도합니다. 유튜브 URL은 자막을 추출합니다. 내부 IP는 SSRF 가드로
-            차단됩니다.
-          </div>
-          <div class="block-label">받은함에 URL 쌓기 — omw inbox add / run</div>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre>
-omw inbox add https://example.com/article-1
+omw fetch https://example.com/spa --backend chromium</pre></div>
+<div class="callout">기본 백엔드(<code>auto</code>)는 urllib → chromium → cloud 순으로 시도합니다. 유튜브 URL은 자막을 추출합니다. 내부 IP는 SSRF 가드로 차단됩니다.</div>
+<div class="block-label">받은함에 URL 쌓기 — omw inbox add / run</div><div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre>omw inbox add https://example.com/article-1
 omw inbox add https://example.com/article-2
 omw inbox list           # 대기 URL 확인
-omw inbox run            # 큐 전체를 raw/로 일괄 수집</pre
-            >
-          </div>
-          <div class="callout">
-            <code>run</code>은 큐에 쌓인 URL을 순서대로 가져와
-            <code>raw/</code>에 저장합니다. 수집 후 세션에서
-            <code>ingest</code>를 실행하면 LLM이 요약·페이지 생성까지
-            처리합니다.
-          </div>
-        </div>
-      </section>
+omw inbox run            # 큐 전체를 raw/로 일괄 수집</pre></div>
+<div class="callout"><code>run</code>은 큐에 쌓인 URL을 순서대로 가져와 <code>raw/</code>에 저장합니다. 수집 후 세션에서 <code>ingest</code>를 실행하면 LLM이 요약·페이지 생성까지 처리합니다.</div>
+</div></section>
 
-      <section id="step-레퍼런스">
-        <div class="container">
-          <div class="section-num">레퍼런스</div>
-          <h2>마무리 / 다음 단계</h2>
-          <p class="lede">
-            전체 레퍼런스는 영어·한국어 튜토리얼에 있습니다. 17개 omw 명령어는
-            직접 실행하는 정리·관리 작업을, 생각이 필요한 작업은 AI 세션이
-            맡습니다.
-          </p>
-          <div class="block code">
-            <div class="bar">
-              <span class="dot r"></span><span class="dot y"></span
-              ><span class="dot g"></span
-              ><span class="bar-label">terminal</span>
-            </div>
-            <pre></pre>
-          </div>
-          <table class="ref-table">
-            <tr>
-              <th>서브커맨드</th>
-              <th>한 줄 설명</th>
-            </tr>
-            <tr>
-              <td><code>omw status</code></td>
-              <td>레지스트리 상태 표시: vault 수, 활성 vault, needs 코드</td>
-            </tr>
-            <tr>
-              <td><code>omw vault</code></td>
-              <td>Vault 관리: create · list · use · forget</td>
-            </tr>
-            <tr>
-              <td><code>omw lint</code></td>
-              <td>위키 건강 검사 (frontmatter + 링크 + 누락 파일)</td>
-            </tr>
-            <tr>
-              <td><code>omw search</code></td>
-              <td>설정된 외부 provider를 통한 웹 검색 (brave/tavily/exa/…)</td>
-            </tr>
-            <tr>
-              <td><code>omw serve</code></td>
-              <td>로컬 읽기 전용 HTTP 쿼리 API 시작 (포트 8765)</td>
-            </tr>
-            <tr>
-              <td><code>omw schema</code></td>
-              <td>페이지 타입 스키마 표시: list · show &lt;type&gt;</td>
-            </tr>
-            <tr>
-              <td><code>omw supersede</code></td>
-              <td>
-                페이지를 status: superseded + superseded_by: &lt;slug&gt;로 표시
-              </td>
-            </tr>
-            <tr>
-              <td><code>omw review</code></td>
-              <td>간격 반복 대기열: due · done</td>
-            </tr>
-            <tr>
-              <td><code>omw links</code></td>
-              <td>엔티티 자동 링크: suggest · link</td>
-            </tr>
-            <tr>
-              <td><code>omw fields</code></td>
-              <td>페이지의 frontmatter + 인라인 key:: value 필드 표시</td>
-            </tr>
-            <tr>
-              <td><code>omw import</code></td>
-              <td>폴더 / Obsidian vault / Notion export 가져오기</td>
-            </tr>
-            <tr>
-              <td><code>omw setup</code></td>
-              <td>대화형 마법사: vault · 검색 · persona · TTS · viewer</td>
-            </tr>
-            <tr>
-              <td><code>omw doctor</code></td>
-              <td>omw 설정 + 설치 건강 상태 검증</td>
-            </tr>
-            <tr>
-              <td><code>omw view</code></td>
-              <td>
-                활성 vault·페이지·검색을 Obsidian/Logseq URI 스킴으로 열기
-              </td>
-            </tr>
-            <tr>
-              <td><code>omw visibility</code></td>
-              <td>페이지 공개 여부 조회(get) · 설정(set public|private)</td>
-            </tr>
-            <tr>
-              <td><code>omw inbox</code></td>
-              <td>URL 큐 관리: add · list · remove · run(일괄 수집)</td>
-            </tr>
-            <tr>
-              <td><code>omw fetch</code></td>
-              <td>
-                URL 하나를 raw/로 즉시 수집 (urllib→chromium→cloud 캐스케이드)
-              </td>
-            </tr>
-          </table>
-          <div class="callout" style="margin-top: 24px">
-            추론 작업(<code>ingest</code> · <code>query</code> ·
-            <code>find</code> · <code>edit</code> · <code>autoresearch</code> ·
-            persona)은 <strong>Claude / Codex / Gemini 세션</strong>에서
-            자연어로 사용합니다. 전체 레퍼런스:
-            <a href="../../TUTORIAL.md">TUTORIAL.md (EN)</a> ·
-            <a href="../../TUTORIAL.ko.md">TUTORIAL.ko.md (KO)</a>.
-          </div>
-        </div>
-      </section>
-    </main>
+<section id="step-레퍼런스">
+<div class="container">
+<div class="section-num">레퍼런스</div>
+<h2>마무리 / 다음 단계</h2>
+<p class="lede">전체 레퍼런스는 영어·한국어 튜토리얼에 있습니다. 17개 omw 명령어는 직접 실행하는 정리·관리 작업을, 생각이 필요한 작업은 AI 세션이 맡습니다.</p>
+<div class="block code"><div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="bar-label">terminal</span></div><pre></pre></div>
+<table class="ref-table">
+<tr><th>서브커맨드</th><th>한 줄 설명</th></tr>
+<tr><td><code>omw status</code></td><td>레지스트리 상태 표시: vault 수, 활성 vault, needs 코드</td></tr>
+<tr><td><code>omw vault</code></td><td>Vault 관리: create · list · use · forget</td></tr>
+<tr><td><code>omw lint</code></td><td>위키 건강 검사 (frontmatter + 링크 + 누락 파일)</td></tr>
+<tr><td><code>omw search</code></td><td>설정된 외부 provider를 통한 웹 검색 (brave/tavily/exa/…)</td></tr>
+<tr><td><code>omw serve</code></td><td>로컬 읽기 전용 HTTP 쿼리 API 시작 (포트 8765)</td></tr>
+<tr><td><code>omw schema</code></td><td>페이지 타입 스키마 표시: list · show &lt;type&gt;</td></tr>
+<tr><td><code>omw supersede</code></td><td>페이지를 status: superseded + superseded_by: &lt;slug&gt;로 표시</td></tr>
+<tr><td><code>omw review</code></td><td>간격 반복 대기열: due · done</td></tr>
+<tr><td><code>omw links</code></td><td>엔티티 자동 링크: suggest · link</td></tr>
+<tr><td><code>omw fields</code></td><td>페이지의 frontmatter + 인라인 key:: value 필드 표시</td></tr>
+<tr><td><code>omw import</code></td><td>폴더 / Obsidian vault / Notion export 가져오기</td></tr>
+<tr><td><code>omw setup</code></td><td>대화형 마법사: vault · hosts · search · serve · personas · import · viewer · agents · recall</td></tr>
+<tr><td><code>omw doctor</code></td><td>omw 설정 + 설치 건강 상태 검증</td></tr>
+<tr><td><code>omw view</code></td><td>활성 vault·페이지·검색을 Obsidian/Logseq URI 스킴으로 열기</td></tr>
+<tr><td><code>omw visibility</code></td><td>페이지 공개 여부 조회(get) · 설정(set public|private)</td></tr>
+<tr><td><code>omw inbox</code></td><td>URL 큐 관리: add · list · remove · run(일괄 수집)</td></tr>
+<tr><td><code>omw fetch</code></td><td>URL 하나를 raw/로 즉시 수집 (urllib→chromium→cloud 캐스케이드)</td></tr>
+</table>
+<div class="callout" style="margin-top:24px">
+추론 작업(<code>ingest</code> · <code>query</code> · <code>find</code> · <code>open</code> · <code>edit</code> ·
+<code>move</code> · <code>delete</code> · <code>autoresearch</code> · <code>persona-factcheck</code> ·
+<code>persona-consistency</code> · <code>persona-terminology</code>)은 <strong>Claude / Codex / Gemini 세션</strong>에서 자연어로 사용합니다.
+전체 레퍼런스: <a href="../../TUTORIAL.md">TUTORIAL.md (EN)</a> ·
+<a href="../../TUTORIAL.ko.md">TUTORIAL.ko.md (KO)</a>.
+</div>
+</div></section>
+</main>
 
-    <footer>
-      <div class="container">
-        oh-my-wiki — host-universal LLM 위키 · MIT License<br />
-        모든 커맨드 블록과 출력은 v3 CLI 실행 결과(TUTORIAL.ko.md)에서
-        가져왔습니다.
-        <div class="links">
-          <a href="../../TUTORIAL.ko.md">TUTORIAL.ko.md</a>
-          <a href="../../TUTORIAL.md">TUTORIAL.md (EN)</a>
-          <a href="https://github.com/dandacompany/oh-my-wiki"
-            >github.com/dandacompany/oh-my-wiki</a
-          >
-          <a href="https://github.com/dandacompany/oh-my-wiki/issues">issues</a>
-        </div>
-      </div>
-    </footer>
-  </body>
+<footer>
+  <div class="container">
+    oh-my-wiki — host-universal LLM 위키 · MIT License<br>
+    모든 커맨드 블록과 출력은 v3 CLI 실행 결과(TUTORIAL.ko.md)에서 가져왔습니다.
+    <div class="links">
+      <a href="../../TUTORIAL.ko.md">TUTORIAL.ko.md</a>
+      <a href="../../TUTORIAL.md">TUTORIAL.md (EN)</a>
+      <a href="https://github.com/dandacompany/oh-my-wiki">github.com/dandacompany/oh-my-wiki</a>
+      <a href="https://github.com/dandacompany/oh-my-wiki/issues">issues</a>
+    </div>
+  </div>
+</footer>
+</body>
 </html>
