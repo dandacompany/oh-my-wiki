@@ -64,15 +64,6 @@ if [ -t 1 ] && [ -z "${OMW_NO_BANNER:-}" ] && [ -z "${NO_COLOR:-}" ] && [ -z "${
 OMWBANNER
 fi
 
-# ---------- Pre-flight: tmux required for dispatch workers ----------
-if ! command -v tmux &>/dev/null; then
-  echo "WARNING: tmux not found. dispatch/team commands require tmux >= 3.0."
-  echo "  Install: brew install tmux (macOS) or sudo apt install tmux (Linux)"
-else
-  TMUX_VER=$(tmux -V | awk '{print $2}')
-  echo "tmux $TMUX_VER found"
-fi
-
 # ---------- 1. Python version check ----------
 echo "==> [1/5] Python version check"
 if ! command -v python3 >/dev/null 2>&1; then
@@ -131,29 +122,6 @@ echo "==> [3/5] Skill symlinks (under ${SKILLS_DIR})"
 link_one "oh-my-wiki" "$REPO_ROOT"
 link_one "omw"        "${REPO_ROOT}/omw"
 
-# Install omw-dispatch shim
-# Resolve SHIM_SRC to the real path so chmod works even when
-# $HOME/.claude/skills/oh-my-wiki/bin is itself a symlink into the repo.
-SHIM_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/omw-dispatch"
-# Resolve physical location of SHIM_SRC to detect self-symlink scenarios
-SHIM_SRC_REAL="$(realpath "$SHIM_SRC" 2>/dev/null || readlink -f "$SHIM_SRC" 2>/dev/null || echo "$SHIM_SRC")"
-chmod +x "$SHIM_SRC_REAL" || { echo "ERROR: chmod failed on $SHIM_SRC_REAL — install aborted" >&2; exit 1; }
-
-SKILL_BIN="$HOME/.claude/skills/oh-my-wiki/bin"
-mkdir -p "$SKILL_BIN"
-SHIM_DST="$SKILL_BIN/omw-dispatch"
-# Resolve SKILL_BIN to catch the case where it's already a symlink into repo/bin
-SKILL_BIN_REAL="$(realpath "$SKILL_BIN" 2>/dev/null || readlink -f "$SKILL_BIN" 2>/dev/null || echo "$SKILL_BIN")"
-SHIM_DST_REAL="$SKILL_BIN_REAL/omw-dispatch"
-if [ "$SHIM_DST_REAL" = "$SHIM_SRC_REAL" ]; then
-  # SKILL_BIN already resolves into the repo's bin/ — no symlink needed
-  echo "omw-dispatch available at $SHIM_SRC_REAL (via oh-my-wiki skill link)"
-else
-  rm -f "$SHIM_DST"
-  ln -s "$SHIM_SRC_REAL" "$SHIM_DST"
-  echo "omw-dispatch installed -> $SHIM_DST"
-fi
-echo "Add $SKILL_BIN to PATH to use outside Claude Code."
 
 # ---------- 4. Pytest verification (optional) ----------
 if [[ "$RUN_TEST" -eq 1 ]]; then
@@ -183,7 +151,7 @@ cat <<EOF
 
    Useful commands:
      - pytest -v                                  # full test suite (91+ tests)
-     - python3 -m scripts.wizard status           # inspect dispatcher state
+     - omw status                                 # inspect registry/vault state
      - python3 -m scripts.lint --vault-id N       # health check a vault
      - bash bin/uninstall.sh                      # remove symlinks + uninstall pkg
 

@@ -36,7 +36,9 @@ claude /login
 # Follow each CLI's own login flow -- OMW never runs login for you.
 
 # 5. Use OMW
-python3 -m scripts.team run --template review-pipeline --source /vault/draft.md
+omw status                       # check registry/vault state
+omw doctor                       # verify the install
+# then drive the wiki from your AI session (ingest / query / autoresearch / fact-check)
 ```
 
 ## Adding codex or gemini

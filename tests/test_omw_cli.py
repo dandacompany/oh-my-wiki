@@ -138,23 +138,13 @@ def test_lint_vault_flag_no_registry_errors(capsys):
     assert "no registry" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("op", ["ingest", "query", "autoresearch", "persona-polish"])
+@pytest.mark.parametrize("op", ["ingest", "query", "autoresearch", "persona-factcheck"])
 def test_agentic_op_bridges_to_claude(op, capsys):
     assert _run([op]) == 0
     out = capsys.readouterr().out
     assert "Claude" in out and op in out
     db = registry_path()
     assert (not db.exists()) or registry.list_vaults(db) == []
-
-
-def test_setup_tts_via_cli(monkeypatch):
-    from scripts import omw_cli, config
-    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
-    rc = omw_cli.main(["setup", "tts", "--provider", "elevenlabs",
-                       "--voice-id", "V9", "--api-key", "K9"])
-    assert rc == 0
-    assert config.read_secret("ELEVENLABS_API_KEY") == "K9"
-    assert config.load_config()["tts"]["enabled"] is True
 
 
 def test_installer_is_executable_and_valid():
@@ -205,7 +195,7 @@ def test_setup_serve_via_cli_writes_token():
 def test_setup_personas_via_cli(tmp_path):
     from scripts import omw_cli, config
     rc = omw_cli.main([
-        "setup", "personas", "--enable", "researcher,curator",
+        "setup", "personas", "--enable", "fact-checker,curator",
         "--main", "curator", "--host", "claude", "--base-dir", str(tmp_path),
     ])
     assert rc == 0

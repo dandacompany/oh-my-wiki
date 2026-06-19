@@ -13,7 +13,7 @@ A storage-agnostic LLM Wiki skill. Implements Andrej Karpathy's three-layer patt
 
 v1 (Plans A + B + C) is complete: dispatcher + foundation scripts, vault management (`vault-setup`, `vault-use`, `vault-list`, `vault-forget`, `vault-import-memo`), memo-mode ops (`create`, `find`, `open`, `edit`, `move`, `delete`), wiki-mode ops (`ingest`, `query`), and the common `lint` op (with wiki-mode structural extensions). 91 pytest tests pass on GitHub Actions matrix (Python 3.10/3.11/3.12 × ubuntu/macos). See `README.md`, `TUTORIAL.md`, `TUTORIAL.ko.md` for usage.
 
-v2 (in progress) adds plugin-marketplace install, session hot cache, 6 vault-setup modes, extended wiki-lint categories, autoresearch, writing-agent personas (translator / polisher / summarizer / scaffolder / fact-checker / consistency-checker / terminology-manager), tmux-based multi-agent orchestration, and a file-based swarm message protocol. See `docs/superpowers/specs/2026-05-25-oh-my-wiki-v2-master-design.md` for the phased roadmap.
+v2 adds plugin-marketplace install, session hot cache, 6 vault-setup modes, extended wiki-lint categories, autoresearch, wiki-maintenance personas (wiki-librarian / curator / fact-checker / consistency-checker / terminology-manager), Obsidian/Logseq viewers, URL fetch + inbox, and per-prompt wiki recall hooks. (Earlier prototypes of a tmux-based multi-agent swarm/team runtime were removed — omw stays focused on the wiki; the host AI agent handles orchestration.)
 
 ## Step 1 — Read registry state
 
@@ -126,10 +126,6 @@ If the user input matches an op keyword, prefer that op over the wizard:
 | "forget", "vault 제거"                                                             | `vault-forget`                                                  |
 | "import memo", "memo 가져오기"                                                     | `vault-import-memo`                                             |
 | "autoresearch", "research this", "리서치", "조사"                                  | `autoresearch`                                                  |
-| "translate", "번역"                                                                | `persona-translate`                                             |
-| "polish", "윤문", "다듬어줘"                                                       | `persona-polish`                                                |
-| "summarize", "요약"                                                                | `persona-summarize`                                             |
-| "scaffold", "초안", "outline"                                                      | `persona-scaffold`                                              |
 | "fact-check this" / "팩트체크해줘"                                                 | `persona-factcheck`                                             |
 | "check for contradictions" / "모순 봐줘"                                           | `persona-consistency`                                           |
 | "build a glossary" / "용어집 만들어줘"                                             | `persona-terminology`                                           |
@@ -139,20 +135,14 @@ If the user input matches an op keyword, prefer that op over the wizard:
 | "visibility get", "visibility set", "공개 설정", "비공개 설정", "visibility"       | `visibility`                                                    |
 | "inbox add", "inbox list", "inbox run", "큐에 추가", "inbox"                       | `inbox`                                                         |
 | "fetch", "fetch this url", "url 가져와", "페이지 가져와"                           | `fetch`                                                         |
-| dispatch / 디스패치 / dispatch this                                                | `commands/dispatch.md`                                          |
-| team / 팀 실행 / run a team                                                        | `commands/team.md`                                              |
-| team-run / 병렬 검토 / team template                                               | `commands/team-run.md`                                          |
-| "monitor the swarm" / "show worker status" / "스웜 모니터" / "워커 상태 보여줘"    | `commands/swarm-monitor.md`                                     |
-| "orchestrate" / "plan this" / "전체적으로 처리" / "계획 세워줘" / "워크플로"       | `commands/persona-orchestrate.md`                               |
 
-### Hierarchical routing (multi-step requests)
+### Multi-step requests
 
-The table above routes **single ops**. If a request spans **multiple lifecycle
-stages**, names **≥2 ops**, or is a **broad multi-step goal** (e.g. "research X,
-fact-check it, and organize it into the wiki"), route to
-`commands/persona-orchestrate.md` instead: the **operations-orchestrator** persona
-proposes an execution plan, you confirm it, then execute each step via that step's
-own command/team. A single, clearly-named op keeps using its direct trigger above.
+The table above routes **single ops**. A request that spans **multiple lifecycle
+stages** or names **≥2 ops** (e.g. "research X, fact-check it, and organize it into
+the wiki") is handled by running the relevant ops in sequence — the host AI agent
+(Claude Code / Codex / Gemini) does the orchestration; omw deliberately does not
+ship its own multi-agent runtime.
 
 ## Pasted content heuristic
 

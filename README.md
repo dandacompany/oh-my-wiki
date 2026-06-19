@@ -210,7 +210,7 @@ The 17 CLI subcommands:
 > private and never served. Publish pages explicitly with
 > `omw visibility set <relpath...> public`.
 
-The skill also exposes natural-language ops via your AI session: `ingest`, `query`, `autoresearch`, `find`, `edit`, `move`, `delete`, and persona invocations (`translate`, `polish`, `summarize`, `scaffold`, `fact-check`, `consistency-check`, `build glossary`).
+The skill also exposes natural-language ops via your AI session: `ingest`, `query`, `autoresearch`, `find`, `edit`, `move`, `delete`, and wiki-maintenance persona invocations (`fact-check`, `consistency-check`, `build glossary`).
 
 ---
 
@@ -226,7 +226,7 @@ The skill also exposes natural-language ops via your AI session: `ingest`, `quer
 
 - `pytest -v` runs all tests.
 - `ruff check scripts/ tests/` runs the linter.
-- `python3 -m scripts.wizard status` inspects the dispatcher state.
+- `omw status` inspects the registry/vault state.
 - `python3 -m scripts.lint --vault-id N` runs the health check on a specific vault.
 
 Continuous integration runs on GitHub Actions, across a matrix of Python 3.10, 3.11, and 3.12 on both ubuntu-latest and macos-latest.

@@ -6,10 +6,12 @@ import pytest
 from scripts import personas
 
 
-def test_list_personas_returns_all_four():
+def test_list_personas_returns_all_five():
     names = {p["name"] for p in personas.list_personas()}
-    # v2.2a core 4; v2.2b adds more — use superset check so new personas don't break this
-    assert {"translator", "polisher", "summarizer", "scaffolder"} <= names
+    assert names == {
+        "wiki-librarian", "curator", "fact-checker",
+        "consistency-checker", "terminology-manager",
+    }
 
 
 def test_list_personas_entries_have_required_keys():
@@ -24,10 +26,10 @@ def test_load_persona_unknown_raises():
         personas.load_persona("nonexistent")
 
 
-def test_load_persona_translator_has_body():
-    p = personas.load_persona("translator")
-    assert p["name"] == "translator"
-    assert p["output_kind"] == "sibling_file"
+def test_load_persona_fact_checker_has_body():
+    p = personas.load_persona("fact-checker")
+    assert p["name"] == "fact-checker"
+    assert p["output_kind"] == "sibling_suffix"
     assert "body" in p
     assert isinstance(p["body"], str)
     assert len(p["body"]) > 0
@@ -111,37 +113,37 @@ def test_resolve_input_multiple_inputs_raises(tmp_path):
         personas.resolve_input(text="x", file_path=tmp_path / "y.md")
 
 
-def test_resolve_output_path_sibling_for_translator(wiki_vault):
+def test_resolve_output_path_sibling_suffix_for_fact_checker(wiki_vault):
     db, vault, root = wiki_vault
     src = root / "wiki" / "summaries" / "demo.md"
     src.parent.mkdir(parents=True, exist_ok=True)
     src.write_text("x", encoding="utf-8")
-    persona = personas.load_persona("translator")
+    persona = personas.load_persona("fact-checker")
     path = personas.resolve_output_path(
         persona=persona,
         source_meta={"kind": "vault_page", "origin": src},
-        lang="ko",
+        suffix="factcheck",
     )
-    assert path == src.with_name("demo.ko.md")
+    assert path == src.with_name("demo.factcheck.md")
 
 
-def test_resolve_output_path_sibling_requires_lang(wiki_vault):
+def test_resolve_output_path_sibling_suffix_requires_suffix(wiki_vault):
     db, vault, root = wiki_vault
     src = root / "wiki" / "summaries" / "demo.md"
     src.parent.mkdir(parents=True, exist_ok=True)
     src.write_text("x", encoding="utf-8")
-    persona = personas.load_persona("translator")
-    with pytest.raises(personas.PersonaError, match="lang"):
+    persona = personas.load_persona("fact-checker")
+    with pytest.raises(personas.PersonaError, match="suffix"):
         personas.resolve_output_path(
             persona=persona,
             source_meta={"kind": "vault_page", "origin": src},
         )
 
 
-def test_resolve_output_path_inplace_for_polisher(tmp_path):
+def test_resolve_output_path_inplace_machinery(tmp_path):
     src = tmp_path / "draft.md"
     src.write_text("x", encoding="utf-8")
-    persona = personas.load_persona("polisher")
+    persona = {"output_kind": "inplace"}
     path = personas.resolve_output_path(
         persona=persona,
         source_meta={"kind": "file", "origin": src},
@@ -149,9 +151,9 @@ def test_resolve_output_path_inplace_for_polisher(tmp_path):
     assert path == src
 
 
-def test_resolve_output_path_new_page_for_scaffolder(wiki_vault):
+def test_resolve_output_path_new_page_machinery(wiki_vault):
     db, vault, root = wiki_vault
-    persona = personas.load_persona("scaffolder")
+    persona = {"output_kind": "new_page"}
     path = personas.resolve_output_path(
         persona=persona,
         source_meta={"kind": "text", "origin": None},
@@ -164,7 +166,7 @@ def test_resolve_output_path_new_page_for_scaffolder(wiki_vault):
 
 def test_resolve_output_path_new_page_requires_title(wiki_vault):
     db, vault, root = wiki_vault
-    persona = personas.load_persona("scaffolder")
+    persona = {"output_kind": "new_page"}
     with pytest.raises(personas.PersonaError, match="title"):
         personas.resolve_output_path(
             persona=persona,
@@ -173,8 +175,8 @@ def test_resolve_output_path_new_page_requires_title(wiki_vault):
         )
 
 
-def test_resolve_output_path_stdout_for_summarizer():
-    persona = personas.load_persona("summarizer")
+def test_resolve_output_path_stdout_for_consistency_checker():
+    persona = personas.load_persona("consistency-checker")
     path = personas.resolve_output_path(
         persona=persona,
         source_meta={"kind": "text", "origin": None},
@@ -185,33 +187,33 @@ def test_resolve_output_path_stdout_for_summarizer():
 from datetime import datetime
 
 
-def test_write_output_sibling_creates_file(wiki_vault):
+def test_write_output_sibling_suffix_creates_file(wiki_vault):
     db, vault, root = wiki_vault
     src = root / "wiki" / "summaries" / "demo.md"
     src.parent.mkdir(parents=True, exist_ok=True)
     src.write_text("---\ntitle: Demo\n---\nbody", encoding="utf-8")
-    persona = personas.load_persona("translator")
+    persona = personas.load_persona("fact-checker")
     out_path = personas.resolve_output_path(
         persona=persona,
         source_meta={"kind": "vault_page", "origin": src},
-        lang="ko",
+        suffix="factcheck",
     )
     result = personas.write_output(
         persona=persona,
         target_path=out_path,
-        content="---\ntitle: 데모\n---\n번역된 본문",
+        content="---\ntitle: Demo\n---\nfact-check report",
         source_meta={"kind": "vault_page", "origin": src},
     )
     assert result == out_path
     assert out_path.exists()
-    assert "번역된 본문" in out_path.read_text(encoding="utf-8")
+    assert "fact-check report" in out_path.read_text(encoding="utf-8")
 
 
 def test_write_output_inplace_backs_up_original(tmp_path):
     src = tmp_path / "draft.md"
     src.write_text("original prose", encoding="utf-8")
     backup_dir = tmp_path / ".trash"
-    persona = personas.load_persona("polisher")
+    persona = {"output_kind": "inplace"}
     result = personas.write_output(
         persona=persona,
         target_path=src,
@@ -229,7 +231,7 @@ def test_write_output_inplace_backs_up_original(tmp_path):
 def test_write_output_inplace_skips_backup_when_no_backup_dir(tmp_path):
     src = tmp_path / "draft.md"
     src.write_text("original", encoding="utf-8")
-    persona = personas.load_persona("polisher")
+    persona = {"output_kind": "inplace"}
     result = personas.write_output(
         persona=persona,
         target_path=src,
@@ -243,7 +245,7 @@ def test_write_output_inplace_skips_backup_when_no_backup_dir(tmp_path):
 
 def test_write_output_new_page_writes_to_wiki_syntheses(wiki_vault):
     db, vault, root = wiki_vault
-    persona = personas.load_persona("scaffolder")
+    persona = {"output_kind": "new_page"}
     out_path = personas.resolve_output_path(
         persona=persona,
         source_meta={"kind": "text", "origin": None},
@@ -262,7 +264,7 @@ def test_write_output_new_page_writes_to_wiki_syntheses(wiki_vault):
 
 
 def test_write_output_stdout_returns_none(tmp_path):
-    persona = personas.load_persona("summarizer")
+    persona = personas.load_persona("consistency-checker")
     result = personas.write_output(
         persona=persona,
         target_path=None,
@@ -277,7 +279,7 @@ import sys
 import json as _json
 
 
-def test_cli_list_returns_4_personas():
+def test_cli_list_returns_5_personas():
     REPO_ROOT = Path(__file__).resolve().parents[1]
     proc = subprocess.run(
         [sys.executable, "-m", "scripts.personas", "list"],
@@ -286,60 +288,62 @@ def test_cli_list_returns_4_personas():
     assert proc.returncode == 0, proc.stderr
     data = _json.loads(proc.stdout)
     names = {p["name"] for p in data}
-    # v2.2a core 4; v2.2b adds more — use superset check so new personas don't break this
-    assert {"translator", "polisher", "summarizer", "scaffolder"} <= names
+    assert names == {
+        "wiki-librarian", "curator", "fact-checker",
+        "consistency-checker", "terminology-manager",
+    }
 
 
 def test_cli_show_returns_persona_spec():
     REPO_ROOT = Path(__file__).resolve().parents[1]
     proc = subprocess.run(
-        [sys.executable, "-m", "scripts.personas", "show", "translator"],
+        [sys.executable, "-m", "scripts.personas", "show", "fact-checker"],
         capture_output=True, text=True, check=False, cwd=REPO_ROOT,
     )
     assert proc.returncode == 0, proc.stderr
     data = _json.loads(proc.stdout)
-    assert data["name"] == "translator"
+    assert data["name"] == "fact-checker"
     assert "body" in data
 
 
-def test_cli_run_translator_sibling_file(wiki_vault, tmp_path):
+def test_cli_run_fact_checker_sibling_suffix(wiki_vault, tmp_path):
     db, vault, root = wiki_vault
     REPO_ROOT = Path(__file__).resolve().parents[1]
     src = root / "wiki" / "summaries" / "demo.md"
     src.parent.mkdir(parents=True, exist_ok=True)
     src.write_text("---\ntitle: Demo\n---\nEnglish body", encoding="utf-8")
-    out = tmp_path / "translated.md"
-    out.write_text("---\ntitle: 데모\n---\n한국어 본문", encoding="utf-8")
+    out = tmp_path / "report.md"
+    out.write_text("---\ntitle: Demo\n---\nfact-check report", encoding="utf-8")
 
     proc = subprocess.run(
         [
-            sys.executable, "-m", "scripts.personas", "run", "translator",
+            sys.executable, "-m", "scripts.personas", "run", "fact-checker",
             "--db", str(db),
             "--vault-id", str(vault["id"]),
             "--vault-relpath", "wiki/summaries/demo.md",
-            "--lang", "ko",
+            "--suffix", "factcheck",
             "--output-file", str(out),
         ],
         capture_output=True, text=True, check=False, cwd=REPO_ROOT,
     )
     assert proc.returncode == 0, proc.stderr
     final_path = proc.stdout.strip()
-    assert final_path.endswith("demo.ko.md")
+    assert final_path.endswith("demo.factcheck.md")
     written = Path(final_path)
     assert written.exists()
-    assert "한국어 본문" in written.read_text(encoding="utf-8")
+    assert "fact-check report" in written.read_text(encoding="utf-8")
 
 
-def test_cli_run_summarizer_stdout(tmp_path):
+def test_cli_run_consistency_checker_stdout(tmp_path):
     REPO_ROOT = Path(__file__).resolve().parents[1]
-    out = tmp_path / "summary.json"
+    out = tmp_path / "report.json"
     out.write_text(
         '{"one_line":"x","one_paragraph":"y","detailed":"z"}',
         encoding="utf-8",
     )
     proc = subprocess.run(
         [
-            sys.executable, "-m", "scripts.personas", "run", "summarizer",
+            sys.executable, "-m", "scripts.personas", "run", "consistency-checker",
             "--text", "some body",
             "--output-file", str(out),
         ],
@@ -349,25 +353,24 @@ def test_cli_run_summarizer_stdout(tmp_path):
     assert "one_line" in proc.stdout
 
 
-def test_researcher_persona_loads():
-    p = personas.load_persona("researcher")
-    assert p["output_kind"] == "new_page"
-    assert p["input_kinds"] == ["text"]
-    assert p["tools"] == []          # search via abstraction, NOT hardcoded MCP
+def test_fact_checker_persona_loads():
+    p = personas.load_persona("fact-checker")
+    assert p["output_kind"] == "sibling_suffix"
+    assert set(p["input_kinds"]) == {"text", "file", "vault_page"}
     assert p["body"].strip()
 
 
-def test_source_curator_persona_loads():
-    p = personas.load_persona("source-curator")
+def test_terminology_manager_persona_loads():
+    p = personas.load_persona("terminology-manager")
     assert p["output_kind"] == "stdout"
-    assert set(p["input_kinds"]) == {"text", "file"}
+    assert set(p["input_kinds"]) == {"text", "file", "vault_page"}
     assert p["body"].strip()
 
 
-def test_memo_curator_persona_loads():
-    p = personas.load_persona("memo-curator")
+def test_consistency_checker_persona_loads():
+    p = personas.load_persona("consistency-checker")
     assert p["output_kind"] == "stdout"
-    assert set(p["input_kinds"]) == {"text", "vault_page"}
+    assert set(p["input_kinds"]) == {"text", "file", "vault_page"}
     assert p["body"].strip()
 
 
@@ -385,44 +388,7 @@ def test_curator_persona_loads():
     assert p["body"].strip()
 
 
-def test_wiki_auditor_persona_loads():
-    p = personas.load_persona("wiki-auditor")
-    assert p["output_kind"] == "stdout"
-    assert set(p["input_kinds"]) == {"text", "vault_page"}
-    assert p["body"].strip()
-
-
-def test_all_sp1_personas_present():
+def test_all_kept_personas_present():
     names = {p["name"] for p in personas.list_personas()}
-    assert {"researcher", "source-curator", "memo-curator",
-            "wiki-librarian", "curator", "wiki-auditor"} <= names
-
-
-def test_operations_orchestrator_persona_loads():
-    p = personas.load_persona("operations-orchestrator")
-    assert p["output_kind"] == "stdout"
-    assert p["input_kinds"] == ["text"]
-    assert p["tools"] == []
-    assert p["model_hint"] == "most_capable"
-    assert p["body"].strip()
-
-
-def test_orchestrate_command_present():
-    from pathlib import Path as _Path
-    doc = _Path(__file__).resolve().parent.parent / "commands" / "persona-orchestrate.md"
-    text = doc.read_text(encoding="utf-8")
-    assert "operations-orchestrator" in text
-    assert "scripts.personas run operations-orchestrator" in text
-
-
-def test_skill_md_routes_to_orchestrate():
-    from pathlib import Path as _Path
-    skill = (_Path(__file__).resolve().parent.parent / "SKILL.md").read_text(encoding="utf-8")
-    assert "persona-orchestrate" in skill
-    # the hierarchical-routing note must mention multi-step routing
-    assert "operations-orchestrator" in skill or "multi-step" in skill.lower()
-
-
-def test_orchestrator_in_roster():
-    names = {p["name"] for p in personas.list_personas()}
-    assert "operations-orchestrator" in names
+    assert names == {"wiki-librarian", "curator", "fact-checker",
+                     "consistency-checker", "terminology-manager"}

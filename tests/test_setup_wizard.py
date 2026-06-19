@@ -100,13 +100,13 @@ def test_setup_serve_without_token_or_flag_errors(capsys):
 def test_setup_personas_records_config_and_exports(tmp_path):
     from scripts import setup_wizard, config, persona_export
     rc = setup_wizard.setup_personas(
-        enabled=["researcher", "curator"], main="researcher",
+        enabled=["fact-checker", "curator"], main="fact-checker",
         hosts=["claude", "codex", "gemini"], base_dir=tmp_path,
     )
     assert rc == 0
     cfg = config.load_config()
-    assert cfg["personas"]["enabled"] == ["researcher", "curator"]
-    assert cfg["personas"]["main"] == "researcher"
+    assert cfg["personas"]["enabled"] == ["fact-checker", "curator"]
+    assert cfg["personas"]["main"] == "fact-checker"
     for f in persona_export.HOST_FILES.values():
         assert "<!-- omw-personas:start -->" in (tmp_path / f).read_text()
 
@@ -118,32 +118,11 @@ def test_setup_personas_unknown_name_errors(tmp_path, capsys):
     assert "nonesuch" in capsys.readouterr().err
 
 
-def test_setup_personas_defaults_main_to_orchestrator(tmp_path):
+def test_setup_personas_defaults_main_to_librarian(tmp_path):
     from scripts import setup_wizard, config
     rc = setup_wizard.setup_personas(base_dir=tmp_path, hosts=["claude"])
     assert rc == 0
-    assert config.load_config()["personas"]["main"] == "operations-orchestrator"
-
-
-def test_setup_tts_enabled_when_complete(monkeypatch):
-    from scripts import setup_wizard, config
-    from scripts.paths import omw_home
-    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
-    rc = setup_wizard.setup_tts(provider="elevenlabs", voice_id="V123", api_key="K456")
-    assert rc == 0
-    cfg = config.load_config()
-    assert cfg["tts"]["provider"] == "elevenlabs"
-    assert cfg["tts"]["voice_id"] == "V123"
-    assert cfg["tts"]["enabled"] is True
-    assert config.read_secret("ELEVENLABS_API_KEY") == "K456"
-    assert (omw_home() / ".env").stat().st_mode & 0o777 == 0o600
-
-
-def test_setup_tts_not_enabled_without_key():
-    from scripts import setup_wizard, config
-    rc = setup_wizard.setup_tts(provider="elevenlabs", voice_id="V123")
-    assert rc == 0
-    assert config.load_config()["tts"]["enabled"] is False
+    assert config.load_config()["personas"]["main"] == "wiki-librarian"
 
 
 def _fake_input(answers):
@@ -185,29 +164,16 @@ def test_setup_serve_noninteractive_flag_unchanged(monkeypatch):
     assert config.read_secret("OMW_SERVE_TOKEN") == "flagtok"
 
 
-def test_setup_tts_interactive_prompts(monkeypatch):
-    from scripts import setup_wizard, config
-    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
-    monkeypatch.setattr(setup_wizard.sys.stdin, "isatty", lambda: True)
-    monkeypatch.setattr("builtins.input", _fake_input(["", "V-int", "K-int"]))
-    rc = setup_wizard.setup_tts()
-    assert rc == 0
-    cfg = config.load_config()
-    assert cfg["tts"]["voice_id"] == "V-int"
-    assert cfg["tts"]["enabled"] is True
-    assert config.read_secret("ELEVENLABS_API_KEY") == "K-int"
-
-
 def test_setup_personas_interactive_selects_roster(monkeypatch, tmp_path):
     from scripts import setup_wizard, config
     monkeypatch.setattr(setup_wizard.sys.stdin, "isatty", lambda: True)
-    # checkbox(enabled) -> "researcher,curator"; select(main) -> "curator"; checkbox(hosts) -> "claude"
+    # checkbox(enabled) -> "fact-checker,curator"; select(main) -> "curator"; checkbox(hosts) -> "claude"
     monkeypatch.setattr("builtins.input",
-                        _fake_input(["researcher,curator", "curator", "claude"]))
+                        _fake_input(["fact-checker,curator", "curator", "claude"]))
     rc = setup_wizard.setup_personas(base_dir=tmp_path)  # no enable/main/host flags
     assert rc == 0
     cfg = config.load_config()
-    assert cfg["personas"]["enabled"] == ["researcher", "curator"]
+    assert cfg["personas"]["enabled"] == ["fact-checker", "curator"]
     assert cfg["personas"]["main"] == "curator"
     assert (tmp_path / "CLAUDE.md").exists()
     assert not (tmp_path / "AGENTS.md").exists()  # only claude host selected
@@ -215,10 +181,10 @@ def test_setup_personas_interactive_selects_roster(monkeypatch, tmp_path):
 
 def test_setup_personas_noninteractive_flags_unchanged(tmp_path):
     from scripts import setup_wizard, config
-    rc = setup_wizard.setup_personas(enabled=["researcher"], main="researcher",
+    rc = setup_wizard.setup_personas(enabled=["fact-checker"], main="fact-checker",
                                      hosts=["claude"], base_dir=tmp_path, noninteractive=True)
     assert rc == 0
-    assert config.load_config()["personas"]["main"] == "researcher"
+    assert config.load_config()["personas"]["main"] == "fact-checker"
 
 
 def test_run_all_invokes_sections_in_order(monkeypatch, tmp_path):
@@ -227,14 +193,14 @@ def test_run_all_invokes_sections_in_order(monkeypatch, tmp_path):
     monkeypatch.setattr(setup_wizard, "run", lambda **k: calls.append("vault") or 0)
     monkeypatch.setattr(setup_wizard, "setup_search", lambda **k: calls.append("search") or 0)
     monkeypatch.setattr(setup_wizard, "setup_serve", lambda **k: calls.append("serve") or 0)
-    monkeypatch.setattr(setup_wizard, "setup_tts", lambda **k: calls.append("tts") or 0)
     monkeypatch.setattr(setup_wizard, "setup_personas", lambda **k: calls.append("personas") or 0)
     monkeypatch.setattr(setup_wizard, "setup_import", lambda **k: calls.append("import") or 0)
     monkeypatch.setattr(setup_wizard, "setup_viewer", lambda **k: calls.append("viewer") or 0)
     monkeypatch.setattr(setup_wizard, "setup_agents", lambda **k: calls.append("agents") or 0)
+    monkeypatch.setattr(setup_wizard, "setup_recall", lambda **k: calls.append("recall") or 0)
     rc = setup_wizard.run_all(noninteractive=False, base_dir=tmp_path)
     assert rc == 0
-    assert calls == ["vault", "search", "serve", "tts", "personas", "import", "viewer", "agents"]
+    assert calls == ["vault", "search", "serve", "personas", "import", "viewer", "agents", "recall"]
 
 
 def test_run_all_returns_first_nonzero_but_continues(monkeypatch, tmp_path):
@@ -243,14 +209,14 @@ def test_run_all_returns_first_nonzero_but_continues(monkeypatch, tmp_path):
     monkeypatch.setattr(setup_wizard, "run", lambda **k: calls.append("vault") or 0)
     monkeypatch.setattr(setup_wizard, "setup_search", lambda **k: calls.append("search") or 2)
     monkeypatch.setattr(setup_wizard, "setup_serve", lambda **k: calls.append("serve") or 0)
-    monkeypatch.setattr(setup_wizard, "setup_tts", lambda **k: calls.append("tts") or 0)
     monkeypatch.setattr(setup_wizard, "setup_personas", lambda **k: calls.append("personas") or 0)
     monkeypatch.setattr(setup_wizard, "setup_import", lambda **k: calls.append("import") or 0)
     monkeypatch.setattr(setup_wizard, "setup_viewer", lambda **k: calls.append("viewer") or 0)
     monkeypatch.setattr(setup_wizard, "setup_agents", lambda **k: calls.append("agents") or 0)
+    monkeypatch.setattr(setup_wizard, "setup_recall", lambda **k: calls.append("recall") or 0)
     rc = setup_wizard.run_all(noninteractive=False, base_dir=tmp_path)
     assert rc == 2
-    assert calls == ["vault", "search", "serve", "tts", "personas", "import", "viewer", "agents"]
+    assert calls == ["vault", "search", "serve", "personas", "import", "viewer", "agents", "recall"]
 
 
 def test_setup_import_interactive_stores_notion_key(monkeypatch):

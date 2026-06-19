@@ -15,9 +15,8 @@ from scripts.paths import ensure_home, registry_path, resolve_vault_root
 
 AGENTIC_OPS = [
     "ingest", "query", "find", "open", "edit", "move", "delete",
-    "autoresearch", "persona-translate", "persona-polish", "persona-summarize",
-    "persona-scaffold", "persona-factcheck", "persona-consistency",
-    "persona-terminology", "dispatch", "team", "team-run", "swarm-monitor",
+    "autoresearch", "persona-factcheck", "persona-consistency",
+    "persona-terminology",
 ]
 
 
@@ -540,11 +539,6 @@ def _cmd_setup(args) -> int:
             enabled=enabled, main=args.main, hosts=hosts,
             base_dir=args.base_dir, noninteractive=args.noninteractive,
         )
-    if args.section == "tts":
-        return setup_wizard.setup_tts(
-            provider=args.provider, voice_id=args.voice_id,
-            api_key=args.api_key, noninteractive=args.noninteractive,
-        )
     if args.section == "search":
         return setup_wizard.setup_search(
             noninteractive=args.noninteractive,
@@ -746,7 +740,7 @@ def build_parser() -> argparse.ArgumentParser:
     pset = sub.add_parser("setup", help="Interactive setup wizard (run after install).")
     pset.add_argument(
         "section", nargs="?",
-        choices=["vault", "hosts", "search", "serve", "personas", "tts", "import", "viewer", "agents", "recall"], default=None,
+        choices=["vault", "hosts", "search", "serve", "personas", "import", "viewer", "agents", "recall"], default=None,
     )
     pset.add_argument(
         "--noninteractive", action="store_true",
@@ -765,7 +759,6 @@ def build_parser() -> argparse.ArgumentParser:
     pset.add_argument("--main", default=None, help="main persona name")
     pset.add_argument("--host", default=None, help="comma-separated hosts (claude,codex,gemini)")
     pset.add_argument("--base-dir", dest="base_dir", default=None, help="dir for host instruction files")
-    pset.add_argument("--voice-id", dest="voice_id", default=None)
     pset.add_argument("--src-dir", dest="src_dir", default=None)
     pset.add_argument("--viewer", choices=["obsidian", "logseq"], default=None,
                       help="viewer for `omw setup viewer` (default obsidian)")

@@ -129,27 +129,6 @@ class TestV23ManifestOps:
         assert self.PLUGIN["version"] == version("oh-my-wiki"), \
             f"plugin.json {self.PLUGIN['version']} != installed {version('oh-my-wiki')}"
 
-    def test_ops_include_dispatch(self):
-        ops = [op["name"] if isinstance(op, dict) else op for op in self.PLUGIN.get("ops", [])]
-        assert "dispatch" in ops, "'dispatch' op missing from plugin.json"
-
-    def test_ops_include_team(self):
-        ops = [op["name"] if isinstance(op, dict) else op for op in self.PLUGIN.get("ops", [])]
-        assert "team" in ops, "'team' op missing from plugin.json"
-
-    def test_ops_include_team_run(self):
-        ops = [op["name"] if isinstance(op, dict) else op for op in self.PLUGIN.get("ops", [])]
-        assert "team-run" in ops, "'team-run' op missing from plugin.json"
-
-    def test_trigger_keywords_english(self):
-        keywords = self.PLUGIN.get("trigger_keywords", [])
-        for kw in ("dispatch this", "run a team", "review this in parallel"):
-            assert kw in keywords, f"EN trigger keyword missing: {kw!r}"
-
-    def test_trigger_keywords_korean(self):
-        keywords = self.PLUGIN.get("trigger_keywords", [])
-        for kw in ("디스패치", "팀 실행", "병렬 검토"):
-            assert kw in keywords, f"KO trigger keyword missing: {kw!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -171,25 +150,6 @@ class TestPluginManifestV24:
             f"plugin.json {data['version']!r} != installed {version('oh-my-wiki')!r}"
         )
 
-    def test_swarm_monitor_op_present(self):
-        data = self._load()
-        ops = [op["name"] if isinstance(op, dict) else op
-               for op in data.get("ops", [])]
-        assert "swarm-monitor" in ops, (
-            f"'swarm-monitor' must be in plugin.json ops; found: {ops}"
-        )
-
-    def test_en_and_ko_triggers_present(self):
-        data = self._load()
-        # Triggers may be at top level or nested under ops
-        # Check trigger keywords exist somewhere in the manifest
-        manifest_text = json.dumps(data, ensure_ascii=False)
-        en_triggers = ["monitor the swarm", "show worker status"]
-        ko_triggers = ["스웜 모니터", "워커 상태 보여줘"]
-        for trigger in en_triggers + ko_triggers:
-            assert trigger in manifest_text, (
-                f"Trigger '{trigger}' not found in plugin.json"
-            )
 
 
 # ---------------------------------------------------------------------------

@@ -85,14 +85,14 @@ def _run_interactive(name: str, mode: str, type_: str, location: str,
     _write_config(name)
     vault_path = resolve_vault_root(name, location)
     if in_wizard:
-        # The top-level wizard continues into search/serve/tts/... right after this,
+        # The top-level wizard continues into search/serve/... right after this,
         # so don't tell the user to "configure later" — just confirm the vault.
         print(f"✓ vault '{name}' ({mode}/{type_}) at {vault_path}")
     else:
         print(
             f"setup complete — vault '{name}' ({mode}/{type_}) at {vault_path}. "
-            f"Configure search/persona/TTS sections anytime with 'omw setup search' / "
-            f"'omw setup personas' / 'omw setup tts'."
+            f"Configure search/persona/recall sections anytime with 'omw setup search' / "
+            f"'omw setup personas' / 'omw setup recall'."
         )
     return 0
 
@@ -207,7 +207,7 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
         picked = _prompt("checkbox", "Enable personas", choices=all_names)
         enabled = picked or list(all_names)
     if interactive and main is None:
-        default_main = ("operations-orchestrator" if "operations-orchestrator" in (enabled or all_names)
+        default_main = ("wiki-librarian" if "wiki-librarian" in (enabled or all_names)
                         else ((enabled or all_names)[0] if (enabled or all_names) else None))
         main = _prompt("select", "Main persona", choices=enabled or all_names,
                        default=default_main) or None
@@ -221,7 +221,7 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
         print(f"error: unknown persona(s): {unknown}", file=sys.stderr)
         return 1
     if main is None:
-        main = "operations-orchestrator" if "operations-orchestrator" in enabled \
+        main = "wiki-librarian" if "wiki-librarian" in enabled \
             else (enabled[0] if enabled else None)
     if main is not None and main not in enabled:
         print(f"error: main persona {main!r} not in enabled set", file=sys.stderr)
@@ -237,35 +237,6 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
     )
     print(f"✓ personas: {len(enabled)} enabled, main={main}; "
           f"exported to {', '.join(p.name for p in written)}")
-    return 0
-
-
-def setup_tts(*, provider: str | None = None, voice_id: str | None = None,
-              api_key: str | None = None, noninteractive: bool = False) -> int:
-    """Configure a TTS provider + voice. Key -> ~/.omw/.env (0600). Mirrors setup_search."""
-    from scripts import config
-    interactive = (not noninteractive) and sys.stdin.isatty()
-    if interactive and provider is None:
-        provider = _prompt("select", "TTS provider", choices=["elevenlabs", "skip"],
-                           default="elevenlabs") or "skip"
-        if provider == "skip":
-            print("tts setup skipped — re-run `omw setup tts` anytime.")
-            return 0
-        if not voice_id:
-            voice_id = _prompt("text", "Voice ID (blank to defer)") or None
-        if not api_key:
-            api_key = _prompt("password", "API key (blank to defer)") or None
-    provider = provider or "elevenlabs"
-    if api_key:
-        config.set_secret(f"{provider.upper()}_API_KEY", api_key)
-    config.set_config("tts.provider", provider)
-    config.set_config("tts.voice_id", voice_id)
-    enabled = bool(api_key and voice_id)
-    config.set_config("tts.enabled", enabled)
-    if enabled:
-        print(f"✓ tts provider '{provider}' configured (voice {voice_id}).")
-    else:
-        print(f"tts provider '{provider}' recorded — provide --api-key + --voice-id to enable.")
     return 0
 
 
@@ -462,7 +433,6 @@ def run_all(*, noninteractive: bool = False, base_dir=None) -> int:
         ("vault", lambda: run(noninteractive=noninteractive, in_wizard=True)),
         ("search", lambda: setup_search(noninteractive=noninteractive)),
         ("serve", lambda: setup_serve(noninteractive=noninteractive)),
-        ("tts", lambda: setup_tts(noninteractive=noninteractive)),
         ("personas", lambda: setup_personas(noninteractive=noninteractive, base_dir=base_dir)),
         ("import", lambda: setup_import(noninteractive=noninteractive)),
         ("viewer", lambda: setup_viewer(noninteractive=noninteractive)),

@@ -31,13 +31,15 @@ _DEFAULTS = {"mode": "auto", "strategy": "fts", "llm_submode": "route",
              "min_score": 1.0, "top_k": 3, "snippet_chars": 280}
 
 
-def effective_strategy(strategy: str) -> str:
+def effective_strategy(strategy: str, *, quiet: bool = False) -> str:
     """Resolve the configured strategy to one that's implemented. Unimplemented
-    strategies (embedding/hybrid/llm) gracefully fall back to fts with a stderr
-    note — so users can already *select* the mode before the engines land."""
+    strategies (embedding/hybrid/llm) gracefully fall back to fts — so users can
+    already *select* the mode before the engines land. `quiet=True` on the
+    per-prompt hot path (the wizard already warns once at config time); the note
+    is only useful on explicit `omw recall`/setup invocations."""
     if strategy in _IMPLEMENTED_STRATEGIES:
         return strategy
-    if strategy in STRATEGIES:
+    if strategy in STRATEGIES and not quiet:
         print(f"omw recall: strategy '{strategy}' is planned, not implemented yet "
               f"— using 'fts'. (references/auto-recall-hook-design.md §10)", file=sys.stderr)
     return "fts"
@@ -67,7 +69,8 @@ def _cfg() -> dict:
     for k in ("mode", "strategy", "min_score", "top_k", "snippet_chars"):
         if k in raw:
             out[k] = raw[k]
-    out["llm_submode"] = (raw.get("llm") or {}).get("submode", _DEFAULTS["llm_submode"])
+    llm = raw.get("llm")  # harden: a hand-edited non-dict must not raise here
+    out["llm_submode"] = (llm if isinstance(llm, dict) else {}).get("submode", _DEFAULTS["llm_submode"])
     return out
 
 
@@ -154,7 +157,8 @@ def prompt(text: str | None) -> str:
 
     # Resolve the configured retrieval strategy. Today every strategy routes to the
     # fts backend (embedding/hybrid/llm fall back here until their engines land).
-    effective_strategy(cfg.get("strategy", "fts"))
+    # quiet=True: this runs on every prompt — stay silent (setup warns once).
+    effective_strategy(cfg.get("strategy", "fts"), quiet=True)
     hits = _hits(text, int(cfg["top_k"]))
     strong = [h for h in hits if (h.get("score") or 0) >= float(cfg["min_score"])]
 
