@@ -53,3 +53,6 @@ uv.lock
 
 # Per-vault runtime state (autoresearch sessions, hot cache state, etc.)
 .oh-my-wiki/
+
+# humanize-korean transient workspace
+_workspace/
