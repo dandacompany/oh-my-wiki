@@ -214,6 +214,14 @@ def _cmd_review(args) -> int:
                                 include_unscheduled=not args.scheduled_only)
         print(json.dumps(rows, ensure_ascii=False, indent=2))
         return 0
+    if args.review_cmd == "audit":
+        rows = review.audit(db, vault_id=vault_id, today=today, apply=args.apply)
+        print(json.dumps({"applied": args.apply, "findings": rows}, ensure_ascii=False, indent=2))
+        return 0
+    if args.review_cmd == "use":
+        ok = review.record_use(db, vault_id=vault_id, relpaths=[args.relpath], today=today)
+        print(json.dumps({"relpath": args.relpath, "recorded": ok, "date": today}, ensure_ascii=False))
+        return 0
     try:
         out = review.reschedule(db, vault_id=vault_id, relpath=args.relpath,
                                 grade=args.grade, today=today)
@@ -655,6 +663,16 @@ def build_parser() -> argparse.ArgumentParser:
     prn.add_argument("--vault", default=None, help="vault name (default: active)")
     prn.add_argument("--today", default=None, help="YYYY-MM-DD (default: today)")
     prn.set_defaults(func=_cmd_review)
+    pra = rsub.add_parser("audit", help="Deterministic freshness audit: stale/expired pages (report-only unless --apply).")
+    pra.add_argument("--apply", action="store_true", help="write stale flags + confidence demotions (default: report only)")
+    pra.add_argument("--vault", default=None, help="vault name (default: active)")
+    pra.add_argument("--today", default=None, help="YYYY-MM-DD (default: today)")
+    pra.set_defaults(func=_cmd_review)
+    pru = rsub.add_parser("use", help="Record that a page was surfaced today (reactivates freshness).")
+    pru.add_argument("relpath")
+    pru.add_argument("--vault", default=None, help="vault name (default: active)")
+    pru.add_argument("--today", default=None, help="YYYY-MM-DD (default: today)")
+    pru.set_defaults(func=_cmd_review)
 
     psup = sub.add_parser("supersede", help="Mark a page superseded (status + superseded_by).")
     psup.add_argument("relpath")

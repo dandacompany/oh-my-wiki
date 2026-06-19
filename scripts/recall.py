@@ -104,6 +104,21 @@ def normalize_query(text: str) -> str:
     return " ".join(_strip_josa(t) for t in (text or "").split())
 
 
+def _record_use(relpaths: list[str]) -> None:
+    """Stamp surfaced pages as used today in the active vault's usage store.
+    Best-effort — recall runs on every prompt and must never raise to the host."""
+    try:
+        from datetime import date
+        from scripts import registry, usage
+        from scripts.paths import registry_path
+        db = registry_path()
+        v = registry.get_active(db)
+        if v:
+            usage.bump(v["path"], relpaths, date.today().isoformat())
+    except Exception:
+        pass
+
+
 def _hits(text: str, top_k: int) -> list[dict]:
     from scripts import search_index
     from scripts.paths import registry_path
@@ -163,6 +178,7 @@ def prompt(text: str | None) -> str:
     strong = [h for h in hits if (h.get("score") or 0) >= float(cfg["min_score"])]
 
     if strong:  # Tier 2 — concrete grounding (both auto and advisory benefit)
+        _record_use([h["relpath"] for h in strong])  # reactivate freshness (best-effort)
         lines = [f"<{MARKER}> 활성 omw 위키에 관련 페이지가 있습니다 — 답변의 근거/출처로 활용하세요:"]
         for h in strong:
             tags = ",".join(h.get("tags") or [])
