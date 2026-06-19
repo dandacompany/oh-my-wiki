@@ -120,7 +120,8 @@ registry:   /Users/you/.omw/registry.db  missing
 omw setup
 ```
 
-`omw setup`은 첫 번째 vault, 검색 provider, TTS, persona 설정을 구성하는 대화형 마법사입니다.
+`omw setup`은 첫 번째 vault, 검색 provider, serve API, persona, import, viewer, agents,
+프롬프트별 recall 설정을 구성하는 대화형 마법사입니다.
 프롬프트에 따라 진행하세요. 빠른 시작을 원하면 기본값을 그대로 받아들이면 됩니다 — 나중에
 `omw setup vault`나 `omw setup personas`를 다시 실행해 개별 섹션을 조정할 수 있습니다.
 
@@ -576,24 +577,19 @@ omw fields wiki/concepts/llm-wiki.md
 wikilink(`[[other-page]]`)를 참조하는 관계 키(`uses`, `contradicts`, `supersedes`)는
 frontmatter `relations:`와 동일한 방식으로 타입드 엣지 그래프에 반영됩니다.
 
-### 4.8 Writing persona (세션 내, 자연어)
+### 4.8 wiki 유지 관리 persona (세션 내, 자연어)
 
-oh-my-wiki는 Claude Code / Codex / Gemini 세션에서 자연어로 호출하는 여덟 가지 writing
-persona를 제공합니다. 별도 커맨드가 필요 없습니다 — 스킬이 입력한 내용에 따라 적절한
-persona로 라우팅합니다. 여기서 설명하는 핵심 persona는 researcher / fact-checker / curator
-/ wiki-auditor이며, 전체 목록(translator, polisher, summarizer, scaffolder 포함)은
-Part 5 표를 참고하세요.
+oh-my-wiki는 Claude Code / Codex / Gemini 세션에서 자연어로 호출하는 다섯 가지 wiki
+유지 관리 persona를 제공합니다. 별도 커맨드가 필요 없습니다 — 스킬이 입력한 내용에 따라
+적절한 persona로 라우팅합니다. 목록은 wiki-librarian / curator / fact-checker /
+consistency-checker / terminology-manager입니다(Part 5 표 참고).
 
-**Researcher** — 여러 웹 쿼리에서 출처를 모아 개요를 작성하고 결과를 `wiki/syntheses/`에
-저장합니다. Claude 세션에서 다음과 같이 말하세요:
+**Curator** — wiki의 공백, 고립 페이지, 구조적 취약점을 검토하고 유지 관리 계획을 제안합니다.
+Claude 세션에서 다음과 같이 말하세요:
 
 ```
-autoresearch how does the LLM Wiki pattern compare to Zettelkasten?
+curate my wiki — what pages are most in need of attention?
 ```
-
-스킬은 질문을 주장 단위로 분해하고, 주장별로 최대 3라운드의 Bright Data MCP 검색을
-실행하며, confidence 태그를 부여한 다음, synthesis 페이지 초안을 작성하고 저장 전에 확인을
-요청합니다.
 
 **Fact-checker** — 초안을 원자 단위 주장으로 분해하고, 웹 검색을 통해 각각을 검증한 후,
 판정 표(supported / contradicted / partial / unverifiable)가 담긴 형제 리포트를
@@ -603,25 +599,23 @@ autoresearch how does the LLM Wiki pattern compare to Zettelkasten?
 fact-check wiki/concepts/llm-wiki.md
 ```
 
-**Curator** — wiki의 공백, 고립 페이지, 구조적 취약점을 검토하고 유지 관리 계획을 제안합니다.
+**Consistency-checker** — 전체 일관성 검사를 실행합니다: 모순, 용어 표류, 오래된 주장.
 Claude 세션에서 다음과 같이 말하세요:
-
-```
-curate my wiki — what pages are most in need of attention?
-```
-
-**Wiki-auditor** — 전체 일관성 검사를 실행합니다: 모순, 용어 표류, 오래된 주장. Claude 세션에서
-다음과 같이 말하세요:
 
 ```
 check my wiki for contradictions
 ```
 
-또는
+**Terminology-manager** — vault의 용어집을 구축하고 유지 관리합니다. Claude 세션에서
+다음과 같이 말하세요:
 
 ```
 build a glossary for my vault
 ```
+
+출처가 필요한 리서치는 `autoresearch` wiki 작업(FAQ 참고)을 사용하세요. 질문을 주장 단위로
+분해하고, 주장별로 최대 3라운드의 Bright Data MCP 검색을 실행하며, confidence 태그를 부여한
+다음, `wiki/syntheses/`에 synthesis 페이지 초안을 작성하고 저장 전에 확인을 요청합니다.
 
 모든 persona는 **제안 → 확인 → 실행** 모델을 따릅니다. 파일을 읽고, 제안 초안을 작성하고,
 무엇이 변경될지 보여준 다음 작성합니다.
@@ -632,24 +626,26 @@ build a glossary for my vault
 
 ### CLI 서브커맨드 (13개)
 
-| 서브커맨드      | 인터페이스 | 한 줄 설명                                                     |
-| --------------- | ---------- | -------------------------------------------------------------- |
-| `omw status`    | CLI        | 레지스트리 상태 표시: vault 수, 활성 vault, `needs` 코드       |
-| `omw vault`     | CLI        | Vault 관리: `create`, `list`, `use`, `forget`                  |
-| `omw lint`      | CLI        | 결정론적 vault 건강 검사 (frontmatter + links + drift)         |
-| `omw search`    | CLI        | 설정된 외부 provider를 통한 웹 검색 (brave/tavily/exa/…)       |
-| `omw serve`     | CLI        | 로컬 읽기 전용 HTTP 쿼리 API 시작 (포트 8765)                  |
-| `omw schema`    | CLI        | 페이지 타입 스키마 표시: `list`, `show <type>`                 |
-| `omw supersede` | CLI        | 페이지를 `status: superseded` + `superseded_by: <slug>`로 표시 |
-| `omw review`    | CLI        | 간격 반복 대기열: `due`, `done`                                |
-| `omw links`     | CLI        | 엔티티 자동 링크: `suggest`, `link`                            |
-| `omw fields`    | CLI        | 페이지의 frontmatter + 인라인 `key:: value` 필드 표시          |
-| `omw import`    | CLI        | 폴더 / Obsidian vault / Notion export 가져오기                 |
-| `omw setup`     | CLI        | 대화형 마법사: vault, 검색, persona, TTS                       |
-| `omw doctor`    | CLI        | omw 설정 + 설치 건강 상태 검증                                 |
+| 서브커맨드      | 인터페이스 | 한 줄 설명                                                                 |
+| --------------- | ---------- | -------------------------------------------------------------------------- |
+| `omw status`    | CLI        | 레지스트리 상태 표시: vault 수, 활성 vault, `needs` 코드                   |
+| `omw vault`     | CLI        | Vault 관리: `create`, `list`, `use`, `forget`                              |
+| `omw lint`      | CLI        | 결정론적 vault 건강 검사 (frontmatter + links + drift)                     |
+| `omw search`    | CLI        | 설정된 외부 provider를 통한 웹 검색 (brave/tavily/exa/…)                   |
+| `omw serve`     | CLI        | 로컬 읽기 전용 HTTP 쿼리 API 시작 (포트 8765)                              |
+| `omw schema`    | CLI        | 페이지 타입 스키마 표시: `list`, `show <type>`                             |
+| `omw supersede` | CLI        | 페이지를 `status: superseded` + `superseded_by: <slug>`로 표시             |
+| `omw review`    | CLI        | 간격 반복 대기열: `due`, `done`                                            |
+| `omw links`     | CLI        | 엔티티 자동 링크: `suggest`, `link`                                        |
+| `omw fields`    | CLI        | 페이지의 frontmatter + 인라인 `key:: value` 필드 표시                      |
+| `omw import`    | CLI        | 폴더 / Obsidian vault / Notion export 가져오기                             |
+| `omw setup`     | CLI        | 대화형 마법사: vault, 검색, serve, persona, import, viewer, agents, recall |
+| `omw doctor`    | CLI        | omw 설정 + 설치 건강 상태 검증                                             |
 
-추론 작업(`ingest`, `query`, `find`, `edit`, `autoresearch`, persona, `dispatch`, `team`)은
+추론 작업(`ingest`, `query`, `find`, `edit`, `autoresearch`, persona)은
 Claude / Codex / Gemini 세션이 필요합니다 — 에이전트 세션에서 자연어로 사용하세요.
+oh-my-wiki는 멀티 스텝 오케스트레이션을 제공하지 않습니다. 이 작업들을 엮어 실행하는 것은
+호스트 AI 에이전트(Claude Code / Codex / Gemini)가 담당합니다.
 
 ### Frontmatter 규약
 
@@ -688,16 +684,13 @@ contradicts:: [[old-method]]
 
 ### Persona 목록
 
-| Persona          | 호출 문구                                          | 출력                              |
-| ---------------- | -------------------------------------------------- | --------------------------------- |
-| **Researcher**   | "autoresearch …"                                   | `wiki/syntheses/<slug>.md`        |
-| **Fact-checker** | "fact-check …"                                     | `<page>.factcheck.md`             |
-| **Curator**      | "curate my wiki"                                   | 유지 관리 제안 (세션 내)          |
-| **Wiki-auditor** | "check for contradictions" 또는 "build a glossary" | JSON 리포트 / `glossary.db`       |
-| **Translator**   | "translate … to Korean"                            | `<base>.<lang>.md` 형제 파일      |
-| **Polisher**     | "polish this"                                      | 제자리 편집 (`.trash/` 백업)      |
-| **Summarizer**   | "summarize …"                                      | stdout JSON (한 줄 / 단락 / 상세) |
-| **Scaffolder**   | "scaffold an outline for …"                        | `wiki/syntheses/<slug>.md` (초안) |
+| Persona                 | 호출 문구                     | 출력                      |
+| ----------------------- | ----------------------------- | ------------------------- |
+| **Wiki-librarian**      | "open my wiki", "ingest this" | ingest / 정리 요청 라우팅 |
+| **Curator**             | "curate my wiki"              | 유지 관리 제안 (세션 내)  |
+| **Fact-checker**        | "fact-check this"             | `<page>.factcheck.md`     |
+| **Consistency-checker** | "check for contradictions"    | JSON 리포트 (세션 내)     |
+| **Terminology-manager** | "build a glossary"            | `glossary.db`             |
 
 ### 스키마 위치
 

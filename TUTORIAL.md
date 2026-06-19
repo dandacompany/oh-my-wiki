@@ -122,9 +122,10 @@ omw setup
 ```
 
 `omw setup` is an interactive wizard that configures your first vault, search
-provider, TTS, and persona preferences. Follow the prompts. For a quick start,
-accept the defaults — you can always re-run `omw setup vault` or
-`omw setup personas` later to adjust individual sections.
+provider, serve API, personas, import, viewer, agents, and per-prompt recall.
+Follow the prompts. For a quick start, accept the defaults — you can always
+re-run `omw setup vault` or `omw setup personas` later to adjust individual
+sections.
 
 ### Step 2 — Check status
 
@@ -589,24 +590,20 @@ Relation keys (`uses`, `contradicts`, `supersedes`) that reference wikilinks
 (`[[other-page]]`) feed the typed-edge graph the same way that frontmatter
 `relations:` does.
 
-### 4.8 Writing personas (in-session, natural language)
+### 4.8 Wiki-maintenance personas (in-session, natural language)
 
-oh-my-wiki ships eight writing personas you invoke in your Claude Code / Codex /
-Gemini session by talking naturally. No separate command is needed — the skill
-routes to the right persona based on what you say. Core personas described here:
-researcher / fact-checker / curator / wiki-auditor. The full roster (including
-translator, polisher, summarizer, scaffolder) is in the Part 5 table.
+oh-my-wiki ships five wiki-maintenance personas you invoke in your Claude Code /
+Codex / Gemini session by talking naturally. No separate command is needed — the
+skill routes to the right persona based on what you say. The roster is
+wiki-librarian / curator / fact-checker / consistency-checker /
+terminology-manager (see the Part 5 table).
 
-**Researcher** — builds a sourced overview from multiple web queries and files
-the result to `wiki/syntheses/`. In your Claude session, say:
+**Curator** — reviews the wiki for gaps, orphan pages, and structural
+weaknesses, then proposes a maintenance plan. In your Claude session, say:
 
 ```
-autoresearch how does the LLM Wiki pattern compare to Zettelkasten?
+curate my wiki — what pages are most in need of attention?
 ```
-
-The skill decomposes the question into claims, runs up to 3 rounds of Bright
-Data MCP searches per claim, assigns confidence tags, then drafts a synthesis
-page and asks before filing it.
 
 **Fact-checker** — decomposes a draft into atomic claims, verifies each via web
 search, and writes a sibling report at `<your-page>.factcheck.md` with a
@@ -617,25 +614,24 @@ Claude session, say:
 fact-check wiki/concepts/llm-wiki.md
 ```
 
-**Curator** — reviews the wiki for gaps, orphan pages, and structural
-weaknesses, then proposes a maintenance plan. In your Claude session, say:
-
-```
-curate my wiki — what pages are most in need of attention?
-```
-
-**Wiki-auditor** — runs a full consistency pass: contradictions, terminology
-drift, stale claims. In your Claude session, say:
+**Consistency-checker** — runs a full consistency pass: contradictions,
+terminology drift, stale claims. In your Claude session, say:
 
 ```
 check my wiki for contradictions
 ```
 
-or
+**Terminology-manager** — builds and maintains a glossary for your vault. In
+your Claude session, say:
 
 ```
 build a glossary for my vault
 ```
+
+For sourced research, use the `autoresearch` wiki op (see the FAQ): it
+decomposes a question into claims, runs up to 3 rounds of Bright Data MCP
+searches per claim, assigns confidence tags, then drafts a synthesis page at
+`wiki/syntheses/` and asks before filing it.
 
 All personas follow the **propose → confirm → execute** model. They read your
 files, draft proposals, and show you what will change before writing anything.
@@ -646,25 +642,26 @@ files, draft proposals, and show you what will change before writing anything.
 
 ### CLI subcommands (13)
 
-| Subcommand      | Surface | One-line description                                                 |
-| --------------- | ------- | -------------------------------------------------------------------- |
-| `omw status`    | CLI     | Show registry state: vault count, active vault, `needs` code         |
-| `omw vault`     | CLI     | Vault management: `create`, `list`, `use`, `forget`                  |
-| `omw lint`      | CLI     | Deterministic vault health check (frontmatter + links + drift)       |
-| `omw search`    | CLI     | Web search via the configured external provider (brave/tavily/exa/…) |
-| `omw serve`     | CLI     | Start the local retrieve-only HTTP query API (port 8765)             |
-| `omw schema`    | CLI     | Show page-type schemas: `list`, `show <type>`                        |
-| `omw supersede` | CLI     | Mark a page `status: superseded` + `superseded_by: <slug>`           |
-| `omw review`    | CLI     | Spaced-repetition queue: `due`, `done`                               |
-| `omw links`     | CLI     | Entity auto-link: `suggest`, `link`                                  |
-| `omw fields`    | CLI     | Show a page's frontmatter + inline `key:: value` fields              |
-| `omw import`    | CLI     | Import a folder / Obsidian vault / Notion export                     |
-| `omw setup`     | CLI     | Interactive wizard: vault, search, personas, TTS                     |
-| `omw doctor`    | CLI     | Validate omw config + install health                                 |
+| Subcommand      | Surface | One-line description                                                               |
+| --------------- | ------- | ---------------------------------------------------------------------------------- |
+| `omw status`    | CLI     | Show registry state: vault count, active vault, `needs` code                       |
+| `omw vault`     | CLI     | Vault management: `create`, `list`, `use`, `forget`                                |
+| `omw lint`      | CLI     | Deterministic vault health check (frontmatter + links + drift)                     |
+| `omw search`    | CLI     | Web search via the configured external provider (brave/tavily/exa/…)               |
+| `omw serve`     | CLI     | Start the local retrieve-only HTTP query API (port 8765)                           |
+| `omw schema`    | CLI     | Show page-type schemas: `list`, `show <type>`                                      |
+| `omw supersede` | CLI     | Mark a page `status: superseded` + `superseded_by: <slug>`                         |
+| `omw review`    | CLI     | Spaced-repetition queue: `due`, `done`                                             |
+| `omw links`     | CLI     | Entity auto-link: `suggest`, `link`                                                |
+| `omw fields`    | CLI     | Show a page's frontmatter + inline `key:: value` fields                            |
+| `omw import`    | CLI     | Import a folder / Obsidian vault / Notion export                                   |
+| `omw setup`     | CLI     | Interactive wizard: vault, search, serve, personas, import, viewer, agents, recall |
+| `omw doctor`    | CLI     | Validate omw config + install health                                               |
 
-Reasoning-ops (`ingest`, `query`, `find`, `edit`, `autoresearch`, personas,
-`dispatch`, `team`) require a Claude / Codex / Gemini session — use them by
-speaking naturally in your agent session.
+Reasoning-ops (`ingest`, `query`, `find`, `edit`, `autoresearch`, personas)
+require a Claude / Codex / Gemini session — use them by speaking naturally in
+your agent session. oh-my-wiki does not ship multi-step orchestration; your host
+AI agent (Claude Code / Codex / Gemini) handles chaining these ops together.
 
 ### Frontmatter conventions
 
@@ -703,16 +700,13 @@ contradicts:: [[old-method]]
 
 ### Persona roster
 
-| Persona          | Invocation phrase                                | Output                                        |
-| ---------------- | ------------------------------------------------ | --------------------------------------------- |
-| **Researcher**   | "autoresearch …"                                 | `wiki/syntheses/<slug>.md`                    |
-| **Fact-checker** | "fact-check …"                                   | `<page>.factcheck.md`                         |
-| **Curator**      | "curate my wiki"                                 | Maintenance proposal (in-session)             |
-| **Wiki-auditor** | "check for contradictions" or "build a glossary" | JSON report / `glossary.db`                   |
-| **Translator**   | "translate … to Korean"                          | `<base>.<lang>.md` sibling                    |
-| **Polisher**     | "polish this"                                    | In-place edit (`.trash/` backup)              |
-| **Summarizer**   | "summarize …"                                    | stdout JSON (one-line / paragraph / detailed) |
-| **Scaffolder**   | "scaffold an outline for …"                      | `wiki/syntheses/<slug>.md` (draft)            |
+| Persona                 | Invocation phrase             | Output                            |
+| ----------------------- | ----------------------------- | --------------------------------- |
+| **Wiki-librarian**      | "open my wiki", "ingest this" | Routes ingest / organize requests |
+| **Curator**             | "curate my wiki"              | Maintenance proposal (in-session) |
+| **Fact-checker**        | "fact-check this"             | `<page>.factcheck.md`             |
+| **Consistency-checker** | "check for contradictions"    | JSON report (in-session)          |
+| **Terminology-manager** | "build a glossary"            | `glossary.db`                     |
 
 ### Schema locations
 

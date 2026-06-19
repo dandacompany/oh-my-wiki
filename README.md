@@ -7,7 +7,7 @@
 
 A host-universal LLM-wiki you drive from your AI coding agent (Claude Code / Codex / Gemini).
 
-oh-my-wiki exposes exactly two surfaces. The **`omw` CLI** handles deterministic ops — `omw setup`, `omw vault create`, `omw lint`, `omw schema list`, `omw supersede`, `omw review`, `omw links`, `omw fields`, `omw doctor` — with no LLM required. The **`omw` skill** brings natural-language reasoning inside your AI session: ingest, query, autoresearch, and personas. The model is _personas propose → you confirm → deterministic ops execute_, so every file change is auditable.
+oh-my-wiki exposes exactly two surfaces. The **`omw` CLI** handles deterministic ops — `omw setup`, `omw vault create`, `omw lint`, `omw schema list`, `omw supersede`, `omw review`, `omw links`, `omw fields`, `omw view`, `omw doctor` — with no LLM required. The **`omw` skill** brings natural-language reasoning inside your AI session: ingest, query, autoresearch, and a small set of wiki-maintenance personas (librarian, curator, fact-checker, consistency-checker, terminology-manager). The model is _personas propose → you confirm → deterministic ops execute_, so every file change is auditable. omw stays focused on the wiki — multi-step orchestration is left to your host AI agent (Claude Code / Codex / Gemini), not reimplemented here.
 
 **Short alias:** `OMW` (lowercase `omw`). Both `oh-my-wiki` and `omw` register as skills and respond to the same trigger phrases.
 
