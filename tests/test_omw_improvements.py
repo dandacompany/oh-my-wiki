@@ -220,11 +220,12 @@ def test_recall_normalize_query_strips_josa():
 def test_recall_effective_strategy_falls_back(capsys):
     from scripts import recall
     assert recall.effective_strategy("fts") == "fts"
-    assert recall.effective_strategy("embedding") == "fts"   # planned → fts
-    assert recall.effective_strategy("hybrid") == "fts"
-    assert recall.effective_strategy("nonsense") == "fts"
+    assert recall.effective_strategy("embedding") == "embedding"  # now implemented (Task 4.4)
+    assert recall.effective_strategy("hybrid") == "hybrid"        # now implemented (Task 4.4)
+    assert recall.effective_strategy("llm") == "fts"              # still planned → falls back to fts
+    assert recall.effective_strategy("nonsense") == "fts"         # unknown → fts
     err = capsys.readouterr().err
-    assert "planned" in err  # the implemented-but-not-yet strategies announce fallback
+    assert "planned" in err  # llm announces its fallback on stderr
 
 
 def test_recall_cost_warning_only_for_auto_llm():
