@@ -432,3 +432,21 @@ def test_fields_serializes_date_frontmatter(tmp_path, monkeypatch, capsys):
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
     assert out["frontmatter"]["date"] == "2026-06-01"  # date serialized as ISO string
+
+
+def test_maint_status_json(capsys, monkeypatch):
+    import json
+    from scripts import omw_cli
+    monkeypatch.setattr("scripts.maint.status", lambda *a, **k: {
+        "stale": 1, "expired": 0, "lint_issues": 0, "nudge": "x"})
+    monkeypatch.setattr(omw_cli, "_resolve_vault_row",
+                        lambda db, name: {"id": 1, "path": "/tmp/v"})
+
+    class _DB:
+        def exists(self):
+            return True
+
+    monkeypatch.setattr(omw_cli, "registry_path", lambda: _DB())
+    rc = omw_cli.main(["maint", "status"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["stale"] == 1

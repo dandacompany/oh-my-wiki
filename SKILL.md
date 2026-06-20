@@ -76,6 +76,11 @@ Parse the JSON output. Fields:
 For deterministic vault management you may call the `omw` CLI directly (e.g.
 `omw vault list`); for content ops always load `commands/<op>.md` and follow it.
 
+## Step 3 — Op Wizard / Menu (when no op specified)
+
+When the user invokes omw without a specific op (bare "omw", "위키 열어줘", "오마이위키 뭐 할까"),
+load `commands/menu.md` and present the AskUserQuestion menu instead of guessing.
+
 ## Step 3 — Op Wizard (when no op specified)
 
 Use `AskUserQuestion` (max 4 options). The option set depends on `active.mode`:
