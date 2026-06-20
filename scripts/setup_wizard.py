@@ -423,6 +423,24 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     return 0
 
 
+def configure_recall(*, strategy="fts", provider="none", model="text-embedding-3-small",
+                     dim=1536, mode=None, noninteractive=False) -> None:
+    """Persist recall strategy + embedding provider. Prints the scale guard note."""
+    from scripts import config, recall
+    if mode:
+        config.set_config("recall.mode", mode)
+    config.set_config("recall.strategy", strategy)
+    config.set_config("recall.embedding.provider", provider)
+    if provider not in ("none", ""):
+        config.set_config("recall.embedding.model", model)
+        config.set_config("recall.embedding.dim", int(dim))
+        print("참고: 위키가 1차 연료입니다. embedding/hybrid는 페이지가 수천+로 커져 "
+              "FTS 정밀도가 떨어질 때 켜는 롱테일 검색 축입니다 (opt-in).")
+    warn = recall.cost_warning(mode or "auto", strategy)
+    if warn:
+        print(warn)
+
+
 def run_all(*, noninteractive: bool = False, base_dir=None) -> int:
     """Top-level interactive wizard: walk every section in order with per-step skip.
 

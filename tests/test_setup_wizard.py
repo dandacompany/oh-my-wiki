@@ -270,3 +270,13 @@ def test_setup_agents_skips_uninstalled(monkeypatch, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "gemini" in out and "skipped" in out
+
+
+def test_recall_embedding_config_written():
+    from scripts import setup_wizard, config
+    setup_wizard.configure_recall(strategy="hybrid", provider="openai",
+                                  model="text-embedding-3-small", dim=1536,
+                                  noninteractive=True)
+    cfg = config.load_config()["recall"]
+    assert cfg["strategy"] == "hybrid"
+    assert cfg["embedding"]["provider"] == "openai"
