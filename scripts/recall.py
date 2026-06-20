@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import sys
 
+from scripts import maint
+
 MARKER = "omw-recall"
 
 #: retrieval strategies (축 2). Only `fts` is implemented; the rest are planned
@@ -211,6 +213,13 @@ def preamble() -> str:
         titles = [r.get("title") or r.get("relpath") for r in recent if r.get("title") or r.get("relpath")]
         if titles:
             lines.append("최근 페이지: " + ", ".join(titles))
+    except Exception:
+        pass
+    try:
+        from datetime import date
+        st = maint.status(db, vault_id=v["id"], today=date.today().isoformat())
+        if st.get("nudge"):
+            lines.append("유지보수: " + st["nudge"])
     except Exception:
         pass
     lines.append("</omw-wiki>")
