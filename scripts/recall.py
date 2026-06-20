@@ -141,7 +141,7 @@ def _hits(text: str, top_k: int) -> list[dict]:
                                       query=normalize_query(text),
                                       limit=top_k, visibility=visibility)
         else:
-            embedder = embed.get_embedder((cfg["recall"] or {}).get("embedding", {}))
+            embedder = embed.get_embedder((cfg.get("recall") or {}).get("embedding") or {})
             return search_index.search_strategy(db, vault_id=v["id"],
                                                 q=text, limit=top_k,
                                                 strategy=strat,

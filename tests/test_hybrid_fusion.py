@@ -1,6 +1,3 @@
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from scripts.search_index import rrf_fuse, search_strategy
 import scripts.search_index as search_index
 
