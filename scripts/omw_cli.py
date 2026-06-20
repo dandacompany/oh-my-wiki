@@ -517,7 +517,12 @@ def _cmd_maint(args) -> int:
 
 def _cmd_recall(args) -> int:
     from scripts import recall
-    out = recall.preamble() if args.action == "preamble" else recall.prompt(args.text)
+    if args.action == "preamble":
+        out = recall.preamble()
+    elif args.action == "pretool":
+        out = recall.pretool(None)
+    else:
+        out = recall.prompt(args.text)
     if out:
         print(out)
     return 0
@@ -770,7 +775,7 @@ def build_parser() -> argparse.ArgumentParser:
     pvw.set_defaults(func=_cmd_view)
 
     prc = sub.add_parser("recall", help="Wiki recall for agent hooks (preamble/prompt). See setup recall.")
-    prc.add_argument("action", choices=["preamble", "prompt"])
+    prc.add_argument("action", choices=["preamble", "prompt", "pretool"])
     prc.add_argument("--text", default=None, help="prompt text (default: read stdin)")
     prc.set_defaults(func=_cmd_recall)
 

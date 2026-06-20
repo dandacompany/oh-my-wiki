@@ -280,6 +280,50 @@ def upsert_block(md_path, block: str, marker: str = MARKER) -> None:
     p.write_text(new, encoding="utf-8")
 
 
+#: tools whose target we inspect for a raw/ read so we can nudge toward the wiki.
+_READ_TOOLS = {"read", "grep", "glob", "cat", "search"}
+
+
+def _targets_raw(tool_input: dict) -> bool:
+    """True if a read/grep payload points into the vault's raw/ sources."""
+    for key in ("path", "file_path", "pattern", "glob", "query"):
+        val = tool_input.get(key)
+        if isinstance(val, str) and "raw/" in val:
+            return True
+    return False
+
+
+def pretool(payload: dict | None) -> str:
+    """PreToolUse nudge: if the agent is about to read/grep raw/ and a wiki exists,
+    suggest `omw find` first. Best-effort, non-blocking, empty when not applicable."""
+    try:
+        if not isinstance(payload, dict):
+            payload = _read_pretool_stdin()
+        tool = str(payload.get("tool_name") or payload.get("tool") or "").lower()
+        if tool not in _READ_TOOLS:
+            return ""
+        if not _targets_raw(payload.get("tool_input") or payload.get("input") or {}):
+            return ""
+        from scripts.paths import registry_path
+        db = registry_path()
+        if not db.exists() or not _active(db):
+            return ""
+        return (f"<{MARKER}> raw/를 직접 보기 전에 — 같은 내용이 위키에 정리돼 있을 수 있습니다. "
+                f"`omw find \"<핵심 명사>\"`를 먼저 시도하세요 (위키가 1차 연료). </{MARKER}>")
+    except Exception:
+        return ""
+
+
+def _read_pretool_stdin() -> dict:
+    import json
+    raw = sys.stdin.read() if not sys.stdin.isatty() else ""
+    try:
+        obj = json.loads(raw) if raw.strip().startswith("{") else {}
+        return obj if isinstance(obj, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
 #: Each supported host reads command hooks from this JSON file, all sharing the
 #: Claude-style schema: {"hooks": {<Event>: [{"hooks": [{"type","command",...}]}]}}.
 def host_hook_configs() -> dict:
@@ -303,16 +347,17 @@ def _recall_hook_specs() -> dict:
     return {
         "SessionStart": (f'"{omw}" recall preamble', "omw wiki preamble"),
         "UserPromptSubmit": (f'"{omw}" recall prompt', "omw wiki recall"),
+        "PreToolUse": (f'"{omw}" recall pretool', "omw wiki-first nudge"),
     }
 
 
 def _event_has_recall(entries: list) -> bool:
     """True if any hook in this event is already an `omw recall …` invocation
-    (path/quoting-agnostic — matches the `recall preamble|prompt` subcommand)."""
+    (path/quoting-agnostic — matches the `recall preamble|prompt|pretool` subcommand)."""
     for group in entries or []:
         for h in (group or {}).get("hooks", []):
             cmd = (h or {}).get("command", "")
-            if "recall" in cmd and ("preamble" in cmd or "prompt" in cmd):
+            if "recall" in cmd and ("preamble" in cmd or "prompt" in cmd or "pretool" in cmd):
                 return True
     return False
 
@@ -357,10 +402,15 @@ def wire_host(host: str, *, config_path=None) -> tuple[bool, str]:
 def main(argv=None) -> int:
     import argparse
     ap = argparse.ArgumentParser(prog="omw recall")
-    ap.add_argument("action", choices=["preamble", "prompt"])
+    ap.add_argument("action", choices=["preamble", "prompt", "pretool"])
     ap.add_argument("--text", default=None, help="prompt text (else read stdin)")
     args = ap.parse_args(argv)
-    out = preamble() if args.action == "preamble" else prompt(args.text)
+    if args.action == "preamble":
+        out = preamble()
+    elif args.action == "pretool":
+        out = pretool(None)
+    else:
+        out = prompt(args.text)
     if out:
         print(out)
     return 0
