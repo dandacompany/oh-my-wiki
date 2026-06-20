@@ -20,8 +20,8 @@ from scripts import maint
 
 MARKER = "omw-recall"
 
-#: retrieval strategies (축 2). Only `fts` is implemented; the rest are planned
-#: and fall back to `fts` (see references/auto-recall-hook-design.md §10).
+#: retrieval strategies (축 2). `fts`, `embedding`, and `hybrid` are implemented;
+#: `llm` is planned and falls back to `fts` (see references/auto-recall-hook-design.md §10).
 STRATEGIES = ("fts", "embedding", "hybrid", "llm")
 LLM_SUBMODES = ("route", "generative")
 _IMPLEMENTED_STRATEGIES = {"fts", "embedding", "hybrid"}
@@ -143,9 +143,11 @@ def _hits(text: str, top_k: int) -> list[dict]:
         else:
             embedder = embed.get_embedder((cfg.get("recall") or {}).get("embedding") or {})
             return search_index.search_strategy(db, vault_id=v["id"],
-                                                q=text, limit=top_k,
+                                                q=text, fts_query=normalize_query(text),
+                                                limit=top_k,
                                                 strategy=strat,
-                                                embedder=embedder)
+                                                embedder=embedder,
+                                                visibility=visibility)
     except Exception:
         return []
 
@@ -377,8 +379,8 @@ def _event_has_recall(entries: list) -> bool:
 
 
 def wire_host(host: str, *, config_path=None) -> tuple[bool, str]:
-    """Idempotently merge recall SessionStart+UserPromptSubmit hooks into a host
-    config (JSON). Preserves all existing content. Returns (changed, detail)."""
+    """Idempotently merge recall SessionStart + UserPromptSubmit + PreToolUse hooks
+    into a host config (JSON). Preserves all existing content. Returns (changed, detail)."""
     import json
     from pathlib import Path
     path = Path(config_path) if config_path else host_hook_configs().get(host)

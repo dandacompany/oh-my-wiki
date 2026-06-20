@@ -4,8 +4,6 @@ cron-friendly health summary. Rolls up review.audit (freshness) + wiki_lint.chec
 (structural signals) into counts. Best-effort: never raises (callers run in hooks)."""
 from __future__ import annotations
 
-from pathlib import Path
-
 from scripts import review, wiki_lint
 
 #: lint report keys that count as a fixable issue (each list element = 1 issue).

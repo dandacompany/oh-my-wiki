@@ -90,10 +90,10 @@ def rrf_fuse(rankings: list[list[str]], k: int = 60) -> list[tuple[str, float]]:
 
 
 def search_strategy(db_path, *, vault_id, q, limit, strategy,
-                    embedder=None, visibility=None):
+                    embedder=None, visibility=None, fts_query=None):
     """fts → existing query(); embedding → vector store; hybrid → RRF(fts, embedding).
     Falls back to fts when embedding unusable."""
-    fts_hits = query(db_path, vault_id=vault_id, query=q, limit=limit,
+    fts_hits = query(db_path, vault_id=vault_id, query=(fts_query or q), limit=limit,
                      visibility=visibility)
     if strategy == "fts" or embedder is None:
         return fts_hits

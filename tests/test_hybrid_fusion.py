@@ -31,3 +31,14 @@ def test_search_strategy_fts_matches_query():
         assert result == [fake_hit]
     finally:
         search_index.query = original_query
+
+
+def test_search_strategy_uses_fts_query_for_lexical_leg(monkeypatch):
+    seen = {}
+    def fake_query(db, *, vault_id, query, limit, visibility=None):
+        seen["q"] = query
+        return [{"relpath": "wiki/x.md", "score": 1.0}]
+    monkeypatch.setattr(search_index, "query", fake_query)
+    search_index.search_strategy(None, vault_id=1, q="ARIMA와", limit=3,
+                                 strategy="fts", fts_query="ARIMA")
+    assert seen["q"] == "ARIMA"   # the normalized fts_query reached the FTS leg
