@@ -409,6 +409,8 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
             continue
         path = base / persona_export.HOST_FILES[host]
         recall.upsert_block(path, block)     # Tier 1: guidance in instruction file
+        recall.upsert_block(path, recall.render_always_on_block(),
+                            marker=recall.ALWAYS_ON_MARKER)  # wiki-first (soft enforcement)
         written.append(path)
     print(f"✓ recall mode '{mode}'; guidance injected into "
           f"{', '.join(p.name for p in written) or '(none)'}.")

@@ -240,11 +240,36 @@ def render_recall_block(mode: str = "auto") -> str:
     ])
 
 
-def upsert_block(md_path, block: str) -> None:
-    """Insert/replace the omw-recall marker region in md_path (idempotent)."""
+ALWAYS_ON_MARKER = "omw-wiki-first"
+
+
+def render_always_on_block() -> str:
+    """Persistent 'wiki-first' instruction for host files (CLAUDE.md/AGENTS.md).
+    Soft enforcement: nudges the agent to consult the wiki before raw search.
+    Distinct marker from the recall block so both can coexist + update independently."""
+    m = ALWAYS_ON_MARKER
+    return "\n".join([
+        f"<!-- {m}:start -->",
+        "## omw wiki-first (managed by `omw setup agents` — do not edit between markers)",
+        "",
+        "이 워크스페이스에는 컴파일된 omw 위키가 있습니다. 도메인/프로젝트 지식 질문에서는:",
+        "- 답하기 전에 `omw find \"<핵심 명사>\"`로 위키를 **먼저** 확인합니다.",
+        "- `raw/`를 직접 grep/read 하기 전에 위키에 같은 내용이 정리돼 있는지 확인합니다 "
+        "(위키가 1차 연료, raw는 출처).",
+        "- 본문 인용 시 페이지의 citations를 함께 제시합니다.",
+        f"<!-- {m}:end -->",
+    ])
+
+
+def upsert_block(md_path, block: str, marker: str = MARKER) -> None:
+    """Insert/replace a marker region in md_path (idempotent).
+
+    Uses *marker* to build the start/end fences (defaults to the module-level
+    MARKER so existing callers need no changes).
+    """
     from pathlib import Path
     p = Path(md_path)
-    start, end = f"<!-- {MARKER}:start -->", f"<!-- {MARKER}:end -->"
+    start, end = f"<!-- {marker}:start -->", f"<!-- {marker}:end -->"
     text = p.read_text(encoding="utf-8") if p.exists() else ""
     if start in text and end in text:
         new = text[: text.index(start)] + block + text[text.index(end) + len(end):]
