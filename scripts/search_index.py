@@ -80,6 +80,39 @@ def query(
     return [hit for _, hit in scored[:limit]]
 
 
+def rrf_fuse(rankings: list[list[str]], k: int = 60) -> list[tuple[str, float]]:
+    """Reciprocal Rank Fusion: score(item) = Σ 1/(k + rank). Returns sorted desc."""
+    scores: dict[str, float] = {}
+    for ranking in rankings:
+        for rank, item in enumerate(ranking):
+            scores[item] = scores.get(item, 0.0) + 1.0 / (k + rank + 1)
+    return sorted(scores.items(), key=lambda kv: -kv[1])
+
+
+def search_strategy(db_path, *, vault_id, q, limit, strategy,
+                    embedder=None, visibility=None):
+    """fts → existing query(); embedding → vector store; hybrid → RRF(fts, embedding).
+    Falls back to fts when embedding unusable."""
+    fts_hits = query(db_path, vault_id=vault_id, query=q, limit=limit,
+                     visibility=visibility)
+    if strategy == "fts" or embedder is None:
+        return fts_hits
+    from scripts import vector_index
+    emb_hits = vector_index.query(db_path, vault_id=vault_id, embedder=embedder,
+                                  text=q, limit=limit)
+    if strategy == "embedding":
+        return emb_hits or fts_hits
+    fused = rrf_fuse([[h["relpath"] for h in fts_hits],
+                      [h["relpath"] for h in emb_hits]])
+    meta = {h["relpath"]: h for h in (fts_hits + emb_hits)}
+    out = []
+    for relpath, score in fused[:limit]:
+        row = dict(meta.get(relpath, {"relpath": relpath}))
+        row["score"] = round(score, 4)
+        out.append(row)
+    return out
+
+
 def _score(q_tokens: list[str], note: sqlite3.Row, tags: list[str]) -> float:
     title_t = set(_tokens(note["title"] or ""))
     summary_t = set(_tokens(note["summary"] or ""))

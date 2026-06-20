@@ -24,7 +24,7 @@ MARKER = "omw-recall"
 #: and fall back to `fts` (see references/auto-recall-hook-design.md §10).
 STRATEGIES = ("fts", "embedding", "hybrid", "llm")
 LLM_SUBMODES = ("route", "generative")
-_IMPLEMENTED_STRATEGIES = {"fts"}
+_IMPLEMENTED_STRATEGIES = {"fts", "embedding", "hybrid"}
 
 # min_score=1.0: the FTS scorer ranks on frontmatter (title/tags/summary/relpath),
 # not body — so ~1.0 means at least one meaningful token hit. Pages with a good
@@ -122,16 +122,30 @@ def _record_use(relpaths: list[str]) -> None:
 
 
 def _hits(text: str, top_k: int) -> list[dict]:
-    from scripts import search_index
-    from scripts.paths import registry_path
-    db = registry_path()
-    if not db.exists():
-        return []
-    v = _active(db)
-    if not v:
-        return []
     try:
-        return search_index.query(db, vault_id=v["id"], query=normalize_query(text), limit=top_k)
+        from scripts import search_index, embed, config
+        from scripts.paths import registry_path
+        db = registry_path()
+        if not db.exists():
+            return []
+        v = _active(db)
+        if not v:
+            return []
+        cfg = config.load_config()
+        rc = (cfg or {}).get("recall", {})
+        visibility = rc.get("visibility", None)
+        strat = effective_strategy(rc.get("strategy", "fts"), quiet=True)
+
+        if strat == "fts":
+            return search_index.query(db, vault_id=v["id"],
+                                      query=normalize_query(text),
+                                      limit=top_k, visibility=visibility)
+        else:
+            embedder = embed.get_embedder((cfg["recall"] or {}).get("embedding", {}))
+            return search_index.search_strategy(db, vault_id=v["id"],
+                                                q=text, limit=top_k,
+                                                strategy=strat,
+                                                embedder=embedder)
     except Exception:
         return []
 
