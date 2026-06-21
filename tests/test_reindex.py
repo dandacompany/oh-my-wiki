@@ -286,3 +286,19 @@ def test_incremental_skips_embeddings_when_nothing_changed(tmp_path, monkeypatch
     calls.clear()
     reindex.incremental(db, vault_id=vid)  # nothing changed since
     assert calls == []  # refresh_embeddings NOT called
+
+
+def test_refresh_embeddings_warns_on_failure_not_silent(tmp_path, monkeypatch, capsys):
+    from scripts import reindex
+    monkeypatch.setattr("scripts.config.load_config",
+                        lambda: {"recall": {"embedding": {"provider": "fake", "dim": 8}}})
+    import scripts.vector_index as vi
+    monkeypatch.setattr(vi, "available", lambda: True)
+    monkeypatch.setattr(vi, "upsert", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    db, root, vid = _vault(tmp_path, monkeypatch)   # use the existing helper in test_reindex.py
+    (root / "wiki").mkdir(parents=True, exist_ok=True)
+    (root / "wiki" / "a.md").write_text("---\ntitle: A\ndate: 2026-01-01\ntype: concept\ntags: [x]\n---\nb\n", encoding="utf-8")
+    reindex.full(db, vault_id=vid)
+    n = reindex.refresh_embeddings(db, vault_id=vid, relpaths=["wiki/a.md"])
+    assert n == 0                                  # best-effort, did not raise
+    assert "embedding refresh failed" in capsys.readouterr().err   # but warned (not silent)

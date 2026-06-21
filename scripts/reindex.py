@@ -34,13 +34,13 @@ def refresh_embeddings(db_path: Path, *, vault_id: int, relpaths: list[str] | No
     When *relpaths* is given, only embed those wiki/ pages (filtered to wiki/-prefixed ones).
     When *relpaths* is None, embed all wiki/ pages (full-rebuild behaviour).
     """
+    from scripts import config
+    cfg = config.load_config()
+    emb_cfg = (cfg.get("recall") or {}).get("embedding") or {}
+    embedder = embed.get_embedder(emb_cfg)
+    if embedder is None or not vector_index.available():
+        return 0  # unconfigured — silent no-op
     try:
-        from scripts import config
-        cfg = config.load_config()
-        emb_cfg = (cfg.get("recall") or {}).get("embedding") or {}
-        embedder = embed.get_embedder(emb_cfg)
-        if embedder is None or not vector_index.available():
-            return 0
         conn = registry.connect(db_path)
         try:
             if relpaths is not None:
@@ -66,7 +66,12 @@ def refresh_embeddings(db_path: Path, *, vault_id: int, relpaths: list[str] | No
             for r in rows_raw
         ]
         return vector_index.upsert(db_path, vault_id=vault_id, embedder=embedder, rows=rows)
-    except Exception:
+    except Exception as e:
+        print(
+            f"warning: embedding refresh failed ({type(e).__name__});"
+            " embedding/hybrid recall may use stale vectors",
+            file=sys.stderr,
+        )
         return 0
 
 

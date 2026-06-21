@@ -222,3 +222,12 @@ def test_load_schemas_backcompat_drops_errors(tmp_path):
     (vault / "schemas" / "broken.yml").write_text("x: : :\n", encoding="utf-8")
     out = schema.load_schemas(vault_path=vault)   # still returns just a dict, no crash
     assert isinstance(out, dict) and "base" in out
+
+
+def test_load_schemas_with_errors_reports_non_dict_root(tmp_path):
+    from scripts import schema
+    vault = tmp_path / "v"; (vault / "schemas").mkdir(parents=True)
+    (vault / "schemas" / "listy.yml").write_text("- a\n- b\n", encoding="utf-8")   # valid YAML, list root
+    schemas, errors = schema.load_schemas_with_errors(vault_path=vault)
+    assert any("listy.yml" in e["path"] and "mapping" in e["error"] for e in errors)
+    assert "base" in schemas  # bundled still load

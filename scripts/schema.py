@@ -74,12 +74,16 @@ def _load_dir(dir_path: Path) -> tuple[dict[str, dict], list[dict]]:
         return out, errors
     for f in sorted(dir_path.glob("*.yml")):
         try:
-            data = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+            data = yaml.safe_load(f.read_text(encoding="utf-8"))
         except (yaml.YAMLError, OSError) as exc:
             errors.append({"path": str(f), "error": str(exc)})
             continue
-        if isinstance(data, dict):
-            out[f.stem] = data
+        if data is None or data == {}:
+            continue  # empty file — silently skip
+        if not isinstance(data, dict):
+            errors.append({"path": str(f), "error": "schema root must be a mapping"})
+            continue
+        out[f.stem] = data
     return out, errors
 
 
