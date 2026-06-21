@@ -24,7 +24,7 @@ MARKER = "omw-recall"
 #: `llm` is planned and falls back to `fts` (see references/auto-recall-hook-design.md §10).
 STRATEGIES = ("fts", "embedding", "hybrid", "llm")
 LLM_SUBMODES = ("route", "generative")
-_IMPLEMENTED_STRATEGIES = {"fts", "embedding", "hybrid"}
+_IMPLEMENTED_STRATEGIES = {"fts", "embedding", "hybrid", "llm"}
 
 # min_score=1.0: the FTS scorer ranks on frontmatter (title/tags/summary/relpath),
 # not body — so ~1.0 means at least one meaningful token hit. Pages with a good
@@ -48,10 +48,11 @@ def effective_strategy(strategy: str, *, quiet: bool = False) -> str:
 
 
 def cost_warning(mode: str, strategy: str) -> str | None:
-    """Flag the expensive combination: an LLM call on every prompt."""
+    """Note for auto+llm. Under the agent-delegated llm design the hook makes NO
+    separate API call — it just emits guidance every prompt; advisory is the natural pairing."""
     if mode == "auto" and strategy == "llm":
-        return ("주의: mode=auto + strategy=llm은 매 프롬프트마다 별도 LLM 호출이라 비용/지연이 큽니다. "
-                "advisory 모드(인루프 에이전트가 수행, 추가 비용 0)를 권장합니다.")
+        return ("참고: auto+llm은 매 프롬프트에 LLM 판단 가이던스를 띄웁니다(별도 API 호출은 없음). "
+                "인루프 에이전트가 수행하는 advisory 모드가 자연스러운 짝입니다.")
     return None
 
 # Short acknowledgements / continuations that should never trigger recall.
@@ -188,10 +189,11 @@ def prompt(text: str | None) -> str:
     if is_trivial(text):
         return ""
 
-    # Resolve the configured retrieval strategy. Today every strategy routes to the
-    # fts backend (embedding/hybrid/llm fall back here until their engines land).
-    # quiet=True: this runs on every prompt — stay silent (setup warns once).
-    effective_strategy(cfg.get("strategy", "fts"), quiet=True)
+    # Resolve the configured retrieval strategy. quiet=True: this runs on every
+    # prompt — stay silent (setup warns once).
+    strat = effective_strategy(cfg.get("strategy", "fts"), quiet=True)
+    if strat == "llm":  # agent-delegated retrieval — emit guidance, run no Python search
+        return render_llm_guidance(cfg.get("llm_submode", "route"))
     hits = _hits(text, int(cfg["top_k"]))
     strong = [h for h in hits if (h.get("score") or 0) >= float(cfg["min_score"])]
 
@@ -240,6 +242,21 @@ def preamble() -> str:
         pass
     lines.append("</omw-wiki>")
     return "\n".join(lines)
+
+
+def render_llm_guidance(submode: str) -> str:
+    """Agent-delegated retrieval guidance for the `llm` strategy. The hook runs NO
+    model — it tells the in-loop agent how to retrieve. Unknown submode → route."""
+    if submode == "generative":
+        body = ("프로젝트/도메인 질문이면 답하기 전에 `omw find \"<핵심 명사>\"`로 후보 페이지를 "
+                "가져와 **직접 읽고 진짜 관련된 것만 선별**한 뒤 그 근거로 답하세요 "
+                "(스니펫/키워드 일치만 믿지 말 것). 위키에 근거가 없으면 모른다고 말하세요. "
+                "무관하면 무시. 인용 시 페이지의 citations를 함께 제시.")
+    else:  # route (default)
+        body = ("프로젝트/도메인 질문이면, 이 질문이 키워드 검색에 맞는지(고유명사·정확한 용어) "
+                "의미 검색에 맞는지(개념·동의어) 판단하고 `omw find \"<핵심 명사>\"`로 적절히 검색한 뒤 "
+                "그 근거로 답하세요. 무관하면 무시. 인용 시 페이지의 citations를 함께 제시.")
+    return f"<{MARKER}> {body} </{MARKER}>"
 
 
 def render_recall_block(mode: str = "auto") -> str:

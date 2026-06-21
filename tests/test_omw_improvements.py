@@ -222,10 +222,9 @@ def test_recall_effective_strategy_falls_back(capsys):
     assert recall.effective_strategy("fts") == "fts"
     assert recall.effective_strategy("embedding") == "embedding"  # now implemented (Task 4.4)
     assert recall.effective_strategy("hybrid") == "hybrid"        # now implemented (Task 4.4)
-    assert recall.effective_strategy("llm") == "fts"              # still planned → falls back to fts
+    assert recall.effective_strategy("llm") == "llm"              # now implemented (Task 1)
     assert recall.effective_strategy("nonsense") == "fts"         # unknown → fts
-    err = capsys.readouterr().err
-    assert "planned" in err  # llm announces its fallback on stderr
+    capsys.readouterr()  # no "planned" stderr: llm is implemented, nonsense is unknown (not in STRATEGIES)
 
 
 def test_recall_cost_warning_only_for_auto_llm():
