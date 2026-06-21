@@ -90,9 +90,6 @@ def _lint_signals(
     try:
         from scripts import wiki_lint
         rep = wiki_lint.check(db_path, vault_id=vault_id)
-    except ImportError:
-        # wiki_lint genuinely unavailable (optional dependency not installed)
-        return {}, None
     except Exception as exc:
         return {}, f"lint signals unavailable: {type(exc).__name__}"
 

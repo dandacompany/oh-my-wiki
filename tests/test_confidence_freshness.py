@@ -169,3 +169,31 @@ def test_audit_surfaces_lint_warning_on_failure(tmp_path, monkeypatch):
         assert lint_entries[0]["relpath"] is None
     finally:
         os.environ.pop("OMW_HOME", None)
+
+
+def test_lint_signal_importerror_is_surfaced_not_silent(monkeypatch):
+    import sys
+    from scripts import review
+
+    # `_lint_signals` does `from scripts import wiki_lint` (a local import).
+    # To force an ImportError from that statement we install a finder that
+    # raises ImportError for the fully-qualified module name.
+    import importlib
+    import importlib.abc
+    import importlib.machinery
+
+    class _FailFinder(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path, target=None):
+            if fullname == "scripts.wiki_lint":
+                raise ImportError("no wiki_lint (injected by test)")
+            return None
+
+    finder = _FailFinder()
+    # Remove cached copy so the finder is actually consulted
+    monkeypatch.delitem(sys.modules, "scripts.wiki_lint", raising=False)
+    sys.meta_path.insert(0, finder)
+    try:
+        sig, warn = review._lint_signals(None, vault_id=1)
+    finally:
+        sys.meta_path.remove(finder)
+    assert sig == {} and warn is not None and "lint" in warn.lower()
