@@ -61,19 +61,30 @@ def validate(meta: dict, body: str, *, schemas: dict) -> list[dict]:
     return issues
 
 
-def _load_dir(dir_path: Path) -> dict[str, dict]:
-    """Read every *.yml in dir_path; key = filename stem, value = raw dict."""
+def _load_dir(dir_path: Path) -> tuple[dict[str, dict], list[dict]]:
+    """Read every *.yml in dir_path; key = filename stem, value = raw dict.
+
+    Returns (schemas, errors) where errors is a list of
+    ``{"path": str, "error": str}`` dicts for files that could not be parsed.
+    Bad files are skipped so lint/reindex still run against the valid subset.
+    """
     out: dict[str, dict] = {}
+    errors: list[dict] = []
     if not dir_path.is_dir():
-        return out
+        return out, errors
     for f in sorted(dir_path.glob("*.yml")):
         try:
-            data = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
-        except yaml.YAMLError:
-            continue  # skip a malformed schema file rather than crashing lint/reindex
-        if isinstance(data, dict):
-            out[f.stem] = data
-    return out
+            data = yaml.safe_load(f.read_text(encoding="utf-8"))
+        except (yaml.YAMLError, OSError) as exc:
+            errors.append({"path": str(f), "error": str(exc)})
+            continue
+        if data is None or data == {}:
+            continue  # empty file — silently skip
+        if not isinstance(data, dict):
+            errors.append({"path": str(f), "error": "schema root must be a mapping"})
+            continue
+        out[f.stem] = data
+    return out, errors
 
 
 def _resolve(raw: dict[str, dict]) -> dict[str, dict]:
@@ -105,12 +116,33 @@ def _resolve(raw: dict[str, dict]) -> dict[str, dict]:
     return resolved
 
 
-def load_schemas(*, vault_path=None) -> dict[str, dict]:
-    """Load bundled schemas, overlay <vault>/schemas/, resolve extends. Includes `base`."""
-    raw = _load_dir(_BUNDLED_DIR)
+def load_schemas_with_errors(
+    *, vault_path=None
+) -> tuple[dict[str, dict], list[dict]]:
+    """Load bundled schemas, overlay <vault>/schemas/, resolve extends.
+
+    Returns ``(schemas, errors)`` where *errors* is a list of
+    ``{"path": str, "error": str}`` dicts for every YAML file that could not
+    be parsed (from either the bundled dir or the vault override dir).
+    Callers that only need the schemas can use :func:`load_schemas` instead.
+    """
+    raw, errors = _load_dir(_BUNDLED_DIR)
     if vault_path is not None:
-        raw.update(_load_dir(Path(vault_path) / "schemas"))
-    return _resolve(raw)
+        vault_raw, vault_errors = _load_dir(Path(vault_path) / "schemas")
+        raw.update(vault_raw)
+        errors.extend(vault_errors)
+    return _resolve(raw), errors
+
+
+def load_schemas(*, vault_path=None) -> dict[str, dict]:
+    """Load bundled schemas, overlay <vault>/schemas/, resolve extends. Includes `base`.
+
+    Back-compat wrapper around :func:`load_schemas_with_errors`; parse errors
+    are silently discarded. Use the ``_with_errors`` variant when you need to
+    surface malformed schema files to the user (e.g. in lint reports).
+    """
+    schemas, _errors = load_schemas_with_errors(vault_path=vault_path)
+    return schemas
 
 
 def valid_types(schemas: dict) -> set[str]:

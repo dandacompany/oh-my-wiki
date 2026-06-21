@@ -47,7 +47,7 @@ def check(db_path: Path, *, vault_id: int) -> dict:
             })
 
     # 2) disk files (.md, excluding .trash and raw/) — schema-driven frontmatter checks
-    schemas = schema.load_schemas(vault_path=root)
+    schemas, schema_load_errors = schema.load_schemas_with_errors(vault_path=root)
     for md in sorted(root.rglob("*.md")):
         if ".trash" in md.parts:
             continue
@@ -87,6 +87,7 @@ def check(db_path: Path, *, vault_id: int) -> dict:
     return {
         "vault_id": vault_id,
         "vault_path": str(root),
+        "schema_load_errors": schema_load_errors,
         "frontmatter_issues": fm_issues,
         "drift": {
             "missing_files": missing_files,

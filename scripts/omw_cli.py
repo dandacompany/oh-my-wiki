@@ -607,6 +607,7 @@ def _cmd_setup(args) -> int:
         return setup_wizard.setup_recall(
             mode=args.provider, strategy=args.strategy, submode=args.submode,
             hosts=hosts, base_dir=args.base_dir, noninteractive=args.noninteractive,
+            provider=args.embed_provider, model=args.embed_model, dim=args.embed_dim,
         )
     return setup_wizard.run(
         section=args.section,
@@ -842,6 +843,12 @@ def build_parser() -> argparse.ArgumentParser:
                       help="retrieval strategy for `omw setup recall`")
     pset.add_argument("--submode", choices=["route", "generative"], default=None,
                       help="llm submode for `omw setup recall` (when --strategy llm)")
+    pset.add_argument("--embed-provider", dest="embed_provider", default=None,
+                      help="embedding provider for `omw setup recall` (none|openai|fake)")
+    pset.add_argument("--embed-model", dest="embed_model", default=None,
+                      help="embedding model name for `omw setup recall`")
+    pset.add_argument("--embed-dim", dest="embed_dim", type=int, default=None,
+                      help="embedding dimension for `omw setup recall`")
     pset.set_defaults(func=_cmd_setup)
 
     pimp = sub.add_parser("import", help="Import folder/Obsidian/Notion into a vault.")

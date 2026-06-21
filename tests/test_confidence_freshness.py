@@ -121,3 +121,79 @@ def test_audit_reactivation_by_use(tmp_path):
         assert rep == []
     finally:
         os.environ.pop("OMW_HOME", None)
+
+
+# --- lint-signal surfacing (Task 3) ------------------------------------------------
+
+def test_lint_signal_failure_is_surfaced_not_silent(monkeypatch):
+    from scripts import review
+    import scripts.wiki_lint as wl
+    monkeypatch.setattr(wl, "check", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    sig, warn = review._lint_signals(None, vault_id=1)
+    assert sig == {} and warn is not None and "lint" in warn.lower()
+
+
+def test_lint_signals_success_returns_no_warning(monkeypatch):
+    from scripts import review
+    import scripts.wiki_lint as wl
+    monkeypatch.setattr(wl, "check", lambda *a, **k: {"dangling_links": [], "contradiction_candidates": [], "stale_claim_candidates": []})
+    sig, warn = review._lint_signals(None, vault_id=1)
+    assert warn is None
+
+
+def test_audit_happy_path_has_no_lint_unavailable_entry(tmp_path):
+    """Normal audit (lint healthy) must NOT include a lint_unavailable warning."""
+    db, vid, root = _vault(tmp_path)
+    (root / "wiki" / "concepts" / "stale.md").write_text(
+        _page("medium", "2026-05-10"), encoding="utf-8")
+    try:
+        rep = review.audit(db, vault_id=vid, today=TODAY, apply=False)
+        kinds = [r.get("kind") for r in rep]
+        assert "lint_unavailable" not in kinds
+    finally:
+        os.environ.pop("OMW_HOME", None)
+
+
+def test_audit_surfaces_lint_warning_on_failure(tmp_path, monkeypatch):
+    """When lint raises, audit output includes a lint_unavailable entry."""
+    import scripts.wiki_lint as wl
+    monkeypatch.setattr(wl, "check", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    db, vid, root = _vault(tmp_path)
+    (root / "wiki" / "concepts" / "stale.md").write_text(
+        _page("medium", "2026-05-10"), encoding="utf-8")
+    try:
+        rep = review.audit(db, vault_id=vid, today=TODAY, apply=False)
+        lint_entries = [r for r in rep if r.get("kind") == "lint_unavailable"]
+        assert len(lint_entries) == 1
+        assert "lint" in lint_entries[0]["detail"].lower()
+        assert lint_entries[0]["relpath"] is None
+    finally:
+        os.environ.pop("OMW_HOME", None)
+
+
+def test_lint_signal_importerror_is_surfaced_not_silent(monkeypatch):
+    import sys
+    from scripts import review
+
+    # `_lint_signals` does `from scripts import wiki_lint` (a local import).
+    # To force an ImportError from that statement we install a finder that
+    # raises ImportError for the fully-qualified module name.
+    import importlib
+    import importlib.abc
+    import importlib.machinery
+
+    class _FailFinder(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path, target=None):
+            if fullname == "scripts.wiki_lint":
+                raise ImportError("no wiki_lint (injected by test)")
+            return None
+
+    finder = _FailFinder()
+    # Remove cached copy so the finder is actually consulted
+    monkeypatch.delitem(sys.modules, "scripts.wiki_lint", raising=False)
+    sys.meta_path.insert(0, finder)
+    try:
+        sig, warn = review._lint_signals(None, vault_id=1)
+    finally:
+        sys.meta_path.remove(finder)
+    assert sig == {} and warn is not None and "lint" in warn.lower()

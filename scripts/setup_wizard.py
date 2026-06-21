@@ -350,7 +350,9 @@ def setup_agents(*, agents: list[str] | None = None, noninteractive: bool = Fals
 
 def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                  submode: str | None = None, hosts: list[str] | None = None,
-                 base_dir=None, noninteractive: bool = False) -> int:
+                 base_dir=None, noninteractive: bool = False,
+                 provider: str | None = None, model: str | None = None,
+                 dim: int | None = None) -> int:
     """Configure auto wiki-recall (two axes):
       mode     — trigger: off | advisory | auto
       strategy — retrieval: fts | embedding | hybrid | llm (+ llm.submode)
@@ -391,6 +393,26 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                   file=sys.stderr)
             return 1
         config.set_config("recall.llm.submode", submode)
+        configure_recall(strategy=strategy, provider="none", mode=mode, submode=submode,
+                         noninteractive=True)
+    if strategy in {"embedding", "hybrid"}:
+        if interactive and provider is None:
+            provider = _prompt("select", "Embedding provider",
+                               choices=["none", "openai", "fake"], default="none") or "none"
+            if provider not in ("none", ""):
+                model = model or (_prompt("text", "Embedding model",
+                                          default="text-embedding-3-small") or "text-embedding-3-small")
+                _dim_str = _prompt("text", "Embedding dim", default="1536") or "1536"
+                dim = int(_dim_str)
+        configure_recall(
+            strategy=strategy,
+            provider=provider or "none",
+            model=model or "text-embedding-3-small",
+            dim=int(dim) if dim else 1536,
+            mode=mode,
+            submode=submode,
+            noninteractive=True,
+        )
     if strategy not in recall._IMPLEMENTED_STRATEGIES:  # only an unrecognized strategy
         print(f"  note: strategy '{strategy}'는 인식되지 않음 — 런타임에 'fts'로 폴백합니다.")
     warn = recall.cost_warning(mode, strategy)
@@ -425,7 +447,8 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
 
 
 def configure_recall(*, strategy="fts", provider="none", model="text-embedding-3-small",
-                     dim=1536, mode=None, noninteractive=False) -> None:
+                     dim=1536, mode=None, submode: str | None = None,
+                     noninteractive=False) -> None:
     """Persist recall strategy + embedding provider. Prints the scale guard note."""
     from scripts import config, recall
     if mode:
@@ -437,6 +460,8 @@ def configure_recall(*, strategy="fts", provider="none", model="text-embedding-3
         config.set_config("recall.embedding.dim", int(dim))
         print("참고: 위키가 1차 연료입니다. embedding/hybrid는 페이지가 수천+로 커져 "
               "FTS 정밀도가 떨어질 때 켜는 롱테일 검색 축입니다 (opt-in).")
+    if strategy == "llm" and submode:
+        config.set_config("recall.llm.submode", submode)
     warn = recall.cost_warning(mode or "auto", strategy)
     if warn:
         print(warn)

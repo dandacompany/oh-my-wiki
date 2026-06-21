@@ -65,13 +65,16 @@ def _write(dir_path: Path, name: str, text: str):
 
 def test_load_dir_reads_yaml_by_stem(tmp_path):
     _write(tmp_path, "entity.yml", "extends: base\nrequired_sections: ['## Summary']\n")
-    loaded = schema._load_dir(tmp_path)
+    loaded, errors = schema._load_dir(tmp_path)
     assert "entity" in loaded
     assert loaded["entity"]["required_sections"] == ["## Summary"]
+    assert errors == []
 
 
 def test_load_dir_missing_returns_empty(tmp_path):
-    assert schema._load_dir(tmp_path / "nope") == {}
+    loaded, errors = schema._load_dir(tmp_path / "nope")
+    assert loaded == {}
+    assert errors == []
 
 
 def test_load_schemas_resolves_extends_base(tmp_path, monkeypatch):
@@ -131,9 +134,10 @@ def test_load_dir_skips_malformed_yaml(tmp_path):
     # halt lint AND reindex). It is skipped; valid siblings still load.
     _write(tmp_path, "good.yml", "extends: base\n")
     _write(tmp_path, "bad.yml", "{ unclosed: true")  # invalid YAML
-    loaded = schema._load_dir(tmp_path)
+    loaded, errors = schema._load_dir(tmp_path)
     assert "good" in loaded
     assert "bad" not in loaded
+    assert any("bad.yml" in e["path"] for e in errors)
 
 
 ALLOWED = {
@@ -197,3 +201,33 @@ def test_validate_aliases_must_be_list():
     assert "wrong_type:aliases" in issues
     good = dict(bad); good["aliases"] = ["x"]
     assert "wrong_type:aliases" not in {i["issue"] for i in schema.validate(good, "", schemas=schemas)}
+
+
+# ---------------------------------------------------------------------------
+# Task 4: load_schemas_with_errors surfaces malformed schema files
+# ---------------------------------------------------------------------------
+
+def test_load_schemas_with_errors_reports_malformed(tmp_path):
+    vault = tmp_path / "v"
+    (vault / "schemas").mkdir(parents=True)
+    (vault / "schemas" / "broken.yml").write_text("a: : : not valid\n", encoding="utf-8")
+    schemas, errors = schema.load_schemas_with_errors(vault_path=vault)
+    assert any("broken.yml" in e["path"] for e in errors)
+    assert "base" in schemas   # bundled schemas still load
+
+
+def test_load_schemas_backcompat_drops_errors(tmp_path):
+    vault = tmp_path / "v"
+    (vault / "schemas").mkdir(parents=True)
+    (vault / "schemas" / "broken.yml").write_text("x: : :\n", encoding="utf-8")
+    out = schema.load_schemas(vault_path=vault)   # still returns just a dict, no crash
+    assert isinstance(out, dict) and "base" in out
+
+
+def test_load_schemas_with_errors_reports_non_dict_root(tmp_path):
+    from scripts import schema
+    vault = tmp_path / "v"; (vault / "schemas").mkdir(parents=True)
+    (vault / "schemas" / "listy.yml").write_text("- a\n- b\n", encoding="utf-8")   # valid YAML, list root
+    schemas, errors = schema.load_schemas_with_errors(vault_path=vault)
+    assert any("listy.yml" in e["path"] and "mapping" in e["error"] for e in errors)
+    assert "base" in schemas  # bundled still load

@@ -221,3 +221,107 @@ def test_refresh_embeddings_noop_when_unconfigured(tmp_path, monkeypatch):
     db, root, vid = _vault(tmp_path, monkeypatch)
     result = reindex.refresh_embeddings(db, vault_id=vid)
     assert result == 0
+
+
+# ---------------------------------------------------------------------------
+# Task 1: changed-only embeddings (B) + surface FTS write errors (C)
+# ---------------------------------------------------------------------------
+
+def test_scan_reports_changed_relpaths_and_fts_errors(tmp_path, monkeypatch):
+    """_scan returns 'changed' list with indexed relpaths and 'fts_errors' == []."""
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    (root / "wiki").mkdir(parents=True, exist_ok=True)
+    (root / "wiki" / "a.md").write_text(
+        "---\ntitle: A\ndate: 2026-01-01\ntype: concept\ntags: [x]\n---\nbody\n",
+        encoding="utf-8",
+    )
+    vp = reindex._vault_path(db, vid)
+    res = reindex._scan(db, vid, vp, incremental=False)
+    assert "wiki/a.md" in res["changed"]
+    assert res["fts_errors"] == []
+
+
+def test_refresh_embeddings_only_targets_given_relpaths(tmp_path, monkeypatch):
+    """refresh_embeddings(relpaths=[...]) only embeds the specified wiki/ pages."""
+    captured = {}
+    monkeypatch.setattr(
+        "scripts.config.load_config",
+        lambda: {"recall": {"embedding": {"provider": "fake", "dim": 8}}},
+    )
+    import scripts.vector_index as vi
+    monkeypatch.setattr(vi, "available", lambda: True)
+    monkeypatch.setattr(
+        vi,
+        "upsert",
+        lambda db, *, vault_id, embedder, rows: captured.update(rows=rows) or len(rows),
+    )
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    (root / "wiki").mkdir(parents=True, exist_ok=True)
+    for n in ("a", "b"):
+        (root / "wiki" / f"{n}.md").write_text(
+            f"---\ntitle: {n}\ndate: 2026-01-01\ntype: concept\ntags: [x]\n---\nb\n",
+            encoding="utf-8",
+        )
+    reindex.full(db, vault_id=vid)
+    # only embed wiki/a.md when restricted
+    reindex.refresh_embeddings(db, vault_id=vid, relpaths=["wiki/a.md"])
+    assert [r[0] for r in captured["rows"]] == ["wiki/a.md"]
+
+
+def test_incremental_skips_embeddings_when_nothing_changed(tmp_path, monkeypatch):
+    """incremental() must NOT call refresh_embeddings when no files changed."""
+    calls = []
+    monkeypatch.setattr(
+        reindex,
+        "refresh_embeddings",
+        lambda *a, **k: calls.append(k.get("relpaths")) or 0,
+    )
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    (root / "wiki").mkdir(parents=True, exist_ok=True)
+    (root / "wiki" / "a.md").write_text(
+        "---\ntitle: A\ndate: 2026-01-01\ntype: concept\ntags: [x]\n---\nb\n",
+        encoding="utf-8",
+    )
+    reindex.full(db, vault_id=vid)  # index it
+    calls.clear()
+    reindex.incremental(db, vault_id=vid)  # nothing changed since
+    assert calls == []  # refresh_embeddings NOT called
+
+
+def test_refresh_embeddings_warns_on_failure_not_silent(tmp_path, monkeypatch, capsys):
+    from scripts import reindex
+    monkeypatch.setattr("scripts.config.load_config",
+                        lambda: {"recall": {"embedding": {"provider": "fake", "dim": 8}}})
+    import scripts.vector_index as vi
+    monkeypatch.setattr(vi, "available", lambda: True)
+    monkeypatch.setattr(vi, "upsert", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    db, root, vid = _vault(tmp_path, monkeypatch)   # use the existing helper in test_reindex.py
+    (root / "wiki").mkdir(parents=True, exist_ok=True)
+    (root / "wiki" / "a.md").write_text("---\ntitle: A\ndate: 2026-01-01\ntype: concept\ntags: [x]\n---\nb\n", encoding="utf-8")
+    reindex.full(db, vault_id=vid)
+    n = reindex.refresh_embeddings(db, vault_id=vid, relpaths=["wiki/a.md"])
+    assert n == 0                                  # best-effort, did not raise
+    assert "embedding refresh failed" in capsys.readouterr().err   # but warned (not silent)
+
+
+def test_refresh_embeddings_warns_on_config_failure_not_raise(tmp_path, monkeypatch, capsys):
+    from scripts import reindex
+    monkeypatch.setattr("scripts.config.load_config",
+                        lambda: (_ for _ in ()).throw(RuntimeError("bad config.yaml")))
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    n = reindex.refresh_embeddings(db, vault_id=vid)        # must NOT raise
+    assert n == 0 and "embedding refresh failed" in capsys.readouterr().err
+
+
+def test_incremental_surfaces_embedding_config_failure(tmp_path, monkeypatch, capsys):
+    from scripts import reindex
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    (root / "wiki").mkdir(parents=True, exist_ok=True)
+    (root / "wiki" / "a.md").write_text("---\ntitle: A\ndate: 2026-01-01\ntype: concept\ntags: [x]\n---\nb\n", encoding="utf-8")
+    reindex.full(db, vault_id=vid)
+    # now break config so the changed-page embedding attempt fails
+    monkeypatch.setattr("scripts.config.load_config",
+                        lambda: (_ for _ in ()).throw(RuntimeError("bad config")))
+    (root / "wiki" / "a.md").write_text("---\ntitle: A2\ndate: 2026-01-02\ntype: concept\ntags: [x]\n---\nchanged\n", encoding="utf-8")
+    reindex.incremental(db, vault_id=vid)                    # must NOT raise
+    assert "embedding refresh failed" in capsys.readouterr().err   # surfaced, not silent

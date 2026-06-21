@@ -280,3 +280,22 @@ def test_recall_embedding_config_written():
     cfg = config.load_config()["recall"]
     assert cfg["strategy"] == "hybrid"
     assert cfg["embedding"]["provider"] == "openai"
+
+
+def test_setup_recall_persists_embedding_provider(tmp_path):
+    from scripts import setup_wizard, config
+    rc = setup_wizard.setup_recall(mode="auto", strategy="hybrid", submode=None,
+                                   provider="openai", model="text-embedding-3-small", dim=1536,
+                                   hosts=[], base_dir=str(tmp_path), noninteractive=True)
+    assert rc == 0
+    cfg = config.load_config()["recall"]
+    assert cfg["strategy"] == "hybrid" and cfg["embedding"]["provider"] == "openai" and cfg["embedding"]["dim"] == 1536
+
+
+def test_setup_recall_llm_persists_submode(tmp_path):
+    from scripts import setup_wizard, config
+    rc = setup_wizard.setup_recall(mode="advisory", strategy="llm", submode="generative",
+                                   hosts=[], base_dir=str(tmp_path), noninteractive=True)
+    assert rc == 0
+    cfg = config.load_config()["recall"]
+    assert cfg["strategy"] == "llm" and cfg["llm"]["submode"] == "generative"
