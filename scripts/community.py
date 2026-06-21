@@ -111,3 +111,50 @@ def detect(edges):
 
     labels = _renumber(dict(node_comm))
     return labels, round(_modularity(adj, deg, labels, two_m), 4)
+
+
+def analyze(db_path, *, vault_id: int, min_bridge_score: int = 0) -> dict:
+    """Communities + bridges (cross-community edges) + hubs (nodes adjacent to ≥2
+    communities) over the vault's resolved link graph. Read-only; never raises."""
+    edges = links.graph(db_path, vault_id)
+    adj, deg = _build_graph(edges)
+    labels, modularity = detect(edges)
+    if not adj:
+        return {"modularity": 0.0, "communities": [], "bridges": [], "hubs": []}
+
+    members: dict[int, list[str]] = {}
+    for node, cid in labels.items():
+        members.setdefault(cid, []).append(node)
+    communities = sorted(
+        ({"id": cid, "size": len(ms), "members": sorted(ms)} for cid, ms in members.items()),
+        key=lambda c: (-c["size"], c["id"]),
+    )
+
+    bridges = []
+    seen = set()
+    for u in sorted(adj):
+        for v in sorted(adj[u]):
+            if labels[u] == labels[v]:
+                continue
+            key = tuple(sorted((u, v)))
+            if key in seen:
+                continue
+            seen.add(key)
+            src, dst = key
+            score = deg[src] * deg[dst]
+            if score < min_bridge_score:
+                continue
+            bridges.append({"src": src, "dst": dst,
+                            "src_community": labels[src], "dst_community": labels[dst],
+                            "weight": adj[u][v], "score": score})
+    bridges.sort(key=lambda b: (-b["score"], b["src"], b["dst"]))
+
+    hubs = []
+    for u in sorted(adj):
+        nbr_comms = sorted({labels[v] for v in adj[u]})
+        if len(nbr_comms) >= 2:
+            hubs.append({"relpath": u, "communities": nbr_comms, "degree": deg[u]})
+    hubs.sort(key=lambda h: (-len(h["communities"]), -h["degree"], h["relpath"]))
+
+    return {"modularity": modularity, "communities": communities,
+            "bridges": bridges, "hubs": hubs}

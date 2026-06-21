@@ -98,3 +98,48 @@ def test_dq_factor_sparse_clustering():
     # b2, b3 must be co-assigned (they form the other cluster)
     assert labels["b2"] == labels["b3"]
     assert labels["a1"] != labels["b2"]
+
+
+def test_analyze_barbell_reports_bridge(monkeypatch):
+    clique1 = [("a1", "a2"), ("a2", "a3"), ("a1", "a3")]
+    clique2 = [("b1", "b2"), ("b2", "b3"), ("b1", "b3")]
+    bridge = [("a3", "b1")]
+    monkeypatch.setattr(community.links, "graph",
+                        lambda db, vid: _edges(clique1 + clique2 + bridge))
+    rep = community.analyze(None, vault_id=1)
+    assert len(rep["communities"]) == 2
+    assert rep["modularity"] > 0
+    # the single inter-community edge is reported as a bridge (order-normalized)
+    assert len(rep["bridges"]) == 1
+    b = rep["bridges"][0]
+    assert {b["src"], b["dst"]} == {"a3", "b1"}
+    assert b["src_community"] != b["dst_community"]
+    assert b["score"] == 9  # deg(a3)=3 * deg(b1)=3
+
+
+def test_analyze_hub_spans_three_communities(monkeypatch):
+    # three separate K3 cliques, plus hub H linked to one node in each
+    c1 = [("a1", "a2"), ("a2", "a3"), ("a1", "a3")]
+    c2 = [("b1", "b2"), ("b2", "b3"), ("b1", "b3")]
+    c3 = [("c1", "c2"), ("c2", "c3"), ("c1", "c3")]
+    hub = [("H", "a1"), ("H", "b1"), ("H", "c1")]
+    monkeypatch.setattr(community.links, "graph", lambda db, vid: _edges(c1 + c2 + c3 + hub))
+    rep = community.analyze(None, vault_id=1)
+    assert rep["hubs"], "expected at least one hub"
+    top = rep["hubs"][0]
+    assert top["relpath"] == "H" and len(top["communities"]) == 3
+
+
+def test_analyze_min_bridge_score_filters(monkeypatch):
+    clique1 = [("a1", "a2"), ("a2", "a3"), ("a1", "a3")]
+    clique2 = [("b1", "b2"), ("b2", "b3"), ("b1", "b3")]
+    bridge = [("a3", "b1")]  # score 9
+    monkeypatch.setattr(community.links, "graph",
+                        lambda db, vid: _edges(clique1 + clique2 + bridge))
+    assert community.analyze(None, vault_id=1, min_bridge_score=10)["bridges"] == []
+
+
+def test_analyze_empty_graph_is_safe(monkeypatch):
+    monkeypatch.setattr(community.links, "graph", lambda db, vid: [])
+    rep = community.analyze(None, vault_id=1)
+    assert rep == {"modularity": 0.0, "communities": [], "bridges": [], "hubs": []}
