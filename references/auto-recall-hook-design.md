@@ -169,17 +169,25 @@ recall:
   top_k: 3
 ```
 
-### 두 축의 상호작용 (비용 가드)
+### 두 축의 상호작용 (구현 반영 — 갱신 2026-06-21)
 
-`strategy=llm` × `mode=auto` = **프롬프트마다 별도 LLM 호출**(비쌈/느림). 반대로
-`mode=advisory`면 이미 도는 에이전트가 곧 그 LLM이라 **추가 비용 0**. 권장 짝:
+> 초기 설계는 `auto+llm`을 "프롬프트마다 별도 LLM 호출"로 가정했으나, 구현은
+> **agent-delegated guidance** 방식으로 확정됐다. 그래서 훅은 **어떤 모드에서도 LLM을 직접
+> 호출하지 않는다** — `strategy=llm`이면 submode 가이던스 텍스트만 emit하고 검색·판정은 이미
+> 도는 인루프 에이전트가 수행한다(별도 API 호출 없음).
 
-| mode       | 권장 strategy                  | 이유                                    |
-| ---------- | ------------------------------ | --------------------------------------- |
-| `auto`     | `fts` / `embedding` / `hybrid` | 결정론, 매 프롬프트 호출해도 쌈         |
-| `advisory` | `llm`(route/generative)        | 인루프 에이전트가 수행 → 추가 비용 없음 |
+`strategy=llm`은 **advisory 성격**이다. `mode=auto`로 설정해도 훅은 결과(구체 힛)를 주입하지
+않고 가이던스만 띄운다. 즉 `auto+llm`과 `advisory+llm`은 동일하게 동작한다. deterministic
+전략(`fts`/`embedding`/`hybrid`)만 `auto`에서 훅이 직접 결과를 주입한다.
 
-→ `omw setup recall`에서 두 축을 고르게 하고, **비싼 조합(auto+llm) 선택 시 경고**만 띄운다(차단하지 않음 — 사용자 자유).
+| mode       | 권장 strategy                  | 이유                                                |
+| ---------- | ------------------------------ | --------------------------------------------------- |
+| `auto`     | `fts` / `embedding` / `hybrid` | 결정론, 훅이 매 프롬프트 구체 힛 주입(호출 비용 쌈) |
+| `advisory` | `llm`(route/generative)        | llm은 advisory 성격 — 인루프 에이전트가 검색 수행   |
+
+→ `omw setup recall`은 `auto+llm` 선택 시 **"llm은 advisory 성격이라 auto여도 훅이 grounding을
+주입하지 않는다"**는 안내만 띄운다(차단하지 않음 — 사용자 자유). 이는 비용 경고가 아니라 **동작
+명료화**다(별도 호출은 어차피 없음).
 
 ### 구현 로드맵 (확정 후)
 
