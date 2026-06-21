@@ -18,16 +18,22 @@ def full(db_path: Path, *, vault_id: int) -> int:
 def incremental(db_path: Path, *, vault_id: int) -> int:
     """Only upsert files whose mtime exceeds the recorded one."""
     vault_path = _vault_path(db_path, vault_id)
-    count = _scan(db_path, vault_id, vault_path, incremental=True)["indexed"]
-    try:
-        refresh_embeddings(db_path, vault_id=vault_id)
-    except Exception:
-        pass
-    return count
+    res = _scan(db_path, vault_id, vault_path, incremental=True)
+    changed_wiki = [r for r in res["changed"] if r.startswith("wiki/")]
+    if changed_wiki:
+        try:
+            refresh_embeddings(db_path, vault_id=vault_id, relpaths=changed_wiki)
+        except Exception:
+            pass
+    return res["indexed"]
 
 
-def refresh_embeddings(db_path: Path, *, vault_id: int) -> int:
-    """Re-embed all wiki/ pages for a vault. Best-effort: returns 0 on any error."""
+def refresh_embeddings(db_path: Path, *, vault_id: int, relpaths: list[str] | None = None) -> int:
+    """Re-embed wiki/ pages for a vault. Best-effort: returns 0 on any error.
+
+    When *relpaths* is given, only embed those wiki/ pages (filtered to wiki/-prefixed ones).
+    When *relpaths* is None, embed all wiki/ pages (full-rebuild behaviour).
+    """
     try:
         from scripts import config
         cfg = config.load_config()
@@ -37,11 +43,22 @@ def refresh_embeddings(db_path: Path, *, vault_id: int) -> int:
             return 0
         conn = registry.connect(db_path)
         try:
-            rows_raw = conn.execute(
-                "SELECT relpath, title, summary FROM notes"
-                " WHERE vault_id = ? AND parse_error = 0 AND relpath LIKE 'wiki/%'",
-                (vault_id,),
-            ).fetchall()
+            if relpaths is not None:
+                wiki_relpaths = [r for r in relpaths if r.startswith("wiki/")]
+                if not wiki_relpaths:
+                    return 0
+                placeholders = ",".join("?" * len(wiki_relpaths))
+                rows_raw = conn.execute(
+                    "SELECT relpath, title, summary FROM notes"
+                    f" WHERE vault_id = ? AND parse_error = 0 AND relpath IN ({placeholders})",
+                    (vault_id, *wiki_relpaths),
+                ).fetchall()
+            else:
+                rows_raw = conn.execute(
+                    "SELECT relpath, title, summary FROM notes"
+                    " WHERE vault_id = ? AND parse_error = 0 AND relpath LIKE 'wiki/%'",
+                    (vault_id,),
+                ).fetchall()
         finally:
             conn.close()
         rows = [
@@ -101,6 +118,8 @@ def _scan(
     schemas = schema.load_schemas(vault_path=vault_path)
     exempt = set(links.META_RELPATHS)
     schema_issues: list[dict] = []
+    changed: list[str] = []
+    fts_errors: list[str] = []
     count = 0
     fts_conn = None
     if fts.fts5_available():
@@ -156,17 +175,18 @@ def _scan(
                                visibility=meta.get("visibility") or "private")
                 fts_conn.commit()
             except Exception:
-                pass  # FTS is an optional auxiliary index; never abort indexing
+                fts_errors.append(rel)  # FTS is optional; never abort indexing
         if fm_ok and rel not in exempt and not rel.startswith("raw/"):
             issues = schema.validate(meta, body, schemas=schemas)
             if issues:
                 schema_issues.append({"relpath": rel, "issues": issues})
         count += 1
+        changed.append(rel)
     if fts_conn is not None:
         fts_conn.commit()
         fts_conn.close()
     links.resolve(db_path, vault_id)
-    return {"indexed": count, "schema_issues": schema_issues}
+    return {"indexed": count, "schema_issues": schema_issues, "changed": changed, "fts_errors": fts_errors}
 
 
 def main(argv: list[str] | None = None) -> int:
