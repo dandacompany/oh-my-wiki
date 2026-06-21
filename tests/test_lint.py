@@ -224,3 +224,18 @@ def test_lint_reports_link_suggestions(tmp_path, monkeypatch):
     report2 = lint.check(db, vault_id=vid)
     pairs2 = {(s["src_relpath"], s["target_slug"]) for s in report2["links"]["link_suggestions"]}
     assert ("wiki/entities/tdd.md", "karpathy") not in pairs2
+
+
+# ---------------------------------------------------------------------------
+# Task 4: lint report includes schema_load_errors for malformed schema files
+# ---------------------------------------------------------------------------
+
+def test_lint_surfaces_schema_load_errors(tmp_path, monkeypatch):
+    db, root, vid = _make_vault(tmp_path, monkeypatch)
+    (root / "schemas").mkdir(parents=True, exist_ok=True)
+    (root / "schemas" / "broken.yml").write_text("bad: : : yaml\n", encoding="utf-8")
+    reindex.full(db, vault_id=vid)
+    report = lint.check(db, vault_id=vid)
+    assert "schema_load_errors" in report
+    paths = [e["path"] for e in report["schema_load_errors"]]
+    assert any("broken.yml" in p for p in paths)
