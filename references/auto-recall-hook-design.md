@@ -197,6 +197,6 @@ recall:
 - [x] config 2축 분리: `recall.strategy`(+`llm.submode`) 추가, 기본 `fts`(현행 동작 보존). 네 전략 모두 구현됨 — **인식되지 않는** 전략만 `fts`로 폴백.
 - [x] `embedding` 백엔드: 임베딩 인덱서(볼트 내부 저장) + 벡터 검색. 모델 의존성 선택형.
 - [x] `hybrid` 랭크 융합(RRF 등).
-- [x] `llm.route`(분류 1콜) / `llm.generative`(후보 read+판정). ← agent-delegated guidance (`commands/recall-llm.md`); hook emits `<omw-recall>` instruction, no Python LLM call. **llm은 advisory 성격 — auto 모드여도 훅이 결과를 주입하지 않고 인루프 에이전트에게 검색을 위임(별도 API 호출 없음).**
-- [x] `omw setup recall`에 strategy/submode 선택 + 비용 가드 경고. (`configure_recall()` 프로그래매틱 진입점 구현 완료)
+- [x] `llm.route`(에이전트가 검색법 선택) / `llm.generative`(에이전트가 후보 read+판정). ← agent-delegated guidance (`commands/recall-llm.md`); 훅은 `<omw-recall>` 지시문만 emit하고 LLM/API를 직접 호출하지 않음. **llm은 advisory 성격 — auto 모드여도 훅이 결과를 주입하지 않고 인루프 에이전트에게 검색을 위임.**
+- [x] `omw setup recall`에 strategy/submode 선택 + `auto+llm` **동작 명료화 안내**(비용 경고가 아님 — 별도 호출이 없으므로). (`configure_recall()` 프로그래매틱 진입점 구현 완료)
 - [ ] josa 정규화는 `fts` 전략 내부 옵션으로 흡수(`embedding`/`llm`은 불필요).
