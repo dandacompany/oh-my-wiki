@@ -496,6 +496,22 @@ def _cmd_view(args) -> int:
     return view.run(args)
 
 
+def _cmd_connections(args) -> int:
+    import json
+    from scripts import community
+    db = registry_path()
+    if not db.exists():
+        print("error: no registry; run `omw status` to set up", file=sys.stderr)
+        return 1
+    vault = _resolve_vault_row(db, args.vault)
+    if vault is None:
+        print("error: no active vault; pass --vault <name>", file=sys.stderr)
+        return 1
+    rep = community.analyze(db, vault_id=vault["id"], min_bridge_score=args.min_bridge_score)
+    print(json.dumps(rep, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _cmd_maint(args) -> int:
     from datetime import date
     from scripts import maint
@@ -655,6 +671,13 @@ def build_parser() -> argparse.ArgumentParser:
     pl = sub.add_parser("lint", help="Run deterministic lint over a vault.")
     pl.add_argument("--vault", default=None, help="vault name (default: active)")
     pl.set_defaults(func=_cmd_lint)
+
+    pcon = sub.add_parser("connections",
+                          help="Detect link-graph communities + surprising bridges/hubs (read-only).")
+    pcon.add_argument("--vault", default=None, help="vault name (default: active)")
+    pcon.add_argument("--min-bridge-score", dest="min_bridge_score", type=int, default=0,
+                      help="drop bridges below this score (deg(src)*deg(dst))")
+    pcon.set_defaults(func=_cmd_connections)
 
     pfl = sub.add_parser("fields", help="Show a page's frontmatter + inline key:: value fields.")
     pfl.add_argument("relpath")

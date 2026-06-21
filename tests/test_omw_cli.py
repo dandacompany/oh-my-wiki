@@ -462,3 +462,19 @@ def test_maint_status_exit_code(monkeypatch):
     monkeypatch.setattr(omw_cli, "registry_path", lambda: _DB())
     monkeypatch.setattr(omw_cli, "_resolve_vault_row", lambda db, name: {"id": 1, "path": "/tmp/v"})
     assert omw_cli.main(["maint", "status", "--exit-code"]) == 1
+
+
+def test_connections_json(capsys, monkeypatch):
+    from scripts import omw_cli
+    monkeypatch.setattr("scripts.community.analyze", lambda *a, **k: {
+        "modularity": 0.5, "communities": [{"id": 0, "size": 2, "members": ["wiki/a.md", "wiki/b.md"]}],
+        "bridges": [], "hubs": []})
+    class _DB:
+        def exists(self):
+            return True
+    monkeypatch.setattr(omw_cli, "registry_path", lambda: _DB())
+    monkeypatch.setattr(omw_cli, "_resolve_vault_row", lambda db, name: {"id": 1, "path": "/tmp/v"})
+    rc = omw_cli.main(["connections"])
+    import json
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["modularity"] == 0.5
