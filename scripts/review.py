@@ -74,18 +74,28 @@ def record_use(db_path: Path, *, vault_id: int, relpaths, today: str) -> bool:
     return usage.bump(reindex._vault_path(db_path, vault_id), relpaths, today)
 
 
-def _lint_signals(db_path: Path, vault_id: int) -> dict[str, list[str]]:
+def _lint_signals(
+    db_path: Path, vault_id: int
+) -> tuple[dict[str, list[str]], str | None]:
     """relpath -> negative content signals from deterministic lint (best-effort).
 
     These mean "this page's knowledge looks wrong/outdated" (not mere staleness),
     so they flag a page even if it was used recently. Final contradiction/stale
     verdicts are still LLM-judged in commands/lint.md — here we only surface signals.
+
+    Returns ``(signals, warning)`` where ``warning`` is ``None`` on success or a
+    short diagnostic string when wiki_lint.check raised unexpectedly.  Callers
+    should surface the warning rather than silently treating it as "no signals".
     """
     try:
         from scripts import wiki_lint
         rep = wiki_lint.check(db_path, vault_id=vault_id)
-    except Exception:
-        return {}
+    except ImportError:
+        # wiki_lint genuinely unavailable (optional dependency not installed)
+        return {}, None
+    except Exception as exc:
+        return {}, f"lint signals unavailable: {type(exc).__name__}"
+
     sig: dict[str, list[str]] = {}
 
     def add(rel, reason):
@@ -101,7 +111,7 @@ def _lint_signals(db_path: Path, vault_id: int) -> dict[str, list[str]]:
         add(c.get("page_b"), "contradiction")
     for s in rep.get("stale_claim_candidates", []):
         add(s.get("relpath"), "stale-claim")
-    return sig
+    return sig, None
 
 
 def audit(db_path: Path, *, vault_id: int, today: str, apply: bool = False) -> list[dict]:
@@ -117,7 +127,7 @@ def audit(db_path: Path, *, vault_id: int, today: str, apply: bool = False) -> l
     from scripts import usage
     root = reindex._vault_path(db_path, vault_id)
     used = usage.last_used(root)
-    lint_sig = _lint_signals(db_path, vault_id)
+    lint_sig, lint_warning = _lint_signals(db_path, vault_id)
     out: list[dict] = []
     changed = False
     for md in sorted(root.rglob("*.md")):
@@ -166,6 +176,8 @@ def audit(db_path: Path, *, vault_id: int, today: str, apply: bool = False) -> l
     if apply and changed:
         reindex.incremental(db_path, vault_id=vault_id)
     out.sort(key=lambda r: (r["action"], r["relpath"]))
+    if lint_warning is not None:
+        out.append({"relpath": None, "kind": "lint_unavailable", "detail": lint_warning})
     return out
 
 
