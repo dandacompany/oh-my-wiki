@@ -41,14 +41,15 @@ def _renumber(labels: dict[str, int]) -> dict[str, int]:
 
 
 def _modularity(adj, deg, labels, two_m: int) -> float:
-    """Standard weighted modularity Q for the given partition."""
+    """Standard weighted modularity Q for the given partition (all-pairs O(n²) sum)."""
     if two_m == 0:
         return 0.0
+    nodes = list(adj)
     q = 0.0
-    for u, nbrs in adj.items():
-        cu = labels[u]
-        for v, w in nbrs.items():
-            if labels[v] == cu:
+    for u in nodes:
+        for v in nodes:
+            if labels[u] == labels[v]:
+                w = adj[u].get(v, 0)
                 q += w - deg[u] * deg[v] / two_m
     return q / two_m
 
@@ -94,10 +95,10 @@ def detect(edges):
         for ci, cj in sorted(pairs):
             e_ij = 2 * between(ci, cj) / two_m        # undirected edge fraction: between() counts once, *2 normalises
             a_i, a_j = cdeg[ci] / two_m, cdeg[cj] / two_m
-            dQ = e_ij - 2 * a_i * a_j                 # standard CNM ΔQ; sign determines merge direction
+            dQ = 2 * e_ij - 2 * a_i * a_j             # standard CNM ΔQ; factor-of-2 on e_ij is required
             if best is None or dQ > best[0] + 1e-12:
                 best = (dQ, ci, cj)
-        if best is None or best[0] <= 1e-12:
+        if best is None or best[0] <= 0:
             break
         _, ci, cj = best
         # merge cj into ci

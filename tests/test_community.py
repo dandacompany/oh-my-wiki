@@ -46,3 +46,55 @@ def test_detect_empty_graph():
     # rows that are all unresolved → still empty
     assert community.detect([{"src_relpath": "a", "dst_relpath": "b", "dst_slug": "b",
                               "link_type": "wikilink", "resolved": 0}]) == ({}, 0.0)
+
+
+def test_barbell_exact_modularity():
+    """Barbell (two K3 cliques + one bridge a3-b1) should yield Q ≈ 0.3571.
+
+    Exact value derivation: 7 edges total (two_m=14).
+    Each clique contributes 3 internal edges; bridge contributes 1 cross edge.
+    Q = (1/14) * sum_{u,v in same community} [A_uv - d_u*d_v/14]
+    The expected value rounds to 0.3571 (to 4 decimal places).
+    """
+    clique1 = [("a1", "a2"), ("a2", "a3"), ("a1", "a3")]
+    clique2 = [("b1", "b2"), ("b2", "b3"), ("b1", "b3")]
+    bridge = [("a3", "b1")]
+    _, q = community.detect(_edges(clique1 + clique2 + bridge))
+    assert abs(q - 0.3571) < 0.001, f"Expected Q ≈ 0.3571, got {q}"
+
+
+def test_dq_factor_sparse_clustering():
+    """Regression test: corrected ΔQ formula (2*e_ij - 2*a_i*a_j) must produce 2
+    communities on two 3-node paths joined by a bridge.
+
+    Graph: path a1-a2-a3 and path b1-b2-b3, joined by bridge edge a3-b1.
+
+    With the BUGGY formula (e_ij - 2*a_i*a_j, missing factor-of-2 on e_ij), the
+    gain from merging the second hop within each path is understated, causing the
+    algorithm to stop early and leave 3 communities:
+        {a1,a2}, {a3,b1}, {b2,b3}
+
+    The corrected formula yields 2 communities:
+        {a1,a2,a3,b1} and {b2,b3}
+
+    This is correct CNM behaviour: the bridge is absorbed into the larger cluster
+    because the net ΔQ for that merge is positive once the factor-of-2 is applied.
+
+    Discrimination confirmed: reverting to `dQ = e_ij - 2*a_i*a_j` yields
+    3 communities; the corrected formula yields exactly 2.
+    """
+    edges = [
+        ("a1", "a2"), ("a2", "a3"),          # path A
+        ("b1", "b2"), ("b2", "b3"),          # path B
+        ("a3", "b1"),                         # bridge
+    ]
+    labels, q = community.detect(_edges(edges))
+    communities = set(labels.values())
+    assert len(communities) == 2, (
+        f"Expected exactly 2 communities on two-path-bridge graph, got {len(communities)}: {labels}"
+    )
+    # a1, a2, a3 must all be in the same community
+    assert labels["a1"] == labels["a2"] == labels["a3"]
+    # b2, b3 must be co-assigned (they form the other cluster)
+    assert labels["b2"] == labels["b3"]
+    assert labels["a1"] != labels["b2"]
