@@ -1,0 +1,112 @@
+# scripts/community.py
+"""Deterministic community detection over the wiki link graph (zero deps, zero tokens).
+
+Greedy modularity (Clauset–Newman–Moore) on the undirected, weighted graph built from
+`links.graph()` resolved edges. Used by `omw connections` to surface communities,
+bridges (cross-community edges = "surprising connections"), and hubs. Pure stdlib;
+fully deterministic (sorted iteration + id renumbering by smallest member)."""
+from __future__ import annotations
+
+from scripts import links
+
+_META = set(links.META_RELPATHS)
+
+
+def _build_graph(edges):
+    """(adj, deg) from links.graph() rows. Undirected, weighted, no self-loops, no META."""
+    adj: dict[str, dict[str, int]] = {}
+    for e in edges or []:
+        if not e.get("resolved"):
+            continue
+        u, v = e.get("src_relpath"), e.get("dst_relpath")
+        if not u or not v or u == v or u in _META or v in _META:
+            continue
+        adj.setdefault(u, {})
+        adj.setdefault(v, {})
+        adj[u][v] = adj[u].get(v, 0) + 1
+        adj[v][u] = adj[v].get(u, 0) + 1
+    deg = {u: sum(nbrs.values()) for u, nbrs in adj.items()}
+    return adj, deg
+
+
+def _renumber(labels: dict[str, int]) -> dict[str, int]:
+    """Renumber community ids 0..k-1 by each community's smallest member (sorted),
+    so labels are stable regardless of internal merge order."""
+    members: dict[int, list[str]] = {}
+    for node, cid in labels.items():
+        members.setdefault(cid, []).append(node)
+    order = sorted(members, key=lambda c: min(members[c]))
+    remap = {old: new for new, old in enumerate(order)}
+    return {node: remap[cid] for node, cid in labels.items()}
+
+
+def _modularity(adj, deg, labels, two_m: int) -> float:
+    """Standard weighted modularity Q for the given partition."""
+    if two_m == 0:
+        return 0.0
+    q = 0.0
+    for u, nbrs in adj.items():
+        cu = labels[u]
+        for v, w in nbrs.items():
+            if labels[v] == cu:
+                q += w - deg[u] * deg[v] / two_m
+    return q / two_m
+
+
+def detect(edges):
+    """Greedy-modularity partition. Returns (labels {relpath: community_id}, modularity).
+    Deterministic: candidate merges are scanned in sorted order, ΔQ ties broken by the
+    lexicographically smallest community key; ids renumbered by smallest member."""
+    adj, deg = _build_graph(edges)
+    if not adj:
+        return {}, 0.0
+    two_m = sum(deg.values())  # = 2 * total edge weight
+
+    # community state: cid -> set(nodes); per-community total degree; inter-community weights
+    comm: dict[int, set[str]] = {}
+    cdeg: dict[int, int] = {}
+    node_comm: dict[str, int] = {}
+    for i, node in enumerate(sorted(adj)):
+        comm[i] = {node}
+        cdeg[i] = deg[node]
+        node_comm[node] = i
+
+    def between(ci: int, cj: int) -> int:
+        a, b = comm[ci], comm[cj]
+        small, big = (a, b) if len(a) <= len(b) else (b, a)
+        tot = 0
+        for u in small:
+            for v, w in adj[u].items():
+                if v in big:
+                    tot += w
+        return tot
+
+    while True:
+        # adjacency between communities (sorted candidate pairs for determinism)
+        pairs = set()
+        for u in adj:
+            cu = node_comm[u]
+            for v in adj[u]:
+                cv = node_comm[v]
+                if cu != cv:
+                    pairs.add((min(cu, cv), max(cu, cv)))
+        best = None  # (dQ, ci, cj)
+        for ci, cj in sorted(pairs):
+            e_ij = 2 * between(ci, cj) / two_m        # undirected edge fraction: between() counts once, *2 normalises
+            a_i, a_j = cdeg[ci] / two_m, cdeg[cj] / two_m
+            dQ = e_ij - 2 * a_i * a_j                 # standard CNM ΔQ; sign determines merge direction
+            if best is None or dQ > best[0] + 1e-12:
+                best = (dQ, ci, cj)
+        if best is None or best[0] <= 1e-12:
+            break
+        _, ci, cj = best
+        # merge cj into ci
+        for n in comm[cj]:
+            node_comm[n] = ci
+        comm[ci] |= comm[cj]
+        cdeg[ci] += cdeg[cj]
+        del comm[cj]
+        del cdeg[cj]
+
+    labels = _renumber(dict(node_comm))
+    return labels, round(_modularity(adj, deg, labels, two_m), 4)
