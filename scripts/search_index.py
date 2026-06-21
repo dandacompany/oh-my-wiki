@@ -122,7 +122,11 @@ def hydrate(db_path, *, vault_id: int, hits: list[dict],
         finally:
             conn.close()
     except Exception:
-        return hits
+        if visibility == "public":
+            # fail closed: cannot verify visibility → keep only upstream-filtered fts hits
+            # (those carry a `title`); drop every vector-sourced/untitled hit.
+            return [h for h in hits if "title" in h]
+        return hits   # visibility is None (recall hot path) → best-effort, no boundary
     out: list[dict] = []
     for h in hits:
         rel = h.get("relpath")

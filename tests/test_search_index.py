@@ -146,6 +146,43 @@ def test_search_strategy_embedding_respects_public_visibility(tmp_path, monkeypa
     assert "wiki/concepts/priv.md" not in relpaths, "private note must be dropped"
 
 
+def test_hydrate_fails_closed_under_public_on_db_error(tmp_path, monkeypatch):
+    """Regression: when DB raises under visibility='public', untitled vector hits are
+    DROPPED (fail-closed). Under visibility=None both hits are returned (fail-open preserved)."""
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    (root / "wiki" / "concepts" / "f.md").write_text(
+        "---\ntitle: F\ndate: 2026-01-01\ntype: concept\ntags: []\n---\nbody\n",
+        encoding="utf-8")
+    reindex.full(db, vault_id=vid)
+
+    # Force every registry.connect call to raise, simulating a DB failure.
+    monkeypatch.setattr(search_index.registry, "connect",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    vector_hit = {"relpath": "wiki/concepts/v.md", "score": 0.9}          # no title
+    fts_hit    = {"relpath": "wiki/concepts/f.md", "title": "F",
+                  "summary": "s", "tags": [], "score": 1.0}               # has title
+
+    # --- visibility='public': fail CLOSED → only fts hit survives ---
+    out_public = search_index.hydrate(db, vault_id=vid,
+                                      hits=[vector_hit, fts_hit],
+                                      visibility="public")
+    relpaths_public = {h["relpath"] for h in out_public}
+    assert "wiki/concepts/v.md" not in relpaths_public, \
+        "untitled vector hit must be DROPPED when DB raises under visibility='public'"
+    assert "wiki/concepts/f.md" in relpaths_public, \
+        "already-titled fts hit must be KEPT"
+
+    # --- visibility=None: fail OPEN → both hits returned unchanged ---
+    out_none = search_index.hydrate(db, vault_id=vid,
+                                    hits=[dict(vector_hit), dict(fts_hit)],
+                                    visibility=None)
+    relpaths_none = {h["relpath"] for h in out_none}
+    assert "wiki/concepts/v.md" in relpaths_none, \
+        "vector hit must be KEPT when visibility=None (hot-path best-effort)"
+    assert "wiki/concepts/f.md" in relpaths_none
+
+
 def test_search_strategy_embedding_no_visibility_returns_both(tmp_path, monkeypatch):
     """No-regression: without a visibility filter, both public and private notes appear."""
     db, root, vid = _vault(tmp_path, monkeypatch)
