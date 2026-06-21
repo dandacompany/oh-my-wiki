@@ -141,6 +141,7 @@ If the user input matches an op keyword, prefer that op over the wizard:
 | "inbox add", "inbox list", "inbox run", "큐에 추가", "inbox"                       | `inbox`                                                         |
 | "fetch", "fetch this url", "url 가져와", "페이지 가져와"                           | `fetch`                                                         |
 | "connections", "의외의 연결점", "어떤 주제들이 이어지나", "what links my topics"   | `connections` → `commands/connections.md`                       |
+| `recall.strategy=llm` (hook emits `<omw-recall>` instruction)                      | agent retrieval procedure → `commands/recall-llm.md`            |
 
 ### Multi-step requests
 
