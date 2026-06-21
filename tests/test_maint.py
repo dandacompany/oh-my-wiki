@@ -1,5 +1,5 @@
 # tests/test_maint.py
-from scripts import maint
+from scripts import maint, recall
 
 
 def test_status_empty_is_silent(monkeypatch):
@@ -21,9 +21,6 @@ def test_status_counts_and_nudge(monkeypatch):
     out = maint.status(db_path=None, vault_id=1, today="2026-06-21")
     assert out["stale"] == 1 and out["expired"] == 1 and out["lint_issues"] == 2
     assert "1 stale" in out["nudge"] and "/omw lint" in out["nudge"]
-
-
-from scripts import recall
 
 
 def test_preamble_includes_maintenance_nudge(monkeypatch):

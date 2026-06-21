@@ -53,8 +53,8 @@ class OpenAIEmbedder(Embedder):
 def get_embedder(cfg: dict) -> Embedder | None:
     """Build an embedder from recall.embedding config, or None if not configured."""
     cfg = cfg or {}
-    provider = (cfg.get("provider") or "none").lower()
-    if provider in ("none", ""):
+    provider = (cfg.get("provider") or "none").lower()  # falsy/missing → "none"
+    if provider == "none":
         return None
     if provider == "fake":
         return FakeEmbedder(dim=int(cfg.get("dim", 256)))
