@@ -208,3 +208,16 @@ def test_reindex_works_without_fts5(tmp_path, monkeypatch):
         encoding="utf-8")
     count = reindex.full(db, vault_id=vid)  # must not raise
     assert count == 1
+
+
+# ---------------------------------------------------------------------------
+# Task 4.3: refresh_embeddings
+# ---------------------------------------------------------------------------
+
+def test_refresh_embeddings_noop_when_unconfigured(tmp_path, monkeypatch):
+    """refresh_embeddings returns 0 (no-op) when embedding provider is 'none'."""
+    import scripts.config as _cfg
+    monkeypatch.setattr(_cfg, "load_config", lambda: {"recall": {}})
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    result = reindex.refresh_embeddings(db, vault_id=vid)
+    assert result == 0

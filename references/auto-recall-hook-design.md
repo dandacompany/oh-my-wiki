@@ -183,9 +183,9 @@ recall:
 
 ### 구현 로드맵 (확정 후)
 
-- [ ] config 2축 분리: `recall.strategy`(+`llm.submode`) 추가, 기본 `fts`(현행 동작 보존), 미구현 전략은 `fts`로 graceful fallback + "planned" 안내.
-- [ ] `embedding` 백엔드: 임베딩 인덱서(볼트 내부 저장) + 벡터 검색. 모델 의존성 선택형.
-- [ ] `hybrid` 랭크 융합(RRF 등).
-- [ ] `llm.route`(분류 1콜) / `llm.generative`(후보 read+판정).
-- [ ] `omw setup recall`에 strategy/submode 선택 + 비용 가드 경고.
+- [x] config 2축 분리: `recall.strategy`(+`llm.submode`) 추가, 기본 `fts`(현행 동작 보존), 미구현 전략은 `fts`로 graceful fallback + "planned" 안내.
+- [x] `embedding` 백엔드: 임베딩 인덱서(볼트 내부 저장) + 벡터 검색. 모델 의존성 선택형.
+- [x] `hybrid` 랭크 융합(RRF 등).
+- [ ] `llm.route`(분류 1콜) / `llm.generative`(후보 read+판정). ← 미래 작업 (future work)
+- [x] `omw setup recall`에 strategy/submode 선택 + 비용 가드 경고. (`configure_recall()` 프로그래매틱 진입점 구현 완료)
 - [ ] josa 정규화는 `fts` 전략 내부 옵션으로 흡수(`embedding`/`llm`은 불필요).

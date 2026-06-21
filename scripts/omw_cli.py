@@ -496,9 +496,33 @@ def _cmd_view(args) -> int:
     return view.run(args)
 
 
+def _cmd_maint(args) -> int:
+    from datetime import date
+    from scripts import maint
+    db = registry_path()
+    if not db.exists():
+        print("error: no registry; run `omw status` to set up", file=sys.stderr)
+        return 1
+    vault = _resolve_vault_row(db, args.vault)
+    if vault is None:
+        print("error: no active vault; pass --vault <name>", file=sys.stderr)
+        return 1
+    today = args.today or date.today().isoformat()
+    st = maint.status(db, vault_id=vault["id"], today=today)
+    print(json.dumps(st, ensure_ascii=False))
+    if getattr(args, "exit_code", False):
+        return 1 if (st["stale"] or st["expired"] or st["lint_issues"]) else 0
+    return 0
+
+
 def _cmd_recall(args) -> int:
     from scripts import recall
-    out = recall.preamble() if args.action == "preamble" else recall.prompt(args.text)
+    if args.action == "preamble":
+        out = recall.preamble()
+    elif args.action == "pretool":
+        out = recall.pretool(None)
+    else:
+        out = recall.prompt(args.text)
     if out:
         print(out)
     return 0
@@ -751,9 +775,18 @@ def build_parser() -> argparse.ArgumentParser:
     pvw.set_defaults(func=_cmd_view)
 
     prc = sub.add_parser("recall", help="Wiki recall for agent hooks (preamble/prompt). See setup recall.")
-    prc.add_argument("action", choices=["preamble", "prompt"])
+    prc.add_argument("action", choices=["preamble", "prompt", "pretool"])
     prc.add_argument("--text", default=None, help="prompt text (default: read stdin)")
     prc.set_defaults(func=_cmd_recall)
+
+    pm = sub.add_parser("maint", help="Knowledge-maintenance status (cron-friendly).")
+    msub = pm.add_subparsers(dest="maint_cmd", required=True)
+    pms = msub.add_parser("status", help="Print stale/expired/lint counts as JSON.")
+    pms.add_argument("--vault", default=None, help="vault name (default: active)")
+    pms.add_argument("--today", default=None, help="YYYY-MM-DD (default: today)")
+    pms.add_argument("--exit-code", dest="exit_code", action="store_true",
+                     help="exit 1 if any maintenance is due (for cron)")
+    pms.set_defaults(func=_cmd_maint)
 
     pset = sub.add_parser("setup", help="Interactive setup wizard (run after install).")
     pset.add_argument(

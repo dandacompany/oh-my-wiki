@@ -16,13 +16,15 @@ from __future__ import annotations
 
 import sys
 
+from scripts import maint
+
 MARKER = "omw-recall"
 
-#: retrieval strategies (축 2). Only `fts` is implemented; the rest are planned
-#: and fall back to `fts` (see references/auto-recall-hook-design.md §10).
+#: retrieval strategies (축 2). `fts`, `embedding`, and `hybrid` are implemented;
+#: `llm` is planned and falls back to `fts` (see references/auto-recall-hook-design.md §10).
 STRATEGIES = ("fts", "embedding", "hybrid", "llm")
 LLM_SUBMODES = ("route", "generative")
-_IMPLEMENTED_STRATEGIES = {"fts"}
+_IMPLEMENTED_STRATEGIES = {"fts", "embedding", "hybrid"}
 
 # min_score=1.0: the FTS scorer ranks on frontmatter (title/tags/summary/relpath),
 # not body — so ~1.0 means at least one meaningful token hit. Pages with a good
@@ -120,16 +122,32 @@ def _record_use(relpaths: list[str]) -> None:
 
 
 def _hits(text: str, top_k: int) -> list[dict]:
-    from scripts import search_index
-    from scripts.paths import registry_path
-    db = registry_path()
-    if not db.exists():
-        return []
-    v = _active(db)
-    if not v:
-        return []
     try:
-        return search_index.query(db, vault_id=v["id"], query=normalize_query(text), limit=top_k)
+        from scripts import search_index, embed, config
+        from scripts.paths import registry_path
+        db = registry_path()
+        if not db.exists():
+            return []
+        v = _active(db)
+        if not v:
+            return []
+        cfg = config.load_config()
+        rc = (cfg or {}).get("recall", {})
+        visibility = rc.get("visibility", None)
+        strat = effective_strategy(rc.get("strategy", "fts"), quiet=True)
+
+        if strat == "fts":
+            return search_index.query(db, vault_id=v["id"],
+                                      query=normalize_query(text),
+                                      limit=top_k, visibility=visibility)
+        else:
+            embedder = embed.get_embedder((cfg.get("recall") or {}).get("embedding") or {})
+            return search_index.search_strategy(db, vault_id=v["id"],
+                                                q=text, fts_query=normalize_query(text),
+                                                limit=top_k,
+                                                strategy=strat,
+                                                embedder=embedder,
+                                                visibility=visibility)
     except Exception:
         return []
 
@@ -213,6 +231,13 @@ def preamble() -> str:
             lines.append("최근 페이지: " + ", ".join(titles))
     except Exception:
         pass
+    try:
+        from datetime import date
+        st = maint.status(db, vault_id=v["id"], today=date.today().isoformat())
+        if st.get("nudge"):
+            lines.append("유지보수: " + st["nudge"])
+    except Exception:
+        pass
     lines.append("</omw-wiki>")
     return "\n".join(lines)
 
@@ -231,11 +256,36 @@ def render_recall_block(mode: str = "auto") -> str:
     ])
 
 
-def upsert_block(md_path, block: str) -> None:
-    """Insert/replace the omw-recall marker region in md_path (idempotent)."""
+ALWAYS_ON_MARKER = "omw-wiki-first"
+
+
+def render_always_on_block() -> str:
+    """Persistent 'wiki-first' instruction for host files (CLAUDE.md/AGENTS.md).
+    Soft enforcement: nudges the agent to consult the wiki before raw search.
+    Distinct marker from the recall block so both can coexist + update independently."""
+    m = ALWAYS_ON_MARKER
+    return "\n".join([
+        f"<!-- {m}:start -->",
+        "## omw wiki-first (managed by `omw setup agents` — do not edit between markers)",
+        "",
+        "이 워크스페이스에는 컴파일된 omw 위키가 있습니다. 도메인/프로젝트 지식 질문에서는:",
+        "- 답하기 전에 `omw find \"<핵심 명사>\"`로 위키를 **먼저** 확인합니다.",
+        "- `raw/`를 직접 grep/read 하기 전에 위키에 같은 내용이 정리돼 있는지 확인합니다 "
+        "(위키가 1차 연료, raw는 출처).",
+        "- 본문 인용 시 페이지의 citations를 함께 제시합니다.",
+        f"<!-- {m}:end -->",
+    ])
+
+
+def upsert_block(md_path, block: str, marker: str = MARKER) -> None:
+    """Insert/replace a marker region in md_path (idempotent).
+
+    Uses *marker* to build the start/end fences (defaults to the module-level
+    MARKER so existing callers need no changes).
+    """
     from pathlib import Path
     p = Path(md_path)
-    start, end = f"<!-- {MARKER}:start -->", f"<!-- {MARKER}:end -->"
+    start, end = f"<!-- {marker}:start -->", f"<!-- {marker}:end -->"
     text = p.read_text(encoding="utf-8") if p.exists() else ""
     if start in text and end in text:
         new = text[: text.index(start)] + block + text[text.index(end) + len(end):]
@@ -244,6 +294,50 @@ def upsert_block(md_path, block: str) -> None:
         new = text + sep + block + "\n"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(new, encoding="utf-8")
+
+
+#: tools whose target we inspect for a raw/ read so we can nudge toward the wiki.
+_READ_TOOLS = {"read", "grep", "glob", "cat", "search"}
+
+
+def _targets_raw(tool_input: dict) -> bool:
+    """True if a read/grep payload points into the vault's raw/ sources."""
+    for key in ("path", "file_path", "pattern", "glob", "query"):
+        val = tool_input.get(key)
+        if isinstance(val, str) and "raw/" in val:
+            return True
+    return False
+
+
+def pretool(payload: dict | None) -> str:
+    """PreToolUse nudge: if the agent is about to read/grep raw/ and a wiki exists,
+    suggest `omw find` first. Best-effort, non-blocking, empty when not applicable."""
+    try:
+        if not isinstance(payload, dict):
+            payload = _read_pretool_stdin()
+        tool = str(payload.get("tool_name") or payload.get("tool") or "").lower()
+        if tool not in _READ_TOOLS:
+            return ""
+        if not _targets_raw(payload.get("tool_input") or payload.get("input") or {}):
+            return ""
+        from scripts.paths import registry_path
+        db = registry_path()
+        if not db.exists() or not _active(db):
+            return ""
+        return (f"<{MARKER}> raw/를 직접 보기 전에 — 같은 내용이 위키에 정리돼 있을 수 있습니다. "
+                f"`omw find \"<핵심 명사>\"`를 먼저 시도하세요 (위키가 1차 연료). </{MARKER}>")
+    except Exception:
+        return ""
+
+
+def _read_pretool_stdin() -> dict:
+    import json
+    raw = sys.stdin.read() if not sys.stdin.isatty() else ""
+    try:
+        obj = json.loads(raw) if raw.strip().startswith("{") else {}
+        return obj if isinstance(obj, dict) else {}
+    except (ValueError, TypeError):
+        return {}
 
 
 #: Each supported host reads command hooks from this JSON file, all sharing the
@@ -269,23 +363,24 @@ def _recall_hook_specs() -> dict:
     return {
         "SessionStart": (f'"{omw}" recall preamble', "omw wiki preamble"),
         "UserPromptSubmit": (f'"{omw}" recall prompt', "omw wiki recall"),
+        "PreToolUse": (f'"{omw}" recall pretool', "omw wiki-first nudge"),
     }
 
 
 def _event_has_recall(entries: list) -> bool:
     """True if any hook in this event is already an `omw recall …` invocation
-    (path/quoting-agnostic — matches the `recall preamble|prompt` subcommand)."""
+    (path/quoting-agnostic — matches the `recall preamble|prompt|pretool` subcommand)."""
     for group in entries or []:
         for h in (group or {}).get("hooks", []):
             cmd = (h or {}).get("command", "")
-            if "recall" in cmd and ("preamble" in cmd or "prompt" in cmd):
+            if "recall" in cmd and ("preamble" in cmd or "prompt" in cmd or "pretool" in cmd):
                 return True
     return False
 
 
 def wire_host(host: str, *, config_path=None) -> tuple[bool, str]:
-    """Idempotently merge recall SessionStart+UserPromptSubmit hooks into a host
-    config (JSON). Preserves all existing content. Returns (changed, detail)."""
+    """Idempotently merge recall SessionStart + UserPromptSubmit + PreToolUse hooks
+    into a host config (JSON). Preserves all existing content. Returns (changed, detail)."""
     import json
     from pathlib import Path
     path = Path(config_path) if config_path else host_hook_configs().get(host)
@@ -323,10 +418,15 @@ def wire_host(host: str, *, config_path=None) -> tuple[bool, str]:
 def main(argv=None) -> int:
     import argparse
     ap = argparse.ArgumentParser(prog="omw recall")
-    ap.add_argument("action", choices=["preamble", "prompt"])
+    ap.add_argument("action", choices=["preamble", "prompt", "pretool"])
     ap.add_argument("--text", default=None, help="prompt text (else read stdin)")
     args = ap.parse_args(argv)
-    out = preamble() if args.action == "preamble" else prompt(args.text)
+    if args.action == "preamble":
+        out = preamble()
+    elif args.action == "pretool":
+        out = pretool(None)
+    else:
+        out = prompt(args.text)
     if out:
         print(out)
     return 0

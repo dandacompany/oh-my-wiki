@@ -3,6 +3,7 @@
 docs/*
 !docs/tutorial-omw/
 !docs/tutorial-reference/
+!docs/cron-maintenance.md
 
 # Claude Code / AI agent instructions and memory (local-only, never publish)
 CLAUDE.md

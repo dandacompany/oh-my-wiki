@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from scripts import frontmatter, fts, links, registry, schema
+from scripts import embed, frontmatter, fts, links, registry, schema, vector_index
 
 
 def full(db_path: Path, *, vault_id: int) -> int:
@@ -18,7 +18,39 @@ def full(db_path: Path, *, vault_id: int) -> int:
 def incremental(db_path: Path, *, vault_id: int) -> int:
     """Only upsert files whose mtime exceeds the recorded one."""
     vault_path = _vault_path(db_path, vault_id)
-    return _scan(db_path, vault_id, vault_path, incremental=True)["indexed"]
+    count = _scan(db_path, vault_id, vault_path, incremental=True)["indexed"]
+    try:
+        refresh_embeddings(db_path, vault_id=vault_id)
+    except Exception:
+        pass
+    return count
+
+
+def refresh_embeddings(db_path: Path, *, vault_id: int) -> int:
+    """Re-embed all wiki/ pages for a vault. Best-effort: returns 0 on any error."""
+    try:
+        from scripts import config
+        cfg = config.load_config()
+        emb_cfg = (cfg.get("recall") or {}).get("embedding") or {}
+        embedder = embed.get_embedder(emb_cfg)
+        if embedder is None or not vector_index.available():
+            return 0
+        conn = registry.connect(db_path)
+        try:
+            rows_raw = conn.execute(
+                "SELECT relpath, title, summary FROM notes"
+                " WHERE vault_id = ? AND parse_error = 0 AND relpath LIKE 'wiki/%'",
+                (vault_id,),
+            ).fetchall()
+        finally:
+            conn.close()
+        rows = [
+            (r["relpath"], f"{r['title'] or ''} {r['summary'] or ''}".strip())
+            for r in rows_raw
+        ]
+        return vector_index.upsert(db_path, vault_id=vault_id, embedder=embedder, rows=rows)
+    except Exception:
+        return 0
 
 
 def _vault_path(db_path: Path, vault_id: int) -> Path:
