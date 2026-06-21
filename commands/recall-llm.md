@@ -1,5 +1,10 @@
 # omw recall (llm strategy) — agent-delegated retrieval
 
+> **Advisory-natured strategy**: the `llm` strategy is advisory — the hook never injects
+> grounded hits itself, even in `mode=auto`. Instead it emits a short `<omw-recall>`
+> instruction and leaves all retrieval to you (the in-loop agent). No separate API call
+> is made by the hook.
+
 When `recall.strategy=llm`, the recall hook does NOT search for you; it emits a short
 `<omw-recall>` instruction. Follow the procedure for the active submode.
 

@@ -51,8 +51,9 @@ def cost_warning(mode: str, strategy: str) -> str | None:
     """Note for auto+llm. Under the agent-delegated llm design the hook makes NO
     separate API call — it just emits guidance every prompt; advisory is the natural pairing."""
     if mode == "auto" and strategy == "llm":
-        return ("참고: auto+llm은 매 프롬프트에 LLM 판단 가이던스를 띄웁니다(별도 API 호출은 없음). "
-                "인루프 에이전트가 수행하는 advisory 모드가 자연스러운 짝입니다.")
+        return ("참고: llm 전략은 advisory 성격입니다 — auto 모드여도 훅은 결과를 주입하지 않고 "
+                "인루프 에이전트에게 검색을 위임합니다(별도 API 호출 없음). "
+                "advisory 모드를 권장합니다.")
     return None
 
 # Short acknowledgements / continuations that should never trigger recall.
@@ -124,18 +125,24 @@ def _record_use(relpaths: list[str]) -> None:
 
 def _hits(text: str, top_k: int) -> list[dict]:
     try:
-        from scripts import search_index, embed, config
+        from scripts import config
         from scripts.paths import registry_path
+        cfg = config.load_config()
+        rc = (cfg or {}).get("recall", {})
+        # llm strategy is advisory-natured: the hook never runs a Python search;
+        # it emits guidance and delegates retrieval to the in-loop agent entirely.
+        # Guard here so no embedder/search_index/vector_index is ever touched.
+        strat = effective_strategy(rc.get("strategy", "fts"), quiet=True)
+        if strat == "llm":
+            return []
+        from scripts import search_index, embed
         db = registry_path()
         if not db.exists():
             return []
         v = _active(db)
         if not v:
             return []
-        cfg = config.load_config()
-        rc = (cfg or {}).get("recall", {})
         visibility = rc.get("visibility", None)
-        strat = effective_strategy(rc.get("strategy", "fts"), quiet=True)
 
         if strat == "fts":
             return search_index.query(db, vault_id=v["id"],
@@ -192,7 +199,10 @@ def prompt(text: str | None) -> str:
     # Resolve the configured retrieval strategy. quiet=True: this runs on every
     # prompt — stay silent (setup warns once).
     strat = effective_strategy(cfg.get("strategy", "fts"), quiet=True)
-    if strat == "llm":  # agent-delegated retrieval — emit guidance, run no Python search
+    if strat == "llm":
+        # llm is advisory-natured: the hook delegates to the agent and injects no
+        # hook-side grounding regardless of mode (only mode=off and is_trivial
+        # suppress recall, which are checked above). No Python search is run here.
         return render_llm_guidance(cfg.get("llm_submode", "route"))
     hits = _hits(text, int(cfg["top_k"]))
     strong = [h for h in hits if (h.get("score") or 0) >= float(cfg["min_score"])]
