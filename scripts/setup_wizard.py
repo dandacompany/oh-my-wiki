@@ -356,7 +356,8 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
       strategy — retrieval: fts | embedding | hybrid | llm (+ llm.submode)
     Sets config and injects the host-agnostic Tier-1 guidance block into each
     host's instruction file. Host-neutral by design — not Claude-only.
-    Unimplemented strategies are selectable now and fall back to fts at runtime."""
+    All strategies (fts/embedding/hybrid/llm) are implemented; `llm` is agent-delegated
+    guidance (advisory-natured — no hook-side LLM call)."""
     from pathlib import Path
     from scripts import config, persona_export, recall
     choices = ["auto", "advisory", "off"]
@@ -371,7 +372,7 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     if mode == "off":
         print("recall disabled (recall.mode=off). Re-run `omw setup recall` to enable.")
         return 0
-    # Axis 2 — retrieval strategy (only fts implemented; others planned/fallback).
+    # Axis 2 — retrieval strategy (fts/embedding/hybrid deterministic; llm agent-delegated).
     if interactive and strategy is None:
         strategy = _prompt("select", "Retrieval strategy", choices=list(recall.STRATEGIES),
                            default="fts") or "fts"
@@ -390,8 +391,8 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                   file=sys.stderr)
             return 1
         config.set_config("recall.llm.submode", submode)
-    if strategy not in recall._IMPLEMENTED_STRATEGIES:
-        print(f"  note: strategy '{strategy}'는 아직 미구현(계획) — 런타임에 'fts'로 폴백합니다.")
+    if strategy not in recall._IMPLEMENTED_STRATEGIES:  # only an unrecognized strategy
+        print(f"  note: strategy '{strategy}'는 인식되지 않음 — 런타임에 'fts'로 폴백합니다.")
     warn = recall.cost_warning(mode, strategy)
     if warn:
         print(f"  {warn}")

@@ -130,12 +130,13 @@ recall:
 
 ---
 
-## 10. 설정 가능한 검색 전략 (계획 — 2026-06-18 합의, 미구현)
+## 10. 설정 가능한 검색 전략 (구현 완료 — 갱신 2026-06-21)
 
-> 동기: josa 같은 손코딩은 "LLM 없이 결정론으로 검색"하기 때문에 필요하다. 품질을
+> 동기: josa 같은 손코딩은 "LLM 없이 결정론으로 검색"하기 때문에 필요했다. 품질을
 > 올리는 길은 regex를 더 늘리는 게 아니라 **임베딩** 또는 **LLM**이다. 단, 무엇이
-> 옳은지 확신이 없으므로 **모두 구현해 사용자가 모드를 고르게** 한다. 아래는 그
-> 설정 구조의 합의안(네이밍 확정). 엔진 구현은 후속.
+> 옳은지 확신이 없으므로 **모두 구현해 사용자가 모드를 고르게** 했다. 아래 네 전략은
+> **모두 구현 완료**다(2026-06-21). 단, `llm`은 별도 LLM 엔진이 아니라 **인루프
+> 에이전트에게 위임하는 guidance** 방식으로 구현됐다(아래 참조).
 
 ### 두 개의 독립 축
 
@@ -145,17 +146,19 @@ recall:
 
 **축 2 — `strategy` (검색 방법, 신규):**
 
-| 값          | 종류   | 설명                                                                    |
-| ----------- | ------ | ----------------------------------------------------------------------- |
-| `fts`       | 결정론 | 키워드 가중 랭커(현행) + josa 정규화. 싸고 오프라인. **현재 구현됨**    |
-| `embedding` | 결정론 | 의미 벡터 검색. josa/복합어/동의어를 규칙 없이 처리. (인덱서+벡터 필요) |
-| `hybrid`    | 결정론 | `fts` + `embedding` 랭크 융합                                           |
-| `llm`       | LLM    | LLM 주도. 하위 모드 `llm.submode`로 분기                                |
+| 값          | 종류       | 설명                                                                                           |
+| ----------- | ---------- | ---------------------------------------------------------------------------------------------- |
+| `fts`       | 결정론     | 키워드 가중 랭커 + josa 정규화. 싸고 오프라인. **구현됨**                                      |
+| `embedding` | 결정론     | 의미 벡터 검색(sqlite-vec, opt-in). josa/복합어/동의어를 규칙 없이. **구현됨**                 |
+| `hybrid`    | 결정론     | `fts` + `embedding` 랭크 융합(RRF). **구현됨**                                                 |
+| `llm`       | agent-위임 | 훅이 LLM을 직접 호출하지 않고, 인루프 에이전트에게 검색을 위임하는 guidance만 emit. **구현됨** |
 
-**`llm.submode` (strategy=llm일 때만):**
+**`llm.submode` (strategy=llm일 때만) — 모두 인루프 에이전트가 수행(훅은 지시문만 emit):**
 
-- `route` — **LLM이 상황을 보고 `fts`/`embedding`/`hybrid` 중 무엇을 적용할지 판단**해 그 결정론 백엔드를 호출(라우터).
-- `generative` — **LLM이 생성형으로 직접 후보를 읽고 관련성을 판단·처리**(가장 강력, 가장 비쌈).
+- `route` — **에이전트가 질문을 보고 키워드/의미 검색 중 무엇이 맞는지 판단**해 `omw find`로 적절히 검색.
+- `generative` — **에이전트가 후보를 `omw find`로 끌어와 직접 읽고 관련성을 판정**한 뒤 답함.
+
+(둘 다 훅은 별도 LLM/API 호출을 하지 않는다 — 비용은 인루프 에이전트가 어차피 도는 비용뿐이다.)
 
 ### 설정 스키마 (backward compatible — 기존 `mode` 유지, `strategy` 추가)
 
@@ -169,23 +172,31 @@ recall:
   top_k: 3
 ```
 
-### 두 축의 상호작용 (비용 가드)
+### 두 축의 상호작용 (구현 반영 — 갱신 2026-06-21)
 
-`strategy=llm` × `mode=auto` = **프롬프트마다 별도 LLM 호출**(비쌈/느림). 반대로
-`mode=advisory`면 이미 도는 에이전트가 곧 그 LLM이라 **추가 비용 0**. 권장 짝:
+> 초기 설계는 `auto+llm`을 "프롬프트마다 별도 LLM 호출"로 가정했으나, 구현은
+> **agent-delegated guidance** 방식으로 확정됐다. 그래서 훅은 **어떤 모드에서도 LLM을 직접
+> 호출하지 않는다** — `strategy=llm`이면 submode 가이던스 텍스트만 emit하고 검색·판정은 이미
+> 도는 인루프 에이전트가 수행한다(별도 API 호출 없음).
 
-| mode       | 권장 strategy                  | 이유                                    |
-| ---------- | ------------------------------ | --------------------------------------- |
-| `auto`     | `fts` / `embedding` / `hybrid` | 결정론, 매 프롬프트 호출해도 쌈         |
-| `advisory` | `llm`(route/generative)        | 인루프 에이전트가 수행 → 추가 비용 없음 |
+`strategy=llm`은 **advisory 성격**이다. `mode=auto`로 설정해도 훅은 결과(구체 힛)를 주입하지
+않고 가이던스만 띄운다. 즉 `auto+llm`과 `advisory+llm`은 동일하게 동작한다. deterministic
+전략(`fts`/`embedding`/`hybrid`)만 `auto`에서 훅이 직접 결과를 주입한다.
 
-→ `omw setup recall`에서 두 축을 고르게 하고, **비싼 조합(auto+llm) 선택 시 경고**만 띄운다(차단하지 않음 — 사용자 자유).
+| mode       | 권장 strategy                  | 이유                                                |
+| ---------- | ------------------------------ | --------------------------------------------------- |
+| `auto`     | `fts` / `embedding` / `hybrid` | 결정론, 훅이 매 프롬프트 구체 힛 주입(호출 비용 쌈) |
+| `advisory` | `llm`(route/generative)        | llm은 advisory 성격 — 인루프 에이전트가 검색 수행   |
+
+→ `omw setup recall`은 `auto+llm` 선택 시 **"llm은 advisory 성격이라 auto여도 훅이 grounding을
+주입하지 않는다"**는 안내만 띄운다(차단하지 않음 — 사용자 자유). 이는 비용 경고가 아니라 **동작
+명료화**다(별도 호출은 어차피 없음).
 
 ### 구현 로드맵 (확정 후)
 
-- [x] config 2축 분리: `recall.strategy`(+`llm.submode`) 추가, 기본 `fts`(현행 동작 보존), 미구현 전략은 `fts`로 graceful fallback + "planned" 안내.
+- [x] config 2축 분리: `recall.strategy`(+`llm.submode`) 추가, 기본 `fts`(현행 동작 보존). 네 전략 모두 구현됨 — **인식되지 않는** 전략만 `fts`로 폴백.
 - [x] `embedding` 백엔드: 임베딩 인덱서(볼트 내부 저장) + 벡터 검색. 모델 의존성 선택형.
 - [x] `hybrid` 랭크 융합(RRF 등).
-- [ ] `llm.route`(분류 1콜) / `llm.generative`(후보 read+판정). ← 미래 작업 (future work)
-- [x] `omw setup recall`에 strategy/submode 선택 + 비용 가드 경고. (`configure_recall()` 프로그래매틱 진입점 구현 완료)
+- [x] `llm.route`(에이전트가 검색법 선택) / `llm.generative`(에이전트가 후보 read+판정). ← agent-delegated guidance (`commands/recall-llm.md`); 훅은 `<omw-recall>` 지시문만 emit하고 LLM/API를 직접 호출하지 않음. **llm은 advisory 성격 — auto 모드여도 훅이 결과를 주입하지 않고 인루프 에이전트에게 검색을 위임.**
+- [x] `omw setup recall`에 strategy/submode 선택 + `auto+llm` **동작 명료화 안내**(비용 경고가 아님 — 별도 호출이 없으므로). (`configure_recall()` 프로그래매틱 진입점 구현 완료)
 - [ ] josa 정규화는 `fts` 전략 내부 옵션으로 흡수(`embedding`/`llm`은 불필요).

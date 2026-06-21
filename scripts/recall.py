@@ -20,11 +20,13 @@ from scripts import maint
 
 MARKER = "omw-recall"
 
-#: retrieval strategies (축 2). `fts`, `embedding`, and `hybrid` are implemented;
-#: `llm` is planned and falls back to `fts` (see references/auto-recall-hook-design.md §10).
+#: retrieval strategies (축 2). All of `fts`, `embedding`, `hybrid`, `llm` are
+#: implemented; only an unknown/unconfigured strategy falls back to `fts`
+#: (see references/auto-recall-hook-design.md §10). `llm` is agent-delegated guidance
+#: (advisory-natured — the hook emits an instruction and makes no LLM/API call).
 STRATEGIES = ("fts", "embedding", "hybrid", "llm")
 LLM_SUBMODES = ("route", "generative")
-_IMPLEMENTED_STRATEGIES = {"fts", "embedding", "hybrid"}
+_IMPLEMENTED_STRATEGIES = {"fts", "embedding", "hybrid", "llm"}
 
 # min_score=1.0: the FTS scorer ranks on frontmatter (title/tags/summary/relpath),
 # not body — so ~1.0 means at least one meaningful token hit. Pages with a good
@@ -34,24 +36,25 @@ _DEFAULTS = {"mode": "auto", "strategy": "fts", "llm_submode": "route",
 
 
 def effective_strategy(strategy: str, *, quiet: bool = False) -> str:
-    """Resolve the configured strategy to one that's implemented. Unimplemented
-    strategies (embedding/hybrid/llm) gracefully fall back to fts — so users can
-    already *select* the mode before the engines land. `quiet=True` on the
-    per-prompt hot path (the wizard already warns once at config time); the note
-    is only useful on explicit `omw recall`/setup invocations."""
+    """Resolve the configured strategy to an implemented one. All named STRATEGIES
+    (fts/embedding/hybrid/llm) are implemented; only an unrecognized strategy falls
+    back to `fts`. `quiet=True` on the per-prompt hot path; the note is only useful
+    on explicit `omw recall`/setup invocations."""
     if strategy in _IMPLEMENTED_STRATEGIES:
         return strategy
-    if strategy in STRATEGIES and not quiet:
-        print(f"omw recall: strategy '{strategy}' is planned, not implemented yet "
+    if strategy in STRATEGIES and not quiet:  # reserved for a future not-yet-built strategy
+        print(f"omw recall: strategy '{strategy}' is not yet implemented "
               f"— using 'fts'. (references/auto-recall-hook-design.md §10)", file=sys.stderr)
     return "fts"
 
 
 def cost_warning(mode: str, strategy: str) -> str | None:
-    """Flag the expensive combination: an LLM call on every prompt."""
+    """Note for auto+llm. Under the agent-delegated llm design the hook makes NO
+    separate API call — it just emits guidance every prompt; advisory is the natural pairing."""
     if mode == "auto" and strategy == "llm":
-        return ("주의: mode=auto + strategy=llm은 매 프롬프트마다 별도 LLM 호출이라 비용/지연이 큽니다. "
-                "advisory 모드(인루프 에이전트가 수행, 추가 비용 0)를 권장합니다.")
+        return ("참고: llm 전략은 advisory 성격입니다 — auto 모드여도 훅은 결과를 주입하지 않고 "
+                "인루프 에이전트에게 검색을 위임합니다(별도 API 호출 없음). "
+                "advisory 모드를 권장합니다.")
     return None
 
 # Short acknowledgements / continuations that should never trigger recall.
@@ -123,18 +126,24 @@ def _record_use(relpaths: list[str]) -> None:
 
 def _hits(text: str, top_k: int) -> list[dict]:
     try:
-        from scripts import search_index, embed, config
+        from scripts import config
         from scripts.paths import registry_path
+        cfg = config.load_config()
+        rc = (cfg or {}).get("recall", {})
+        # llm strategy is advisory-natured: the hook never runs a Python search;
+        # it emits guidance and delegates retrieval to the in-loop agent entirely.
+        # Guard here so no embedder/search_index/vector_index is ever touched.
+        strat = effective_strategy(rc.get("strategy", "fts"), quiet=True)
+        if strat == "llm":
+            return []
+        from scripts import search_index, embed
         db = registry_path()
         if not db.exists():
             return []
         v = _active(db)
         if not v:
             return []
-        cfg = config.load_config()
-        rc = (cfg or {}).get("recall", {})
         visibility = rc.get("visibility", None)
-        strat = effective_strategy(rc.get("strategy", "fts"), quiet=True)
 
         if strat == "fts":
             return search_index.query(db, vault_id=v["id"],
@@ -188,10 +197,14 @@ def prompt(text: str | None) -> str:
     if is_trivial(text):
         return ""
 
-    # Resolve the configured retrieval strategy. Today every strategy routes to the
-    # fts backend (embedding/hybrid/llm fall back here until their engines land).
-    # quiet=True: this runs on every prompt — stay silent (setup warns once).
-    effective_strategy(cfg.get("strategy", "fts"), quiet=True)
+    # Resolve the configured retrieval strategy. quiet=True: this runs on every
+    # prompt — stay silent (setup warns once).
+    strat = effective_strategy(cfg.get("strategy", "fts"), quiet=True)
+    if strat == "llm":
+        # llm is advisory-natured: the hook delegates to the agent and injects no
+        # hook-side grounding regardless of mode (only mode=off and is_trivial
+        # suppress recall, which are checked above). No Python search is run here.
+        return render_llm_guidance(cfg.get("llm_submode", "route"))
     hits = _hits(text, int(cfg["top_k"]))
     strong = [h for h in hits if (h.get("score") or 0) >= float(cfg["min_score"])]
 
@@ -240,6 +253,21 @@ def preamble() -> str:
         pass
     lines.append("</omw-wiki>")
     return "\n".join(lines)
+
+
+def render_llm_guidance(submode: str) -> str:
+    """Agent-delegated retrieval guidance for the `llm` strategy. The hook runs NO
+    model — it tells the in-loop agent how to retrieve. Unknown submode → route."""
+    if submode == "generative":
+        body = ("프로젝트/도메인 질문이면 답하기 전에 `omw find \"<핵심 명사>\"`로 후보 페이지를 "
+                "가져와 **직접 읽고 진짜 관련된 것만 선별**한 뒤 그 근거로 답하세요 "
+                "(스니펫/키워드 일치만 믿지 말 것). 위키에 근거가 없으면 모른다고 말하세요. "
+                "무관하면 무시. 인용 시 페이지의 citations를 함께 제시.")
+    else:  # route (default)
+        body = ("프로젝트/도메인 질문이면, 이 질문이 키워드 검색에 맞는지(고유명사·정확한 용어) "
+                "의미 검색에 맞는지(개념·동의어) 판단하고 `omw find \"<핵심 명사>\"`로 적절히 검색한 뒤 "
+                "그 근거로 답하세요. 무관하면 무시. 인용 시 페이지의 citations를 함께 제시.")
+    return f"<{MARKER}> {body} </{MARKER}>"
 
 
 def render_recall_block(mode: str = "auto") -> str:
