@@ -474,3 +474,12 @@ def test_connections_json(capsys, monkeypatch):
     import json
     out = json.loads(capsys.readouterr().out)
     assert rc == 0 and out["modularity"] == 0.5
+
+
+def test_cli_setup_recall_accepts_embed_flags(tmp_path, monkeypatch):
+    from scripts import omw_cli, config
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw"))
+    rc = omw_cli.main(["setup", "recall", "--noninteractive", "--strategy", "embedding",
+                       "--embed-provider", "openai", "--embed-dim", "1536", "--base-dir", str(tmp_path)])
+    assert rc == 0
+    assert config.load_config()["recall"]["embedding"]["provider"] == "openai"
