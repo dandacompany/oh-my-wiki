@@ -202,11 +202,17 @@ def main(argv: list[str] | None = None) -> int:
     db = Path(args.db) if args.db else registry_path()
     vault_path = _vault_path(db, args.vault_id)
     result = _scan(db, args.vault_id, vault_path, incremental=not args.full)
+    fts_errors = result.get("fts_errors") or []
+    if fts_errors:
+        print(f"warning: {len(fts_errors)} note(s) failed FTS indexing "
+              f"(search may be partial): {', '.join(fts_errors[:5])}"
+              f"{' …' if len(fts_errors) > 5 else ''}", file=sys.stderr)
     print(json.dumps({
         "vault_id": args.vault_id,
         "mode": "full" if args.full else "incremental",
         "indexed": result["indexed"],
         "schema_issues": len(result["schema_issues"]),
+        "fts_errors": len(fts_errors),
     }))
     return 0
 
