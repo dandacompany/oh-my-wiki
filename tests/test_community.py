@@ -64,24 +64,24 @@ def test_barbell_exact_modularity():
 
 
 def test_dq_factor_sparse_clustering():
-    """Regression test: corrected ΔQ formula (2*e_ij - 2*a_i*a_j) must produce 2
-    communities on two 3-node paths joined by a bridge.
+    """Regression guard for the corrected ΔQ formula (e_ij - 2*a_i*a_j).
 
-    Graph: path a1-a2-a3 and path b1-b2-b3, joined by bridge edge a3-b1.
+    Graph: path a1-a2-a3 and path b1-b2-b3, joined by bridge edge a3-b1 (5 edges,
+    two_m=10).
 
-    With the BUGGY formula (e_ij - 2*a_i*a_j, missing factor-of-2 on e_ij), the
-    gain from merging the second hop within each path is understated, causing the
-    algorithm to stop early and leave 3 communities:
-        {a1,a2}, {a3,b1}, {b2,b3}
+    With the BUGGY formula (2*e_ij - 2*a_i*a_j, doubling e_ij), the bridge-spanning
+    merge dQ is artificially inflated, causing the algorithm to absorb a3 and b1 into
+    the same cluster and yield just 2 communities: {a1,a2,a3,b1} and {b2,b3}.
 
-    The corrected formula yields 2 communities:
-        {a1,a2,a3,b1} and {b2,b3}
+    The CORRECT formula (e_ij - 2*a_i*a_j) makes the greedy CNM stop earlier and
+    produce 3 communities: {a1,a2}, {a3,b1}, {b2,b3}.  This is a known limitation of
+    greedy CNM on sparse paths — the global optimum (Q=0.30 for {a1,a2,a3}/{b1,b2,b3},
+    verified via _modularity brute-force) is not always reachable by the greedy merge
+    sequence; the algorithm halts at the locally consistent 3-community partition
+    (Q=0.26 by _modularity).
 
-    This is correct CNM behaviour: the bridge is absorbed into the larger cluster
-    because the net ΔQ for that merge is positive once the factor-of-2 is applied.
-
-    Discrimination confirmed: reverting to `dQ = e_ij - 2*a_i*a_j` yields
-    3 communities; the corrected formula yields exactly 2.
+    Discrimination confirmed: the buggy 2*e_ij formula yields 2 communities;
+    the corrected formula yields exactly 3.
     """
     edges = [
         ("a1", "a2"), ("a2", "a3"),          # path A
@@ -90,14 +90,27 @@ def test_dq_factor_sparse_clustering():
     ]
     labels, q = community.detect(_edges(edges))
     communities = set(labels.values())
-    assert len(communities) == 2, (
-        f"Expected exactly 2 communities on two-path-bridge graph, got {len(communities)}: {labels}"
+    assert len(communities) == 3, (
+        f"Expected exactly 3 communities on two-path-bridge graph, got {len(communities)}: {labels}"
     )
-    # a1, a2, a3 must all be in the same community
-    assert labels["a1"] == labels["a2"] == labels["a3"]
-    # b2, b3 must be co-assigned (they form the other cluster)
+    # endpoints pair with their direct neighbour only
+    assert labels["a1"] == labels["a2"]
     assert labels["b2"] == labels["b3"]
-    assert labels["a1"] != labels["b2"]
+    # bridge nodes a3 and b1 are co-assigned (merged in step 3 of greedy CNM)
+    assert labels["a3"] == labels["b1"]
+    # the three clusters are distinct
+    assert labels["a1"] != labels["a3"]
+    assert labels["b2"] != labels["a3"]
+
+
+def test_detect_sparse_path_splits_not_overmerged():
+    # path 0-1, 1-2 plus pendant 0-3. _modularity says {0,3}/{1,2} (Q=0.1667)
+    # beats one community (Q=0.0); the detector must not over-merge into one.
+    labels, q = community.detect(_edges([("0", "1"), ("1", "2"), ("0", "3")]))
+    assert len(set(labels.values())) == 2
+    assert abs(q - 0.1667) < 0.001
+    # the reported Q must equal the best partition's modularity, never a worse one
+    assert q > 0.0
 
 
 def test_analyze_barbell_reports_bridge(monkeypatch):

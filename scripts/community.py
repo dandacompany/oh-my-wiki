@@ -95,7 +95,7 @@ def detect(edges):
         for ci, cj in sorted(pairs):
             e_ij = 2 * between(ci, cj) / two_m        # undirected edge fraction: between() counts once, *2 normalises
             a_i, a_j = cdeg[ci] / two_m, cdeg[cj] / two_m
-            dQ = 2 * e_ij - 2 * a_i * a_j             # standard CNM ΔQ; factor-of-2 on e_ij is required
+            dQ = e_ij - 2 * a_i * a_j                 # standard CNM ΔQ
             if best is None or dQ > best[0] + 1e-12:
                 best = (dQ, ci, cj)
         if best is None or best[0] <= 0:
