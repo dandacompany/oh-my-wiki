@@ -106,3 +106,75 @@ def test_search_strategy_hybrid_is_hydrated(tmp_path, monkeypatch):
                                        strategy="hybrid", embedder=_FakeEmb())
     a = next(h for h in out if h["relpath"] == "wiki/concepts/a.md")
     assert a["title"] == "Alpha"             # embedding-only hit hydrated in the fused result
+
+
+def test_search_strategy_embedding_respects_public_visibility(tmp_path, monkeypatch):
+    """Regression: vector hits for PRIVATE notes must be dropped under visibility='public'."""
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    # public note
+    (root / "wiki" / "concepts" / "pub.md").write_text(
+        "---\ntitle: Public Page\ndate: 2026-01-01\ntype: concept\n"
+        "tags: []\nvisibility: public\n---\npublic body\n",
+        encoding="utf-8")
+    # private note (no visibility key → defaults to private)
+    (root / "wiki" / "concepts" / "priv.md").write_text(
+        "---\ntitle: Private Page\ndate: 2026-01-01\ntype: concept\n"
+        "tags: []\nvisibility: private\n---\nprivate body\n",
+        encoding="utf-8")
+    reindex.full(db, vault_id=vid)
+
+    class _FakeEmb:
+        dim = 8
+        def embed(self, texts):
+            return [[0.0] * 8 for _ in texts]
+
+    # FTS leg returns nothing so only the vector leg contributes.
+    monkeypatch.setattr(search_index, "query", lambda *a, **k: [])
+    import scripts.vector_index as vector_index
+    # Vector index returns BOTH notes as bare hits (simulating a privacy-unaware ANN search).
+    monkeypatch.setattr(vector_index, "query",
+                        lambda *a, **k: [
+                            {"relpath": "wiki/concepts/pub.md", "score": 0.9},
+                            {"relpath": "wiki/concepts/priv.md", "score": 0.85},
+                        ])
+
+    out = search_index.search_strategy(db, vault_id=vid, q="page", limit=5,
+                                       strategy="embedding", embedder=_FakeEmb(),
+                                       visibility="public")
+    relpaths = {h["relpath"] for h in out}
+    assert "wiki/concepts/pub.md" in relpaths, "public note must appear"
+    assert "wiki/concepts/priv.md" not in relpaths, "private note must be dropped"
+
+
+def test_search_strategy_embedding_no_visibility_returns_both(tmp_path, monkeypatch):
+    """No-regression: without a visibility filter, both public and private notes appear."""
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    (root / "wiki" / "concepts" / "pub.md").write_text(
+        "---\ntitle: Public Page\ndate: 2026-01-01\ntype: concept\n"
+        "tags: []\nvisibility: public\n---\npublic body\n",
+        encoding="utf-8")
+    (root / "wiki" / "concepts" / "priv.md").write_text(
+        "---\ntitle: Private Page\ndate: 2026-01-01\ntype: concept\n"
+        "tags: []\nvisibility: private\n---\nprivate body\n",
+        encoding="utf-8")
+    reindex.full(db, vault_id=vid)
+
+    class _FakeEmb:
+        dim = 8
+        def embed(self, texts):
+            return [[0.0] * 8 for _ in texts]
+
+    monkeypatch.setattr(search_index, "query", lambda *a, **k: [])
+    import scripts.vector_index as vector_index
+    monkeypatch.setattr(vector_index, "query",
+                        lambda *a, **k: [
+                            {"relpath": "wiki/concepts/pub.md", "score": 0.9},
+                            {"relpath": "wiki/concepts/priv.md", "score": 0.85},
+                        ])
+
+    out = search_index.search_strategy(db, vault_id=vid, q="page", limit=5,
+                                       strategy="embedding", embedder=_FakeEmb(),
+                                       visibility=None)
+    relpaths = {h["relpath"] for h in out}
+    assert "wiki/concepts/pub.md" in relpaths, "public note must appear"
+    assert "wiki/concepts/priv.md" in relpaths, "private note must also appear (no filter)"

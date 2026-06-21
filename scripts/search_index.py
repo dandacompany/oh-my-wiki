@@ -89,11 +89,19 @@ def rrf_fuse(rankings: list[list[str]], k: int = 60) -> list[tuple[str, float]]:
     return sorted(scores.items(), key=lambda kv: -kv[1])
 
 
-def hydrate(db_path, *, vault_id: int, hits: list[dict]) -> list[dict]:
+def hydrate(db_path, *, vault_id: int, hits: list[dict],
+            visibility: str | None = None) -> list[dict]:
     """Fill missing title/summary/tags on vector-sourced hits (which carry only
     relpath/score) from the notes table. fts hits already have a `title` key and are
-    left untouched; unknown relpaths stay bare. Best-effort — returns hits unmodified
-    on any DB error (runs in the recall hot path). Enriches in place."""
+    left untouched.
+
+    When *visibility* is ``'public'`` the function also enforces the public boundary:
+    vector-sourced hits whose note is NOT public are dropped, and hits whose relpath
+    is not found in the notes table at all are also dropped (cannot verify visibility).
+    When *visibility* is ``None`` no hits are dropped (backward-compatible).
+
+    Best-effort — returns hits unmodified on any DB error (runs in the recall hot path).
+    """
     need = [h["relpath"] for h in hits if h.get("relpath") and "title" not in h]
     if not need:
         return hits
@@ -102,7 +110,7 @@ def hydrate(db_path, *, vault_id: int, hits: list[dict]) -> list[dict]:
         try:
             ph = ",".join("?" for _ in need)
             meta = {r["relpath"]: r for r in conn.execute(
-                f"SELECT relpath, title, summary FROM notes "
+                f"SELECT relpath, title, summary, visibility FROM notes "
                 f"WHERE vault_id = ? AND relpath IN ({ph})", (vault_id, *need))}
             tags: dict[str, list[str]] = {}
             for tr in conn.execute(
@@ -115,13 +123,28 @@ def hydrate(db_path, *, vault_id: int, hits: list[dict]) -> list[dict]:
             conn.close()
     except Exception:
         return hits
+    out: list[dict] = []
     for h in hits:
         rel = h.get("relpath")
-        if "title" not in h and rel in meta:
-            h["title"] = meta[rel]["title"]
-            h["summary"] = meta[rel]["summary"]
-            h["tags"] = tags.get(rel, [])
-    return hits
+        if "title" in h:
+            # fts-sourced hit: already visibility-filtered upstream — keep as-is.
+            out.append(h)
+            continue
+        # vector-sourced hit (no title key).
+        if rel not in meta:
+            # Unknown / deleted relpath — can't verify visibility.
+            if visibility == "public":
+                continue  # drop: cannot confirm it's public
+            out.append(h)
+            continue
+        note_vis = meta[rel]["visibility"]
+        if visibility == "public" and note_vis != "public":
+            continue  # drop: private note leaking through the public boundary
+        h["title"] = meta[rel]["title"]
+        h["summary"] = meta[rel]["summary"]
+        h["tags"] = tags.get(rel, [])
+        out.append(h)
+    return out
 
 
 def search_strategy(db_path, *, vault_id, q, limit, strategy,
@@ -136,7 +159,8 @@ def search_strategy(db_path, *, vault_id, q, limit, strategy,
     emb_hits = vector_index.query(db_path, vault_id=vault_id, embedder=embedder,
                                   text=q, limit=limit)
     if strategy == "embedding":
-        return hydrate(db_path, vault_id=vault_id, hits=emb_hits or fts_hits)
+        return hydrate(db_path, vault_id=vault_id, hits=emb_hits or fts_hits,
+                       visibility=visibility)
     fused = rrf_fuse([[h["relpath"] for h in fts_hits],
                       [h["relpath"] for h in emb_hits]])
     meta = {h["relpath"]: h for h in (fts_hits + emb_hits)}
@@ -145,7 +169,7 @@ def search_strategy(db_path, *, vault_id, q, limit, strategy,
         row = dict(meta.get(relpath, {"relpath": relpath}))
         row["score"] = round(score, 4)
         out.append(row)
-    return hydrate(db_path, vault_id=vault_id, hits=out)
+    return hydrate(db_path, vault_id=vault_id, hits=out, visibility=visibility)
 
 
 def _score(q_tokens: list[str], note: sqlite3.Row, tags: list[str]) -> float:
