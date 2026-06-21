@@ -140,6 +140,7 @@ If the user input matches an op keyword, prefer that op over the wizard:
 | "visibility get", "visibility set", "공개 설정", "비공개 설정", "visibility"       | `visibility`                                                    |
 | "inbox add", "inbox list", "inbox run", "큐에 추가", "inbox"                       | `inbox`                                                         |
 | "fetch", "fetch this url", "url 가져와", "페이지 가져와"                           | `fetch`                                                         |
+| "connections", "의외의 연결점", "어떤 주제들이 이어지나", "what links my topics"   | `connections` → `commands/connections.md`                       |
 
 ### Multi-step requests
 
@@ -176,3 +177,4 @@ Always confirm before writing. Show the proposed slug + destination first.
 - `references/socratic-dialog.md` — question tone and patterns
 - `references/adapter-spec.md` — guide for adding new adapter types
 - `references/frontmatter.md` — YAML field definitions
+- `commands/connections.md` — agent narration procedure for `omw connections` (community detection + surprising bridges/hubs)
