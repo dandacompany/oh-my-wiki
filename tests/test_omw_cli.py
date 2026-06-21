@@ -382,10 +382,6 @@ def test_links_link_missing_page_exits_1(tmp_path, monkeypatch, capsys):
     assert "not found" in capsys.readouterr().err.lower()
 
 
-import json
-from scripts import omw_cli, registry
-
-
 def _fields_vault(tmp_path, monkeypatch):
     monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw"))
     from scripts.paths import registry_path

@@ -71,7 +71,6 @@ def test_hits_never_searches_under_llm(monkeypatch):
 
     # Patch scripts.config inside the module so _hits sees llm strategy
     import scripts.config as real_config
-    original_load = real_config.load_config
     monkeypatch.setattr(real_config, "load_config",
                         lambda: {"recall": {"strategy": "llm"}})
 
