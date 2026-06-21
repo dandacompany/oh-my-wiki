@@ -302,3 +302,26 @@ def test_refresh_embeddings_warns_on_failure_not_silent(tmp_path, monkeypatch, c
     n = reindex.refresh_embeddings(db, vault_id=vid, relpaths=["wiki/a.md"])
     assert n == 0                                  # best-effort, did not raise
     assert "embedding refresh failed" in capsys.readouterr().err   # but warned (not silent)
+
+
+def test_refresh_embeddings_warns_on_config_failure_not_raise(tmp_path, monkeypatch, capsys):
+    from scripts import reindex
+    monkeypatch.setattr("scripts.config.load_config",
+                        lambda: (_ for _ in ()).throw(RuntimeError("bad config.yaml")))
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    n = reindex.refresh_embeddings(db, vault_id=vid)        # must NOT raise
+    assert n == 0 and "embedding refresh failed" in capsys.readouterr().err
+
+
+def test_incremental_surfaces_embedding_config_failure(tmp_path, monkeypatch, capsys):
+    from scripts import reindex
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    (root / "wiki").mkdir(parents=True, exist_ok=True)
+    (root / "wiki" / "a.md").write_text("---\ntitle: A\ndate: 2026-01-01\ntype: concept\ntags: [x]\n---\nb\n", encoding="utf-8")
+    reindex.full(db, vault_id=vid)
+    # now break config so the changed-page embedding attempt fails
+    monkeypatch.setattr("scripts.config.load_config",
+                        lambda: (_ for _ in ()).throw(RuntimeError("bad config")))
+    (root / "wiki" / "a.md").write_text("---\ntitle: A2\ndate: 2026-01-02\ntype: concept\ntags: [x]\n---\nchanged\n", encoding="utf-8")
+    reindex.incremental(db, vault_id=vid)                    # must NOT raise
+    assert "embedding refresh failed" in capsys.readouterr().err   # surfaced, not silent
