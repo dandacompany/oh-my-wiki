@@ -20,8 +20,10 @@ from scripts import maint
 
 MARKER = "omw-recall"
 
-#: retrieval strategies (축 2). `fts`, `embedding`, and `hybrid` are implemented;
-#: `llm` is planned and falls back to `fts` (see references/auto-recall-hook-design.md §10).
+#: retrieval strategies (축 2). All of `fts`, `embedding`, `hybrid`, `llm` are
+#: implemented; only an unknown/unconfigured strategy falls back to `fts`
+#: (see references/auto-recall-hook-design.md §10). `llm` is agent-delegated guidance
+#: (advisory-natured — the hook emits an instruction and makes no LLM/API call).
 STRATEGIES = ("fts", "embedding", "hybrid", "llm")
 LLM_SUBMODES = ("route", "generative")
 _IMPLEMENTED_STRATEGIES = {"fts", "embedding", "hybrid", "llm"}
@@ -34,15 +36,14 @@ _DEFAULTS = {"mode": "auto", "strategy": "fts", "llm_submode": "route",
 
 
 def effective_strategy(strategy: str, *, quiet: bool = False) -> str:
-    """Resolve the configured strategy to one that's implemented. Unimplemented
-    strategies (embedding/hybrid/llm) gracefully fall back to fts — so users can
-    already *select* the mode before the engines land. `quiet=True` on the
-    per-prompt hot path (the wizard already warns once at config time); the note
-    is only useful on explicit `omw recall`/setup invocations."""
+    """Resolve the configured strategy to an implemented one. All named STRATEGIES
+    (fts/embedding/hybrid/llm) are implemented; only an unrecognized strategy falls
+    back to `fts`. `quiet=True` on the per-prompt hot path; the note is only useful
+    on explicit `omw recall`/setup invocations."""
     if strategy in _IMPLEMENTED_STRATEGIES:
         return strategy
-    if strategy in STRATEGIES and not quiet:
-        print(f"omw recall: strategy '{strategy}' is planned, not implemented yet "
+    if strategy in STRATEGIES and not quiet:  # reserved for a future not-yet-built strategy
+        print(f"omw recall: strategy '{strategy}' is not yet implemented "
               f"— using 'fts'. (references/auto-recall-hook-design.md §10)", file=sys.stderr)
     return "fts"
 
