@@ -115,8 +115,16 @@ def detect(edges):
 
 def analyze(db_path, *, vault_id: int, min_bridge_score: int = 0) -> dict:
     """Communities + bridges (cross-community edges) + hubs (nodes adjacent to ≥2
-    communities) over the vault's resolved link graph. Read-only; never raises."""
-    edges = links.graph(db_path, vault_id)
+    communities) over the vault's resolved link graph. Read-only; never raises.
+
+    Only wiki-layer pages are considered: edges where either endpoint does not start
+    with 'wiki/' or is a META page (index, log) are dropped before graph construction."""
+    rows = links.graph(db_path, vault_id)
+    edges = [r for r in (rows or [])
+             if str(r.get("src_relpath", "")).startswith("wiki/")
+             and str(r.get("dst_relpath", "")).startswith("wiki/")
+             and r.get("src_relpath") not in _META
+             and r.get("dst_relpath") not in _META]
     adj, deg = _build_graph(edges)
     labels, modularity = detect(edges)
     if not adj:
