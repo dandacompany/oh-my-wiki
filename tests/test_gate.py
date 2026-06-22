@@ -188,7 +188,7 @@ REPO = Path(__file__).resolve().parents[1]
 
 
 def test_skill_documents_gate_note():
-    skill = (REPO / "omw" / "SKILL.md").read_text(encoding="utf-8")
+    skill = (REPO / "SKILL.md").read_text(encoding="utf-8")
     assert "omw gate note" in skill
     assert "foreground" in skill and "background" in skill
 
