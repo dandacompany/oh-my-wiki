@@ -67,3 +67,24 @@ def note(kind: str, *, now: datetime, ttl_min: int = 120) -> dict:
     state["markers"].append({"kind": kind, "at": now.isoformat()})
     save_state(state)
     return state
+
+
+DEFAULT_THRESHOLD = {"stale": 1, "lint": 3}
+
+
+def debt_pending(maint_status: dict, *, threshold: dict) -> list[str]:
+    stale = (maint_status.get("stale", 0) or 0) + (maint_status.get("expired", 0) or 0)
+    lint = maint_status.get("lint_issues", 0) or 0
+    if stale >= threshold.get("stale", 1) or lint >= threshold.get("lint", 3):
+        return ["upkeep"]
+    return []
+
+
+def marker_pending(markers: list[dict]) -> list[str]:
+    kinds = {m.get("kind") for m in markers}
+    out = []
+    if kinds & {"research", "synthesis", "ingest"}:
+        out += ["capture", "reindex"]
+    if "recall-stale" in kinds:
+        out += ["recall"]
+    return out

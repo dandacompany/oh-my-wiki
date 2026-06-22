@@ -34,3 +34,19 @@ def test_load_state_on_corrupt_returns_default(tmp_path, monkeypatch):
     (tmp_path / "gate-state.json").write_text("{not json", encoding="utf-8")
     st = gate.load_state()
     assert st == {"markers": [], "last_prompt_at": None, "snooze_until": None}
+
+
+def test_debt_pending_respects_threshold():
+    below = {"stale": 0, "expired": 0, "lint_issues": 2, "nudge": ""}
+    assert gate.debt_pending(below, threshold={"stale": 1, "lint": 3}) == []
+    above_lint = {"stale": 0, "expired": 0, "lint_issues": 3, "nudge": ""}
+    assert gate.debt_pending(above_lint, threshold={"stale": 1, "lint": 3}) == ["upkeep"]
+    above_stale = {"stale": 1, "expired": 0, "lint_issues": 0, "nudge": ""}
+    assert gate.debt_pending(above_stale, threshold={"stale": 1, "lint": 3}) == ["upkeep"]
+
+
+def test_marker_pending_maps_kinds_stably():
+    markers = [{"kind": "synthesis", "at": "x"}, {"kind": "ingest", "at": "y"},
+               {"kind": "recall-stale", "at": "z"}]
+    assert gate.marker_pending(markers) == ["capture", "reindex", "recall"]
+    assert gate.marker_pending([]) == []
