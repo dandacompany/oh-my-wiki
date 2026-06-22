@@ -1,9 +1,6 @@
-# Meta/planning artifacts excluded from distribution (ignore everything under docs/
 # except the published tutorial showcase + the full-feature reference)
-docs/*
-!docs/tutorial-omw/
-!docs/tutorial-reference/
-!docs/cron-maintenance.md
+# Meta/planning + generated tutorials: docs/ is local-only, never distributed
+docs/
 
 # Claude Code / AI agent instructions and memory (local-only, never publish)
 CLAUDE.md

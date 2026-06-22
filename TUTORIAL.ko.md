@@ -641,12 +641,20 @@ omw setup recall
 - `recall.mode` — _언제_ 작동하나:
   - `auto` — 매 프롬프트마다 활성 볼트를 검색해, 관련 페이지가 있으면 `<omw-recall>`
     블록(제목·경로·태그·출처)을 주입해 에이전트가 그 근거로 답하게 합니다.
-  - `advisory` — 훅은 넛지만 주고, 세션 내 에이전트가 직접 `omw find`를 쓸지 판단합니다
-    (이미 그 에이전트가 LLM이므로 추가 비용 0).
+  - `advisory` — 훅은 강한 히트가 있을 때 여전히 검색하여 `<omw-recall>` 블록을 주입합니다;
+    임계값을 만족하는 강한 히트가 없을 때만 `omw find`를 권유하는 한 줄 넛지로 폴백합니다.
+    (auto vs advisory의 차이는 강한 히트가 없을 때: auto는 조용히 넘어가고, advisory는 넛지를 남깁니다.)
   - `off` — 비활성.
-- `recall.strategy` — _어떻게_ 검색하나: `fts`(키워드 + 한국어 조사 정규화, 현재 구현) ·
-  `embedding` · `hybrid` · `llm`. 뒤 셋은 계획 단계로, 구현 전까지는 `fts`로 폴백하므로
-  지금 선택해 둘 수 있습니다.
+- `recall.strategy` — _어떻게_ 검색하나:
+  - `fts` — 키워드 + 한국어 조사 정규화 (결정론적, 기본값).
+  - `embedding` — sqlite-vec를 통한 시맨틱 벡터 검색. `omw setup recall
+--embed-provider openai` (또는 `fake`)로 provider를 설정해야 동작. provider 미설정 시
+    키워드(FTS) 결과로 폴백합니다.
+  - `hybrid` — fts + embedding의 RRF 융합. 임베딩 provider 미설정 시 사실상 FTS로 동작합니다.
+  - `llm` — 에이전트 위임: recall 훅이 `<omw-recall>` 지시를 내보내고, 세션 내 에이전트가
+    직접 검색합니다. `recall.llm.submode`로 서브모드 선택 가능: `route`(에이전트가 키워드
+    vs 시맨틱을 판단 후 `omw find` 실행) · `generative`(에이전트가 후보를 읽어 진짜 관련
+    항목만 남김). 알 수 없는 전략은 `fts`로 폴백합니다.
 
 예시 — 위키에 있는 주제를 물으면(예: "수요 예측에서 ARIMA와 Prophet 비교") 에이전트는
 다음을 받습니다:
@@ -667,23 +675,25 @@ omw setup recall
 
 ## Part 5 — 레퍼런스
 
-### CLI 서브커맨드 (13개)
+### CLI 서브커맨드
 
-| 서브커맨드      | 인터페이스 | 한 줄 설명                                                                 |
-| --------------- | ---------- | -------------------------------------------------------------------------- |
-| `omw status`    | CLI        | 레지스트리 상태 표시: vault 수, 활성 vault, `needs` 코드                   |
-| `omw vault`     | CLI        | Vault 관리: `create`, `list`, `use`, `forget`                              |
-| `omw lint`      | CLI        | 결정론적 vault 건강 검사 (frontmatter + links + drift)                     |
-| `omw search`    | CLI        | 설정된 외부 provider를 통한 웹 검색 (brave/tavily/exa/…)                   |
-| `omw serve`     | CLI        | 로컬 읽기 전용 HTTP 쿼리 API 시작 (포트 8765)                              |
-| `omw schema`    | CLI        | 페이지 타입 스키마 표시: `list`, `show <type>`                             |
-| `omw supersede` | CLI        | 페이지를 `status: superseded` + `superseded_by: <slug>`로 표시             |
-| `omw review`    | CLI        | 간격 반복 대기열: `due`, `done`                                            |
-| `omw links`     | CLI        | 엔티티 자동 링크: `suggest`, `link`                                        |
-| `omw fields`    | CLI        | 페이지의 frontmatter + 인라인 `key:: value` 필드 표시                      |
-| `omw import`    | CLI        | 폴더 / Obsidian vault / Notion export 가져오기                             |
-| `omw setup`     | CLI        | 대화형 마법사: vault, 검색, serve, persona, import, viewer, agents, recall |
-| `omw doctor`    | CLI        | omw 설정 + 설치 건강 상태 검증                                             |
+| 서브커맨드        | 인터페이스 | 한 줄 설명                                                                                                                                                                                     |
+| ----------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `omw status`      | CLI        | 레지스트리 상태 표시: vault 수, 활성 vault, `needs` 코드                                                                                                                                       |
+| `omw vault`       | CLI        | Vault 관리: `create`, `list`, `use`, `forget`                                                                                                                                                  |
+| `omw lint`        | CLI        | 결정론적 vault 건강 검사 (frontmatter + links + drift)                                                                                                                                         |
+| `omw search`      | CLI        | 설정된 외부 provider를 통한 웹 검색 (brave/tavily/exa/…)                                                                                                                                       |
+| `omw serve`       | CLI        | 로컬 읽기 전용 HTTP 쿼리 API 시작 (포트 8765)                                                                                                                                                  |
+| `omw schema`      | CLI        | 페이지 타입 스키마 표시: `list`, `show <type>`                                                                                                                                                 |
+| `omw supersede`   | CLI        | 페이지를 `status: superseded` + `superseded_by: <slug>`로 표시                                                                                                                                 |
+| `omw review`      | CLI        | 간격 반복 대기열: `due`, `done`                                                                                                                                                                |
+| `omw links`       | CLI        | 엔티티 자동 링크: `suggest`, `link`                                                                                                                                                            |
+| `omw fields`      | CLI        | 페이지의 frontmatter + 인라인 `key:: value` 필드 표시                                                                                                                                          |
+| `omw import`      | CLI        | 폴더 / Obsidian vault / Notion export 가져오기                                                                                                                                                 |
+| `omw setup`       | CLI        | 대화형 마법사: vault, 검색, serve, persona, import, viewer, agents, recall                                                                                                                     |
+| `omw doctor`      | CLI        | omw 설정 + 설치 건강 상태 검증                                                                                                                                                                 |
+| `omw connections` | CLI        | 위키 링크 그래프에 대한 커뮤니티 감지; 커뮤니티·브리지(크로스 커뮤니티 링크)·허브(≥2 커뮤니티 연결 페이지)를 표시합니다. 읽기 전용 JSON.                                                       |
+| `omw maint`       | CLI        | 지식 관리 상태: `omw maint status [--vault] [--exit-code]`으로 만료/오래된 페이지 + lint 이슈를 집계하고 한 줄 넛지를 출력합니다. `--exit-code`는 작업이 필요하면 1을 반환합니다(cron 친화적). |
 
 추론 작업(`ingest`, `query`, `find`, `edit`, `autoresearch`, persona)은
 Claude / Codex / Gemini 세션이 필요합니다. 에이전트 세션에서 자연어로 사용하세요.

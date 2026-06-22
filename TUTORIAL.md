@@ -659,13 +659,23 @@ Two axes you can configure:
   - `auto` — the hook searches the active vault on every prompt and, when a page
     is relevant, injects an `<omw-recall>` block (title · path · tags · citations)
     for the agent to ground its answer on.
-  - `advisory` — the hook only nudges; the in-session agent decides whether to
-    run `omw find` itself (no extra cost — the agent is already the LLM).
+  - `advisory` — the hook still searches and injects a strong hit when one is
+    found (score ≥ min_score); it falls back to a one-line nudge (suggesting
+    `omw find`) only when no strong hit meets the threshold. (auto vs advisory
+    differ mainly when there is no strong hit: auto stays silent, advisory nudges.)
   - `off` — disabled.
-- `recall.strategy` — _how_ it retrieves: `fts` (keyword + Korean-josa
-  normalization, implemented today) · `embedding` · `hybrid` · `llm`. The latter
-  three are planned and fall back to `fts` until shipped, so you can already
-  select them.
+- `recall.strategy` — _how_ it retrieves:
+  - `fts` — keyword + Korean-josa normalization (deterministic, default).
+  - `embedding` — semantic vector search via sqlite-vec; set a provider with
+    `omw setup recall --embed-provider openai` (or `fake`). Without a provider
+    it falls back to keyword (FTS) results.
+  - `hybrid` — RRF fusion of fts + embedding; without an embedding provider it
+    is effectively FTS.
+  - `llm` — agent-delegated: the recall hook emits an `<omw-recall>` instruction;
+    the in-session agent does the retrieval. Submodes via `recall.llm.submode`:
+    `route` (agent picks keyword vs semantic, then `omw find`) · `generative`
+    (agent pulls candidates, reads them, keeps only genuinely relevant).
+    Unknown strategies fall back to `fts`.
 
 What you'll see — ask something whose topic is in the wiki (e.g. "compare ARIMA
 and Prophet for demand forecasting") and the agent receives:
@@ -686,23 +696,25 @@ so its answer cites your own vetted, sourced page instead of guessing.
 
 ## Part 5 — Reference
 
-### CLI subcommands (13)
+### CLI subcommands
 
-| Subcommand      | Surface | One-line description                                                               |
-| --------------- | ------- | ---------------------------------------------------------------------------------- |
-| `omw status`    | CLI     | Show registry state: vault count, active vault, `needs` code                       |
-| `omw vault`     | CLI     | Vault management: `create`, `list`, `use`, `forget`                                |
-| `omw lint`      | CLI     | Deterministic vault health check (frontmatter + links + drift)                     |
-| `omw search`    | CLI     | Web search via the configured external provider (brave/tavily/exa/…)               |
-| `omw serve`     | CLI     | Start the local retrieve-only HTTP query API (port 8765)                           |
-| `omw schema`    | CLI     | Show page-type schemas: `list`, `show <type>`                                      |
-| `omw supersede` | CLI     | Mark a page `status: superseded` + `superseded_by: <slug>`                         |
-| `omw review`    | CLI     | Spaced-repetition queue: `due`, `done`                                             |
-| `omw links`     | CLI     | Entity auto-link: `suggest`, `link`                                                |
-| `omw fields`    | CLI     | Show a page's frontmatter + inline `key:: value` fields                            |
-| `omw import`    | CLI     | Import a folder / Obsidian vault / Notion export                                   |
-| `omw setup`     | CLI     | Interactive wizard: vault, search, serve, personas, import, viewer, agents, recall |
-| `omw doctor`    | CLI     | Validate omw config + install health                                               |
+| Subcommand        | Surface | One-line description                                                                                                                                                                                  |
+| ----------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `omw status`      | CLI     | Show registry state: vault count, active vault, `needs` code                                                                                                                                          |
+| `omw vault`       | CLI     | Vault management: `create`, `list`, `use`, `forget`                                                                                                                                                   |
+| `omw lint`        | CLI     | Deterministic vault health check (frontmatter + links + drift)                                                                                                                                        |
+| `omw search`      | CLI     | Web search via the configured external provider (brave/tavily/exa/…)                                                                                                                                  |
+| `omw serve`       | CLI     | Start the local retrieve-only HTTP query API (port 8765)                                                                                                                                              |
+| `omw schema`      | CLI     | Show page-type schemas: `list`, `show <type>`                                                                                                                                                         |
+| `omw supersede`   | CLI     | Mark a page `status: superseded` + `superseded_by: <slug>`                                                                                                                                            |
+| `omw review`      | CLI     | Spaced-repetition queue: `due`, `done`                                                                                                                                                                |
+| `omw links`       | CLI     | Entity auto-link: `suggest`, `link`                                                                                                                                                                   |
+| `omw fields`      | CLI     | Show a page's frontmatter + inline `key:: value` fields                                                                                                                                               |
+| `omw import`      | CLI     | Import a folder / Obsidian vault / Notion export                                                                                                                                                      |
+| `omw setup`       | CLI     | Interactive wizard: vault, search, serve, personas, import, viewer, agents, recall                                                                                                                    |
+| `omw doctor`      | CLI     | Validate omw config + install health                                                                                                                                                                  |
+| `omw connections` | CLI     | Community detection over the wiki link graph; surfaces communities, bridges (cross-community links), and hubs (pages spanning ≥2 communities). Read-only JSON.                                        |
+| `omw maint`       | CLI     | Knowledge-maintenance status: `omw maint status [--vault] [--exit-code]` counts stale/expired pages + lint issues; prints a one-line nudge. `--exit-code` returns 1 when work is due (cron-friendly). |
 
 Reasoning-ops (`ingest`, `query`, `find`, `edit`, `autoresearch`, personas)
 require a Claude / Codex / Gemini session — use them by speaking naturally in
