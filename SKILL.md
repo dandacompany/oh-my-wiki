@@ -9,6 +9,24 @@ A storage-agnostic LLM Wiki skill. Implements Andrej Karpathy's three-layer patt
 
 **Short alias:** `OMW` (lowercase `omw`). Both `oh-my-wiki` and `omw` resolve to this skill.
 
+## ⛔ HARD RULES — read before doing ANYTHING (non-negotiable)
+
+1. **The `omw` CLI ONLY. NEVER call internals.** Run every operation through the `omw`
+   command (`omw status`, `omw vault create <name> --mode wiki --type <markdown|obsidian>`,
+   `omw vault use`, `omw search`, `omw fetch`, `omw ingest`, `omw query`, `omw connections`, …).
+   It is FORBIDDEN to run `python3 -m scripts.<anything>`, `python3 -c "from scripts import …"`,
+   or to import / execute `scripts/*.py` modules (registry, adapters, reindex, wizard, …)
+   directly. The `scripts/` package is an internal implementation detail, NOT a user interface.
+2. **Web search MUST go through `omw search "<query>"`.** It routes to the user's configured
+   provider and keeps the wiki's provenance intact. Do NOT use your own / native web-search
+   tool for OMW work.
+3. **Create vaults ONLY with `omw vault create <name> --mode wiki --type <markdown|obsidian>`** —
+   never construct a vault by calling registry/adapters yourself.
+4. **Ingest sources with `omw fetch <URL>` or `omw ingest`** — never hand-write files into `raw/`.
+
+> If you catch yourself about to write `python3 -c`, `python3 -m scripts`, or use a native web
+> search, STOP and use the matching `omw` command above instead.
+
 ## Current status — v1 shipped, v2 in progress
 
 v1 (Plans A + B + C) is complete: dispatcher + foundation scripts, vault management (`vault-setup`, `vault-use`, `vault-list`, `vault-forget`, `vault-import-memo`), memo-mode ops (`create`, `find`, `open`, `edit`, `move`, `delete`), wiki-mode ops (`ingest`, `query`), and the common `lint` op (with wiki-mode structural extensions). 91 pytest tests pass on GitHub Actions matrix (Python 3.10/3.11/3.12 × ubuntu/macos). See `README.md`, `TUTORIAL.md`, `TUTORIAL.ko.md` for usage.
