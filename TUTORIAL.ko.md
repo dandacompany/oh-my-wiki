@@ -86,6 +86,22 @@ bash bin/install.sh
 재실행해도 안전합니다. `--force`를 사용하면 프롬프트 없이 기존 symlink를 교체합니다.
 전체 플래그는 `bash bin/install.sh --help`로 확인하세요.
 
+### Path D — PyPI (`pip` / `pipx`)
+
+레포를 클론하지 않고 [PyPI](https://pypi.org/project/oh-my-wiki/)에서 `omw` CLI를
+설치합니다:
+
+```bash
+pipx install oh-my-wiki        # 격리된 CLI (권장)
+# 또는
+pip install oh-my-wiki         # 현재 환경에 설치
+```
+
+배포되는 wheel은 self-contained입니다 — schemas, personas, backends, 그리고 전체
+스킬을 함께 담고 있어 바로 동작하는 `omw`를 얻습니다. 설치 후 번들된 스킬을 에이전트에
+등록하려면 `omw setup agents`를 실행하세요. GitHub에서 직접 설치하는 것도 동일하게
+동작합니다: `pipx install git+https://github.com/dandacompany/oh-my-wiki`.
+
 ### 설치 확인
 
 ```
@@ -785,9 +801,9 @@ omw setup
 레거시 `data/registry.db` 파일을 감지했을 때 나타납니다. `data/registry.db`가
 디스크에 존재하는 **소스 트리 체크아웃**에서 발생합니다.
 
-Skills CLI, 마켓플레이스, 또는 `bin/install.sh`로 설치한 실제 사용자는 새 머신에서
-`needs: "setup"`을 봅니다. `data/`는 .gitignore 처리되어 배포 패키지에 포함되지 않기
-때문입니다.
+Skills CLI, 마켓플레이스, PyPI(`pip`/`pipx`), 또는 `bin/install.sh`로 설치한 실제
+사용자는 새 머신에서 `needs: "setup"`을 봅니다. `data/`는 .gitignore 처리되어 배포
+패키지에 포함되지 않기 때문입니다.
 
 > **참고:** `OMW_HOME` 오버라이드(예: `export OMW_HOME=$(mktemp -d)/.omw`)는 소스 트리에서
 > 실행할 때 깨끗한 사용자 환경을 시뮬레이션하지 **않습니다**. 레거시 감지는 `OMW_HOME`과

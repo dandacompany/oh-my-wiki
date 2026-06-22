@@ -87,6 +87,23 @@ The installer:
 It is safe to re-run. Use `--force` to replace existing symlinks without a
 prompt. Run `bash bin/install.sh --help` for all flags.
 
+### Path D — PyPI (`pip` / `pipx`)
+
+Install the `omw` CLI from [PyPI](https://pypi.org/project/oh-my-wiki/) without
+cloning the repo:
+
+```bash
+pipx install oh-my-wiki        # isolated CLI (recommended)
+# or
+pip install oh-my-wiki         # into the current environment
+```
+
+The published wheel is self-contained — it bundles the schemas, personas,
+backends, and the full skill — so you get a working `omw` immediately. To
+register the bundled skill with your agents afterwards, run `omw setup agents`.
+Installing straight from GitHub works the same way:
+`pipx install git+https://github.com/dandacompany/oh-my-wiki`.
+
 ### Verify the install
 
 ```
@@ -807,9 +824,9 @@ reports `ok`.
 file in the skill directory (or `<cwd>/data/registry.db`). This happens in a
 **source-tree checkout** where `data/registry.db` is present on disk.
 
-Real end-users who install via Skills CLI, marketplace, or `bin/install.sh`
-see `needs: "setup"` on a fresh machine — `data/` is gitignored and not
-included in the distributed package.
+Real end-users who install via Skills CLI, marketplace, PyPI (`pip`/`pipx`), or
+`bin/install.sh` see `needs: "setup"` on a fresh machine — `data/` is gitignored
+and not included in the distributed package.
 
 > **Note:** Overriding `OMW_HOME` (e.g. `export OMW_HOME=$(mktemp -d)/.omw`)
 > does **not** simulate a clean end-user environment when running from a source
