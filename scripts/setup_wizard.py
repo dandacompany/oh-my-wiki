@@ -446,6 +446,26 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     return 0
 
 
+def setup_gate(mode="enforce", hosts=None, noninteractive=False) -> int:
+    """Configure gate.mode and wire/unwire the Stop hook on each host."""
+    import json
+    from scripts import config, gate, recall
+    if mode not in ("off", "advisory", "enforce"):
+        print(f"error: invalid mode {mode!r}", flush=True)
+        return 1
+    config.set_config("gate.mode", mode)
+    hosts = hosts or list(recall.host_hook_configs().keys())
+    results = {}
+    for h in hosts:
+        if mode == "off":
+            changed, detail = gate.unwire_host(h)
+        else:
+            changed, detail = gate.wire_host(h)
+        results[h] = detail
+    print(json.dumps({"gate.mode": mode, "hosts": results}, ensure_ascii=False))
+    return 0
+
+
 def configure_recall(*, strategy="fts", provider="none", model="text-embedding-3-small",
                      dim=1536, mode=None, submode: str | None = None,
                      noninteractive=False) -> None:

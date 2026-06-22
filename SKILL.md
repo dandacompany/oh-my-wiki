@@ -132,6 +132,31 @@ These hold across all commands. Each `commands/<op>.md` repeats the relevant one
 - **SMB-mounted vaults** (e.g. `/Volumes/...`): use `rsync -rlpt` rather than `cp`. Never `cp -a` on SMB.
 - **Recommended option goes first** in any AskUserQuestion list and is suffixed with `(추천)` / `(recommended)`.
 
+## Maintenance gate (opt-in)
+
+When the user has enabled the gate (`omw setup gate --enable`), help it work:
+
+- **Drop a breadcrumb when you finish a unit of knowledge work** so the turn-end
+  gate knows real work happened — run exactly one of:
+  - `omw gate note research` — after gathering external sources/research
+  - `omw gate note synthesis` — after composing a synthesis/summary
+  - `omw gate note ingest` — after pulling a source into raw/
+  - `omw gate note recall-stale` — when a page you recalled looks out of date
+    Only note a _completed_ unit, not mid-thought. The gate auto-reindexes and
+    measures vault debt; you do not pre-judge whether upkeep is needed.
+
+- **When the gate opens** (an `<omw-gate>` block appears at turn end), ask the
+  user whether to run the upkeep/capture cycle **now (foreground)**, in the
+  **background** (`omw team-run <bg_team>`), or **later**. Show only the pending
+  parts the block lists.
+  - Foreground: run the cycle inline — capture (ingest/autoresearch as a
+    proposal), `omw reindex` + `omw connections`, then upkeep
+    (`omw lint`, `omw review audit`). **Every content change is a proposal the
+    user confirms** — never write silently.
+  - Background: dispatch `omw team-run`; read-only steps run, writes are staged
+    as proposals for later confirmation.
+  - Later: do nothing; the gate snoozes itself.
+
 ## Trigger-phrase routing hint
 
 If the user input matches an op keyword, prefer that op over the wizard:
@@ -163,6 +188,7 @@ If the user input matches an op keyword, prefer that op over the wizard:
 | "fetch", "fetch this url", "url 가져와", "페이지 가져와"                           | `fetch`                                                         |
 | "connections", "의외의 연결점", "어떤 주제들이 이어지나", "what links my topics"   | `connections` → `commands/connections.md`                       |
 | `recall.strategy=llm` (hook emits `<omw-recall>` instruction)                      | agent retrieval procedure → `commands/recall-llm.md`            |
+| "run upkeep", "maintenance gate", an `<omw-gate>` block appears                    | gate cycle → `commands/gate.md`                                 |
 
 ### Multi-step requests
 
