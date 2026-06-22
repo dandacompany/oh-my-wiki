@@ -56,3 +56,32 @@ def legacy_registry_candidates() -> list[Path]:
     [<skill_dir>/data/registry.db, <cwd>/data/registry.db]."""
     skill_dir = Path(__file__).resolve().parent.parent
     return [skill_dir / "data" / "registry.db", Path.cwd() / "data" / "registry.db"]
+
+
+# ---------------------------------------------------------------------------
+# Bundled data resolver (dev checkout vs installed wheel)
+# ---------------------------------------------------------------------------
+
+_PKG_DIR = Path(__file__).resolve().parent            # .../scripts
+_REPO_ROOT = _PKG_DIR.parent                          # repo root (dev/skill checkout)
+_bundled_root_cache: "Path | None" = None
+
+
+def bundled_root() -> Path:
+    """Base dir for bundled data (schemas/personas/backends/commands/omw/.claude-plugin).
+
+    Dev + skill-copy checkouts keep the data at the repo root (authoritative); an
+    installed wheel ships it under <scripts>/_bundle.  Prefer the root, fall back to
+    the package bundle.
+    """
+    global _bundled_root_cache
+    if _bundled_root_cache is None:
+        _bundled_root_cache = (
+            _REPO_ROOT if (_REPO_ROOT / "schemas").is_dir() else (_PKG_DIR / "_bundle")
+        )
+    return _bundled_root_cache
+
+
+def bundled_dir(name: str) -> Path:
+    """Return bundled_root() / name."""
+    return bundled_root() / name

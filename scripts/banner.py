@@ -38,8 +38,8 @@ def version() -> str:
         return m.version("oh-my-wiki")
     except Exception:
         import json
-        from pathlib import Path
-        pj = Path(__file__).resolve().parents[1] / ".claude-plugin" / "plugin.json"
+        from scripts import paths
+        pj = paths.bundled_root() / ".claude-plugin" / "plugin.json"
         try:
             return json.loads(pj.read_text(encoding="utf-8")).get("version", "0.0.0")
         except Exception:
