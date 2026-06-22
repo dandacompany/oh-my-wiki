@@ -11,13 +11,13 @@ from scripts import embed, frontmatter, fts, links, registry, schema, vector_ind
 
 def full(db_path: Path, *, vault_id: int) -> int:
     """Rescan everything. Returns number of notes indexed."""
-    vault_path = _vault_path(db_path, vault_id)
+    vault_path = registry.get_vault_root(db_path, vault_id)
     return _scan(db_path, vault_id, vault_path, incremental=False)["indexed"]
 
 
 def incremental(db_path: Path, *, vault_id: int) -> int:
     """Only upsert files whose mtime exceeds the recorded one."""
-    vault_path = _vault_path(db_path, vault_id)
+    vault_path = registry.get_vault_root(db_path, vault_id)
     res = _scan(db_path, vault_id, vault_path, incremental=True)
     changed_wiki = [r for r in res["changed"] if r.startswith("wiki/")]
     if changed_wiki:
@@ -70,19 +70,6 @@ def refresh_embeddings(db_path: Path, *, vault_id: int, relpaths: list[str] | No
             file=sys.stderr,
         )
         return 0
-
-
-def _vault_path(db_path: Path, vault_id: int) -> Path:
-    conn = registry.connect(db_path)
-    try:
-        row = conn.execute(
-            "SELECT path FROM vaults WHERE id = ?", (vault_id,)
-        ).fetchone()
-        if not row:
-            raise registry.VaultError(f"vault id {vault_id} not found")
-        return Path(row[0])
-    finally:
-        conn.close()
 
 
 def _existing_mtimes(db_path: Path, vault_id: int) -> dict[str, float]:
@@ -202,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--full", action="store_true", help="full rescan (default: incremental)")
     args = parser.parse_args(argv)
     db = Path(args.db) if args.db else registry_path()
-    vault_path = _vault_path(db, args.vault_id)
+    vault_path = registry.get_vault_root(db, args.vault_id)
     result = _scan(db, args.vault_id, vault_path, incremental=not args.full)
     fts_errors = result.get("fts_errors") or []
     if fts_errors:

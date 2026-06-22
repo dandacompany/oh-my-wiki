@@ -7,12 +7,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts import frontmatter, reindex
+from scripts import frontmatter, registry, reindex
 
 
 def mark_superseded(db_path: Path, *, vault_id: int, relpath: str, by_slug: str) -> dict:
     """Set status: superseded + superseded_by on a page, then reindex. Idempotent."""
-    root = reindex._vault_path(db_path, vault_id)  # raises VaultError if vault is unknown
+    root = registry.get_vault_root(db_path, vault_id)  # raises VaultError if vault is unknown
     abs_path = root / relpath
     if not abs_path.exists():
         raise FileNotFoundError(f"page not found: {relpath}")

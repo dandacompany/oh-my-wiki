@@ -189,3 +189,16 @@ def test_cascade_delete_vault_removes_notes(tmp_db, tmp_path):
     conn = sqlite3.connect(tmp_db)
     n = conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
     assert n == 0
+
+
+def test_get_vault_root_returns_path_and_raises_for_missing(tmp_path):
+    from pathlib import Path
+    from scripts import registry
+    db = tmp_path / "r.db"
+    registry.init_db(db)
+    root = tmp_path / "v"; root.mkdir()
+    v = registry.add_vault(db, name="v", path=str(root), type_="markdown", mode="wiki")
+    assert registry.get_vault_root(db, v["id"]) == Path(str(root)).resolve()
+    import pytest
+    with pytest.raises(registry.VaultError):
+        registry.get_vault_root(db, 99999)   # missing id

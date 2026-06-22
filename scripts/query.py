@@ -22,16 +22,7 @@ def write_synthesis(
     `summary` (if given) lands in frontmatter — it lifts search/recall ranking
     (the FTS scorer weights summary heavily) and feeds the index/hot cache.
     """
-    conn = registry.connect(db_path)
-    try:
-        row = conn.execute(
-            "SELECT path FROM vaults WHERE id = ?", (vault_id,)
-        ).fetchone()
-    finally:
-        conn.close()
-    if row is None:
-        raise registry.VaultError(f"unknown vault_id={vault_id}")
-    root = Path(row["path"])
+    root = registry.get_vault_root(db_path, vault_id)
 
     base = slugify.slugify(title)
     relpath = ingest._resolve_path(root, "wiki/syntheses", base, "md")

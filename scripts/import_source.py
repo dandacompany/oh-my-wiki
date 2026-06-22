@@ -20,17 +20,6 @@ _TEXT_EXTS = {".md", ".txt"}
 _IMPORT_EXTS = _TEXT_EXTS | {".pdf"}
 
 
-def _vault_root(db_path: Path, vault_id: int) -> Path:
-    conn = registry.connect(db_path)
-    try:
-        row = conn.execute("SELECT path FROM vaults WHERE id = ?", (vault_id,)).fetchone()
-    finally:
-        conn.close()
-    if row is None:
-        raise registry.VaultError(f"unknown vault_id={vault_id}")
-    return Path(row["path"])
-
-
 def _wiki_stub(title: str, *, date: str) -> str:
     return (f"---\ntitle: {title}\ntype: imported\ndate: {date}\ntags: []\n---\n\n")
 
@@ -43,7 +32,7 @@ def import_folder(db_path: Path, *, vault_id: int, src_dir, layer: str = "raw",
                   source: str = "folder") -> dict:
     """Import .md/.txt/.pdf from a folder (or Obsidian vault) into <layer>/import/."""
     src = Path(src_dir)
-    root = _vault_root(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     today = datetime.date.today().isoformat()
     imported, skipped = [], []
     for path in sorted(src.rglob("*")):
@@ -163,7 +152,7 @@ def import_notion(db_path: Path, *, vault_id: int, token: str, root_id: str,
     """Import a Notion page (and its child_page descendants) into <layer>/import/notion/."""
     if not token:
         raise ImportError_("Notion token required — run `omw setup import`")
-    root = _vault_root(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     today = datetime.date.today().isoformat()
     imported = []
 

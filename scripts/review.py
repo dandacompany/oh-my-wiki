@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from pathlib import Path
 
-from scripts import frontmatter, links, reindex
+from scripts import frontmatter, links, registry, reindex
 
 _TIERS = {"high": 90, "medium": 30, "low": 7}
 _EXEMPT = set(links.META_RELPATHS)
@@ -71,7 +71,7 @@ def _used_recently(last_used_iso, today: str, interval_days) -> bool:
 def record_use(db_path: Path, *, vault_id: int, relpaths, today: str) -> bool:
     """Stamp pages as used today in the vault usage side store (reactivates freshness)."""
     from scripts import usage
-    return usage.bump(reindex._vault_path(db_path, vault_id), relpaths, today)
+    return usage.bump(registry.get_vault_root(db_path, vault_id), relpaths, today)
 
 
 def _lint_signals(
@@ -122,7 +122,7 @@ def audit(db_path: Path, *, vault_id: int, today: str, apply: bool = False) -> l
     with the agent + user (propose → confirm → execute). apply=True writes flags/demotions, then reindexes.
     """
     from scripts import usage
-    root = reindex._vault_path(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     used = usage.last_used(root)
     lint_sig, lint_warning = _lint_signals(db_path, vault_id)
     out: list[dict] = []
@@ -197,7 +197,7 @@ def schedule_fields(today: str, interval_days: int) -> dict:
 def due_pages(db_path: Path, *, vault_id: int, today: str,
               include_unscheduled: bool = True) -> list[dict]:
     """Pages due for review on `today`. Unscheduled (no review block) → due."""
-    root = reindex._vault_path(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     out: list[dict] = []
     for md in sorted(root.rglob("*.md")):
         if ".trash" in md.parts:
@@ -226,7 +226,7 @@ def due_pages(db_path: Path, *, vault_id: int, today: str,
 def reschedule(db_path: Path, *, vault_id: int, relpath: str, grade: str,
                today: str) -> dict:
     """Re-verify outcome → recompute the schedule, write frontmatter, reindex."""
-    root = reindex._vault_path(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     abs_path = root / relpath
     if not abs_path.exists():
         raise FileNotFoundError(f"page not found: {relpath}")

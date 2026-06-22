@@ -12,14 +12,9 @@ _META_RELPATHS = set(links.META_RELPATHS)
 
 def check(db_path: Path, *, vault_id: int) -> dict:
     """Return a categorized report dict. Read-only."""
+    root = registry.get_vault_root(db_path, vault_id)
     conn = registry.connect(db_path)
     try:
-        vault_row = conn.execute(
-            "SELECT path FROM vaults WHERE id = ?", (vault_id,)
-        ).fetchone()
-        if vault_row is None:
-            raise registry.VaultError(f"unknown vault_id={vault_id}")
-        root = Path(vault_row["path"])
         rows = list(conn.execute(
             "SELECT relpath, mtime FROM notes WHERE vault_id = ?",
             (vault_id,),

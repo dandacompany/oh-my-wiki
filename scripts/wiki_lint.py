@@ -33,16 +33,7 @@ TERMINOLOGY_DRIFT_THRESHOLD = 0.85
 
 def check(db_path: Path, *, vault_id: int) -> dict:
     """Return wiki structural lint report. Read-only."""
-    conn = registry.connect(db_path)
-    try:
-        row = conn.execute(
-            "SELECT path FROM vaults WHERE id = ?", (vault_id,)
-        ).fetchone()
-    finally:
-        conn.close()
-    if row is None:
-        raise registry.VaultError(f"unknown vault_id={vault_id}")
-    root = Path(row["path"])
+    root = registry.get_vault_root(db_path, vault_id)
 
     pages = _scan_pages(root)
     return {

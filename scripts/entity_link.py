@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from scripts import frontmatter, links, reindex, text_match
+from scripts import frontmatter, links, registry, reindex, text_match
 
 _EXEMPT = set(links.META_RELPATHS)
 
@@ -29,7 +29,7 @@ def _in_span(pos: int, spans: list[tuple[int, int]]) -> bool:
 
 
 def _entities(db_path: Path, *, vault_id: int) -> list[dict]:
-    root = reindex._vault_path(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     ents: list[dict] = []
     for md in sorted(root.rglob("*.md")):
         if ".trash" in md.parts:
@@ -49,7 +49,7 @@ def _entities(db_path: Path, *, vault_id: int) -> list[dict]:
 
 
 def suggest_links(db_path: Path, *, vault_id: int, relpath=None) -> list[dict]:
-    root = reindex._vault_path(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     ents = _entities(db_path, vault_id=vault_id)
     for e in ents:
         e["pat"] = _name_pattern(e["names"])
@@ -81,7 +81,7 @@ def suggest_links(db_path: Path, *, vault_id: int, relpath=None) -> list[dict]:
 
 
 def apply_link(db_path: Path, *, vault_id: int, relpath: str, target_slug: str) -> dict:
-    root = reindex._vault_path(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     abs_path = root / relpath
     if not abs_path.exists():
         raise FileNotFoundError(f"page not found: {relpath}")
