@@ -489,8 +489,8 @@ def _cmd_gate(args) -> int:
         decision = gate.decide(state, st, now=now, cfg=cfg)
         out = gate.render(decision, mode=mode)
         if out:
-            gate.record_prompt(state, now=now)
             print(out)
+            gate.record_prompt(state, now=now)
     except Exception:
         return 0
     return 0

@@ -8,6 +8,7 @@ raises to the host. The engine takes an injected `now` for deterministic tests.
 from __future__ import annotations
 
 import json
+import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -167,14 +168,13 @@ def render(decision: dict, *, mode: str) -> str:
     return f"<{MARKER}>\n{body}\n</{MARKER}>"
 
 
-import shutil
-
-
 def _omw_bin() -> str:
     return shutil.which("omw") or "omw"
 
 
-def _gate_hook_specs() -> dict:
+def _gate_hook_specs(host: str) -> dict:
+    if host != "claude":
+        return {}
     omw = _omw_bin()
     return {"Stop": (f'"{omw}" gate check', "omw wiki upkeep gate")}
 
@@ -215,12 +215,14 @@ def wire_host(host, *, config_path=None) -> tuple[bool, str]:
     path = _host_path(host, config_path)
     if path is None:
         return False, f"unknown host {host!r}"
+    if not _gate_hook_specs(host):
+        return False, f"no turn-end gate hook for {host!r} (Phase 1: Claude Code only)"
     data, err = _load_host(path)
     if err:
         return False, err
     hooks = data.setdefault("hooks", {})
     added = []
-    for event, (command, status) in _gate_hook_specs().items():
+    for event, (command, status) in _gate_hook_specs(host).items():
         entries = hooks.setdefault(event, [])
         if _event_has_gate(entries):
             continue

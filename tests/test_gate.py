@@ -1,5 +1,12 @@
+import json
+import os
+import subprocess
+import sys
 from datetime import datetime, timedelta
+from pathlib import Path
+
 import pytest
+
 from scripts import gate
 
 
@@ -124,7 +131,14 @@ def test_render_advisory_is_softer():
     assert "offer" in out.lower()
 
 
-import json
+def test_wire_host_non_claude_skips_with_honest_message(tmp_path):
+    cfg = tmp_path / "hooks.json"
+    for host in ("codex", "gemini"):
+        ok, msg = gate.wire_host(host, config_path=cfg)
+        assert ok is False
+        assert "Phase 1" in msg or "Claude" in msg
+        # must NOT have written anything
+        assert not cfg.exists(), f"{host}: file should not have been created"
 
 
 def test_wire_host_is_idempotent(tmp_path):
@@ -160,9 +174,6 @@ def test_unwire_removes_only_gate(tmp_path):
     assert "echo keep" in cmds and not any("gate check" in c for c in cmds)
 
 
-import subprocess, sys, os
-
-
 def _run(args, env):
     return subprocess.run([sys.executable, "-m", "scripts.omw_cli", *args],
                           capture_output=True, text=True, env=env)
@@ -181,8 +192,6 @@ def test_cli_note_records_marker(tmp_path):
     assert r.returncode == 0 and '"noted": "synthesis"' in r.stdout
     assert (tmp_path / "gate-state.json").exists()
 
-
-from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 

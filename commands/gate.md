@@ -14,4 +14,6 @@ Triggered when the user accepts the maintenance gate. Steps:
 
 Foreground does these inline. Background hands the same checklist to
 `omw team-run <bg_team>`, which prepares proposals without applying writes.
+If the user says "later" (or declines), take no action — the gate snoozes
+itself and will re-surface after the next cooldown period.
 Never mutate vault content without explicit user confirmation.
