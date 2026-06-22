@@ -30,7 +30,8 @@ if ! confirm; then
 fi
 
 if command -v pipx >/dev/null 2>&1; then
-  pipx install oh-my-wiki && pipx ensurepath >/dev/null 2>&1 || true
+  pipx install oh-my-wiki || { echo "pipx install failed. Try: $MANUAL" >&2; exit 3; }
+  pipx ensurepath >/dev/null 2>&1 || true
 elif command -v python3 >/dev/null 2>&1; then
   python3 -m pip install --user --upgrade oh-my-wiki \
     || python3 -m pip install --user --break-system-packages --upgrade oh-my-wiki
@@ -40,7 +41,8 @@ else
 fi
 
 # Resolve the freshly installed binary (PATH of THIS process may not see it yet).
-for cand in "$(command -v omw 2>/dev/null)" "$HOME/.local/bin/omw"; do
+omw_path="$(command -v omw 2>/dev/null || true)"
+for cand in ${omw_path:+"$omw_path"} "$HOME/.local/bin/omw"; do
   if [ -n "$cand" ] && [ -x "$cand" ]; then
     echo "OMW_BIN=$cand"
     exit 0

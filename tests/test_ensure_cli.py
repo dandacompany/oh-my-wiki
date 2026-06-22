@@ -1,5 +1,6 @@
 # tests/test_ensure_cli.py
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -9,7 +10,6 @@ SCRIPT = REPO / "bin" / "ensure-cli.sh"
 
 def _run(env_extra, path_dir):
     # Run script with minimal PATH (test PATH only). Bash location must be in original PATH.
-    import shutil
     bash_path = shutil.which("bash") or "/bin/bash"
     env = dict(os.environ, PATH=str(path_dir), **env_extra)
     return subprocess.run([bash_path, str(SCRIPT)], capture_output=True, text=True, env=env)
