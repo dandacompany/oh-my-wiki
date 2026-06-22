@@ -435,7 +435,7 @@ def test_maint_status_json(capsys, monkeypatch):
     from scripts import omw_cli
     monkeypatch.setattr("scripts.maint.status", lambda *a, **k: {
         "stale": 1, "expired": 0, "lint_issues": 0, "nudge": "x"})
-    monkeypatch.setattr(omw_cli, "_resolve_vault_row",
+    monkeypatch.setattr(omw_cli, "_require_vault_row",
                         lambda db, name: {"id": 1, "path": "/tmp/v"})
 
     class _DB:
@@ -456,7 +456,7 @@ def test_maint_status_exit_code(monkeypatch):
         def exists(self):
             return True
     monkeypatch.setattr(omw_cli, "registry_path", lambda: _DB())
-    monkeypatch.setattr(omw_cli, "_resolve_vault_row", lambda db, name: {"id": 1, "path": "/tmp/v"})
+    monkeypatch.setattr(omw_cli, "_require_vault_row", lambda db, name: {"id": 1, "path": "/tmp/v"})
     assert omw_cli.main(["maint", "status", "--exit-code"]) == 1
 
 
@@ -469,7 +469,7 @@ def test_connections_json(capsys, monkeypatch):
         def exists(self):
             return True
     monkeypatch.setattr(omw_cli, "registry_path", lambda: _DB())
-    monkeypatch.setattr(omw_cli, "_resolve_vault_row", lambda db, name: {"id": 1, "path": "/tmp/v"})
+    monkeypatch.setattr(omw_cli, "_require_vault_row", lambda db, name: {"id": 1, "path": "/tmp/v"})
     rc = omw_cli.main(["connections"])
     import json
     out = json.loads(capsys.readouterr().out)
@@ -483,3 +483,26 @@ def test_cli_setup_recall_accepts_embed_flags(tmp_path, monkeypatch):
                        "--embed-provider", "openai", "--embed-dim", "1536", "--base-dir", str(tmp_path)])
     assert rc == 0
     assert config.load_config()["recall"]["embedding"]["provider"] == "openai"
+
+
+def test_require_vault_row_consistent_errors(tmp_path, monkeypatch, capsys):
+    from scripts import omw_cli, registry
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw"))
+    db = omw_cli.registry_path(); registry.init_db(db)
+    root = tmp_path / "v"; root.mkdir()
+    registry.add_vault(db, name="v", path=str(root), type_="markdown", mode="wiki")
+    # explicit bad name → specific message
+    assert omw_cli._require_vault_row(db, "nope") is None
+    assert "vault 'nope' not found" in capsys.readouterr().err
+    # explicit good name → row
+    assert omw_cli._require_vault_row(db, "v")["name"] == "v"
+
+
+def test_cmd_import_missing_vault_uses_consistent_message(tmp_path, monkeypatch, capsys):
+    # _cmd_import previously printed a generic "no vault"; now it must match the others
+    from scripts import omw_cli, registry
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw"))
+    db = omw_cli.registry_path(); registry.init_db(db)
+    src = tmp_path / "s"; src.mkdir(); (src / "x.md").write_text("hi", encoding="utf-8")
+    rc = omw_cli.main(["import", "--source", "folder", "--src-dir", str(src), "--vault", "ghost"])
+    assert rc == 1 and "vault 'ghost' not found" in capsys.readouterr().err

@@ -104,22 +104,10 @@ def _cmd_vault_forget(args) -> int:
 
 def _cmd_lint(args) -> int:
     db = registry_path()
-    if not db.exists():
-        print("error: no registry; run `omw status` to set up", file=sys.stderr)
+    row = _require_vault_row(db, args.vault)
+    if row is None:
         return 1
-    if args.vault:
-        match = [v for v in registry.list_vaults(db) if v["name"] == args.vault]
-        if not match:
-            print(f"error: vault {args.vault!r} not found", file=sys.stderr)
-            return 1
-        vault_id = match[0]["id"]
-    else:
-        active = registry.get_active(db)
-        if active is None:
-            print("error: no active vault; pass --vault <name>", file=sys.stderr)
-            return 1
-        vault_id = active["id"]
-    print(json.dumps(lint.check(db, vault_id=vault_id), ensure_ascii=False, indent=2))
+    print(json.dumps(lint.check(db, vault_id=row["id"]), ensure_ascii=False, indent=2))
     return 0
 
 
@@ -127,19 +115,9 @@ def _cmd_fields(args) -> int:
     from pathlib import Path
     from scripts import frontmatter, inline_fields
     db = registry_path()
-    if not db.exists():
-        print("error: no registry; run `omw status` to set up", file=sys.stderr)
+    row = _require_vault_row(db, args.vault)
+    if row is None:
         return 1
-    if args.vault:
-        row = next((v for v in registry.list_vaults(db) if v["name"] == args.vault), None)
-        if row is None:
-            print(f"error: vault {args.vault!r} not found", file=sys.stderr)
-            return 1
-    else:
-        row = registry.get_active(db)
-        if row is None:
-            print("error: no active vault; pass --vault <name>", file=sys.stderr)
-            return 1
     abs_path = Path(row["path"]) / args.relpath
     if not abs_path.exists():
         print(f"error: page not found: {args.relpath}", file=sys.stderr)
@@ -160,21 +138,10 @@ def _cmd_fields(args) -> int:
 def _cmd_links(args) -> int:
     from scripts import entity_link
     db = registry_path()
-    if not db.exists():
-        print("error: no registry; run `omw status` to set up", file=sys.stderr)
+    row = _require_vault_row(db, args.vault)
+    if row is None:
         return 1
-    if args.vault:
-        match = [v for v in registry.list_vaults(db) if v["name"] == args.vault]
-        if not match:
-            print(f"error: vault {args.vault!r} not found", file=sys.stderr)
-            return 1
-        vault_id = match[0]["id"]
-    else:
-        active = registry.get_active(db)
-        if active is None:
-            print("error: no active vault; pass --vault <name>", file=sys.stderr)
-            return 1
-        vault_id = active["id"]
+    vault_id = row["id"]
     if args.links_cmd == "suggest":
         rows = entity_link.suggest_links(db, vault_id=vault_id, relpath=args.relpath)
         print(json.dumps(rows, ensure_ascii=False, indent=2))
@@ -193,21 +160,10 @@ def _cmd_review(args) -> int:
     from datetime import date
     from scripts import review
     db = registry_path()
-    if not db.exists():
-        print("error: no registry; run `omw status` to set up", file=sys.stderr)
+    row = _require_vault_row(db, args.vault)
+    if row is None:
         return 1
-    if args.vault:
-        match = [v for v in registry.list_vaults(db) if v["name"] == args.vault]
-        if not match:
-            print(f"error: vault {args.vault!r} not found", file=sys.stderr)
-            return 1
-        vault_id = match[0]["id"]
-    else:
-        active = registry.get_active(db)
-        if active is None:
-            print("error: no active vault; pass --vault <name>", file=sys.stderr)
-            return 1
-        vault_id = active["id"]
+    vault_id = row["id"]
     today = args.today or date.today().isoformat()
     if args.review_cmd == "due":
         rows = review.due_pages(db, vault_id=vault_id, today=today,
@@ -236,20 +192,9 @@ def _cmd_visibility(args) -> int:
     from pathlib import Path
     from scripts import frontmatter, reindex
     db = registry_path()
-    if not db.exists():
-        print("error: no registry; run `omw status` to set up", file=sys.stderr)
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
         return 1
-    if args.vault:
-        match = [v for v in registry.list_vaults(db) if v["name"] == args.vault]
-        if not match:
-            print(f"error: vault {args.vault!r} not found", file=sys.stderr)
-            return 1
-        vault = match[0]
-    else:
-        vault = registry.get_active(db)
-        if vault is None:
-            print("error: no active vault; pass --vault <name>", file=sys.stderr)
-            return 1
     root = Path(vault["path"])
 
     if args.visibility_cmd == "get":
@@ -299,23 +244,11 @@ def _cmd_visibility(args) -> int:
 def _cmd_supersede(args) -> int:
     from scripts import supersede
     db = registry_path()
-    if not db.exists():
-        print("error: no registry; run `omw status` to set up", file=sys.stderr)
+    row = _require_vault_row(db, args.vault)
+    if row is None:
         return 1
-    if args.vault:
-        match = [v for v in registry.list_vaults(db) if v["name"] == args.vault]
-        if not match:
-            print(f"error: vault {args.vault!r} not found", file=sys.stderr)
-            return 1
-        vault_id = match[0]["id"]
-    else:
-        active = registry.get_active(db)
-        if active is None:
-            print("error: no active vault; pass --vault <name>", file=sys.stderr)
-            return 1
-        vault_id = active["id"]
     try:
-        out = supersede.mark_superseded(db, vault_id=vault_id, relpath=args.relpath,
+        out = supersede.mark_superseded(db, vault_id=row["id"], relpath=args.relpath,
                                         by_slug=args.by)
     except FileNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -336,22 +269,39 @@ def _resolve_vault_path(db, name):
 
 
 def _resolve_vault_row(db, name):
+    """Resolve vault row silently (no error output). Returns row or None."""
     if name:
         match = [v for v in registry.list_vaults(db) if v["name"] == name]
         return match[0] if match else None
     return registry.get_active(db)
 
 
+def _require_vault_row(db, name):
+    """Resolve the target vault row (explicit --vault name, else active) with a
+    consistent CLI error to stderr + None on failure. Single source for vault-scoped
+    command resolution."""
+    if not db.exists():
+        print("error: no registry; run `omw status` to set up", file=sys.stderr)
+        return None
+    if name:
+        match = [v for v in registry.list_vaults(db) if v["name"] == name]
+        if not match:
+            print(f"error: vault {name!r} not found", file=sys.stderr)
+            return None
+        return match[0]
+    active = registry.get_active(db)
+    if active is None:
+        print("error: no active vault; pass --vault <name>", file=sys.stderr)
+        return None
+    return active
+
+
 def _cmd_inbox(args) -> int:
     from datetime import date
     from scripts import inbox
     db = registry_path()
-    if not db.exists():
-        print("error: no registry; run `omw status` to set up", file=sys.stderr)
-        return 1
-    vault = _resolve_vault_row(db, args.vault)
+    vault = _require_vault_row(db, args.vault)
     if vault is None:
-        print("error: no active vault; pass --vault <name>", file=sys.stderr)
         return 1
     vid = vault["id"]
     if args.inbox_cmd == "add":
@@ -380,12 +330,8 @@ def _cmd_fetch(args) -> int:
     from scripts import fetch, ingest, reindex, search
     from scripts.fetch_errors import FetchError
     db = registry_path()
-    if not db.exists():
-        print("error: no registry; run `omw status` to set up", file=sys.stderr)
-        return 1
-    vault = _resolve_vault_row(db, args.vault)
+    vault = _require_vault_row(db, args.vault)
     if vault is None:
-        print("error: no active vault; pass --vault <name>", file=sys.stderr)
         return 1
     try:
         res = fetch.fetch_url(args.url, html_backend=args.backend)
@@ -441,7 +387,7 @@ def _cmd_schema(args) -> int:
 
 
 def _cmd_import(args) -> int:
-    from scripts import config, paths, registry, import_source
+    from scripts import config, paths, import_source
     db = paths.registry_path()
     # Check notion token early (before vault lookup) so the error is clear even without a vault.
     if args.source == "notion":
@@ -452,15 +398,8 @@ def _cmd_import(args) -> int:
         if not args.notion_id:
             print("error: --notion-id required for notion import", file=sys.stderr)
             return 1
-    if not db.exists():
-        print("error: no vault (pass --vault or set an active vault)", file=sys.stderr)
-        return 1
-    if args.vault:
-        row = next((v for v in registry.list_vaults(db) if v["name"] == args.vault), None)
-    else:
-        row = registry.get_active(db)
+    row = _require_vault_row(db, args.vault)
     if row is None:
-        print("error: no vault (pass --vault or set an active vault)", file=sys.stderr)
         return 1
     vid = row["id"]
     if args.source in ("folder", "obsidian"):
@@ -500,12 +439,8 @@ def _cmd_connections(args) -> int:
     import json
     from scripts import community
     db = registry_path()
-    if not db.exists():
-        print("error: no registry; run `omw status` to set up", file=sys.stderr)
-        return 1
-    vault = _resolve_vault_row(db, args.vault)
+    vault = _require_vault_row(db, args.vault)
     if vault is None:
-        print("error: no active vault; pass --vault <name>", file=sys.stderr)
         return 1
     rep = community.analyze(db, vault_id=vault["id"], min_bridge_score=args.min_bridge_score)
     print(json.dumps(rep, ensure_ascii=False, indent=2))
@@ -516,12 +451,8 @@ def _cmd_maint(args) -> int:
     from datetime import date
     from scripts import maint
     db = registry_path()
-    if not db.exists():
-        print("error: no registry; run `omw status` to set up", file=sys.stderr)
-        return 1
-    vault = _resolve_vault_row(db, args.vault)
+    vault = _require_vault_row(db, args.vault)
     if vault is None:
-        print("error: no active vault; pass --vault <name>", file=sys.stderr)
         return 1
     today = args.today or date.today().isoformat()
     st = maint.status(db, vault_id=vault["id"], today=today)
