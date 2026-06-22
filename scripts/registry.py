@@ -102,6 +102,19 @@ def list_vaults(db_path: Path) -> list[sqlite3.Row]:
         conn.close()
 
 
+def get_vault_root(db_path: Path, vault_id: int) -> Path:
+    """Return a vault's content root by id. Raises VaultError if the id is unknown.
+    Single source of truth for the `SELECT path FROM vaults WHERE id=?` lookup."""
+    conn = connect(db_path)
+    try:
+        row = conn.execute("SELECT path FROM vaults WHERE id = ?", (vault_id,)).fetchone()
+        if not row:
+            raise VaultError(f"vault id {vault_id} not found")
+        return Path(row[0])
+    finally:
+        conn.close()
+
+
 def get_active(db_path: Path) -> sqlite3.Row | None:
     conn = connect(db_path)
     try:

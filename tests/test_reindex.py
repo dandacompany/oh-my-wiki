@@ -153,7 +153,7 @@ def test_scan_reports_schema_issues_but_still_ingests(tmp_path, monkeypatch):
         "---\ntitle: T\ndate: 2026-01-01\ntype: entity\ntags: [a]\n---\nno section\n",
         encoding="utf-8",
     )
-    vp = reindex._vault_path(db, vid)
+    vp = registry.get_vault_root(db, vid)
     result = reindex._scan(db, vid, vp, incremental=False)
     assert result["indexed"] == 1
     flat = {i["issue"] for entry in result["schema_issues"] for i in entry["issues"]}
@@ -170,7 +170,7 @@ def test_scan_validates_pages_without_frontmatter(tmp_path, monkeypatch):
     (root / "wiki" / "entities" / "nofm.md").write_text(
         "just plain text, no frontmatter at all\n", encoding="utf-8",
     )
-    vp = reindex._vault_path(db, vid)
+    vp = registry.get_vault_root(db, vid)
     result = reindex._scan(db, vid, vp, incremental=False)
     flat = {i["issue"] for entry in result["schema_issues"]
             if entry["relpath"] == "wiki/entities/nofm.md" for i in entry["issues"]}
@@ -235,7 +235,7 @@ def test_scan_reports_changed_relpaths_and_fts_errors(tmp_path, monkeypatch):
         "---\ntitle: A\ndate: 2026-01-01\ntype: concept\ntags: [x]\n---\nbody\n",
         encoding="utf-8",
     )
-    vp = reindex._vault_path(db, vid)
+    vp = registry.get_vault_root(db, vid)
     res = reindex._scan(db, vid, vp, incremental=False)
     assert "wiki/a.md" in res["changed"]
     assert res["fts_errors"] == []

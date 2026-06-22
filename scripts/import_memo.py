@@ -10,19 +10,6 @@ from scripts import frontmatter, reindex, registry
 DEFAULT_TYPE = "note"
 
 
-def _vault_root(db_path: Path, vault_id: int) -> Path:
-    conn = registry.connect(db_path)
-    try:
-        row = conn.execute(
-            "SELECT path FROM vaults WHERE id = ?", (vault_id,)
-        ).fetchone()
-    finally:
-        conn.close()
-    if row is None:
-        raise registry.VaultError(f"unknown vault_id={vault_id}")
-    return Path(row["path"])
-
-
 def _scan_files(root: Path) -> list[Path]:
     return [p for p in sorted(root.rglob("*.md")) if ".trash" not in p.parts]
 
@@ -49,7 +36,7 @@ def _plan_changes(meta: dict, today: str) -> list[dict]:
 
 def dry_run(db_path: Path, *, vault_id: int) -> dict:
     """Return a per-file plan without mutating anything."""
-    root = _vault_root(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
 
     today = _date.today().isoformat()
     files: list[dict] = []
@@ -88,7 +75,7 @@ def dry_run(db_path: Path, *, vault_id: int) -> dict:
 
 def apply(db_path: Path, *, vault_id: int, plan: dict) -> dict:
     """Mutate files per plan. Backs up the pre-image of each changed file to .trash/."""
-    root = _vault_root(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     trash = root / ".trash"
     trash.mkdir(exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d-%H%M%S-%f")

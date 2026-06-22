@@ -6,19 +6,6 @@ from pathlib import Path
 from scripts import frontmatter, registry, slugify
 
 
-def _vault_root(db_path: Path, vault_id: int) -> Path:
-    conn = registry.connect(db_path)
-    try:
-        row = conn.execute(
-            "SELECT path FROM vaults WHERE id = ?", (vault_id,)
-        ).fetchone()
-    finally:
-        conn.close()
-    if row is None:
-        raise registry.VaultError(f"unknown vault_id={vault_id}")
-    return Path(row["path"])
-
-
 def _resolve_path(root: Path, folder: str, base: str, ext: str) -> str:
     """Return non-colliding relpath under root/folder with given base + ext."""
     candidate = base
@@ -39,7 +26,7 @@ def save_raw(
     date_str: str,
 ) -> str:
     """Save a raw source under raw/<date>-<slug>.<ext>. Returns relpath."""
-    root = _vault_root(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     base = f"{date_str}-{slugify.slugify(title)}"
     relpath = _resolve_path(root, "raw", base, ext)
     abs_path = root / relpath
@@ -60,7 +47,7 @@ def save_raw_pdf(
     from pypdf import PdfReader
     from io import BytesIO
 
-    root = _vault_root(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     base = f"{date_str}-{slugify.slugify(title)}"
     relpath = _resolve_path(root, "raw", base, "pdf")
     abs_path = root / relpath
@@ -99,7 +86,7 @@ def write_wiki_page(
     """Write wiki/<layer>/<slug>.md with required frontmatter. Returns relpath."""
     if layer not in WIKI_LAYERS:
         raise ValueError(f"unknown wiki layer: {layer!r} (valid: {sorted(WIKI_LAYERS)})")
-    root = _vault_root(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     base = slugify.slugify(title)
     relpath = _resolve_path(root, f"wiki/{layer}", base, "md")
     type_ = WIKI_LAYERS[layer]
@@ -167,7 +154,7 @@ def update_index(
     entries: list[tuple[str, str, str]],
 ) -> None:
     """Add lines under section per entry. Entries: [(layer, slug, oneliner), ...]."""
-    root = _vault_root(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     index_path = root / "wiki" / "index.md"
     text = index_path.read_text(encoding="utf-8")
     for layer, slug, oneliner in entries:
@@ -189,7 +176,7 @@ def append_log(
     date_str: str,
 ) -> None:
     """Append `## [YYYY-MM-DD] <op> | <title>` to wiki/log.md."""
-    root = _vault_root(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     log_path = root / "wiki" / "log.md"
     text = log_path.read_text(encoding="utf-8")
     line = f"## [{date_str}] {op} | {title}\n"

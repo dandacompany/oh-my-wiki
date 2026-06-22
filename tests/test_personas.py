@@ -392,3 +392,57 @@ def test_all_kept_personas_present():
     names = {p["name"] for p in personas.list_personas()}
     assert names == {"wiki-librarian", "curator", "fact-checker",
                      "consistency-checker", "terminology-manager"}
+
+
+def test_resolve_input_invalid_vault_id_raises_persona_error(tmp_path):
+    """Invalid vault_id must surface as PersonaError, not VaultError (regression guard)."""
+    db = tmp_path / "registry.db"
+    registry.init_db(db)
+    # vault_id 9999 never added → registry.get_vault_root raises VaultError
+    # personas.resolve_input must catch it and re-raise as PersonaError.
+    with pytest.raises(personas.PersonaError, match="unknown vault_id=9999"):
+        personas.resolve_input(
+            vault_relpath="wiki/summaries/demo.md",
+            db_path=db,
+            vault_id=9999,
+        )
+    # Confirm it does NOT leak VaultError at the top level.
+    from scripts.registry import VaultError
+    try:
+        personas.resolve_input(
+            vault_relpath="wiki/summaries/demo.md",
+            db_path=db,
+            vault_id=9999,
+        )
+    except VaultError:
+        pytest.fail("VaultError leaked past PersonaError boundary in resolve_input")
+    except personas.PersonaError:
+        pass  # expected
+
+
+def test_resolve_output_path_new_page_invalid_vault_id_raises_persona_error(tmp_path):
+    """resolve_output_path new_page with invalid vault_id must raise PersonaError."""
+    db = tmp_path / "registry.db"
+    registry.init_db(db)
+    persona = {"output_kind": "new_page"}
+    with pytest.raises(personas.PersonaError, match="unknown vault_id=9999"):
+        personas.resolve_output_path(
+            persona=persona,
+            source_meta={"kind": "text", "origin": None},
+            db_path=db,
+            vault_id=9999,
+            title="Some Title",
+        )
+    from scripts.registry import VaultError
+    try:
+        personas.resolve_output_path(
+            persona=persona,
+            source_meta={"kind": "text", "origin": None},
+            db_path=db,
+            vault_id=9999,
+            title="Some Title",
+        )
+    except VaultError:
+        pytest.fail("VaultError leaked past PersonaError boundary in resolve_output_path")
+    except personas.PersonaError:
+        pass  # expected

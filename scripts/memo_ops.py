@@ -9,17 +9,6 @@ from scripts import frontmatter, registry, reindex, slugify
 from scripts.paths import registry_path
 
 
-def _vault_root(db_path: Path, vault_id: int) -> Path:
-    conn = registry.connect(db_path)
-    try:
-        row = conn.execute("SELECT path FROM vaults WHERE id = ?", (vault_id,)).fetchone()
-    finally:
-        conn.close()
-    if row is None:
-        raise registry.VaultError(f"unknown vault_id={vault_id}")
-    return Path(row["path"])
-
-
 def _resolve_slug(root: Path, folder: str, base: str) -> str:
     """Return a non-colliding filename stem under root/folder."""
     folder_dir = root / folder
@@ -45,7 +34,7 @@ def write(
     status: str | None = "inbox",
 ) -> str:
     """Create a new memo file. Returns the relpath stored in the registry."""
-    root = _vault_root(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     base = slugify.slugify(title)
     stem = _resolve_slug(root, folder, base)
     relpath = f"{folder}/{stem}.md"
@@ -79,7 +68,7 @@ def edit_meta(
     value,
 ) -> None:
     """Edit a single frontmatter field in place. Body untouched."""
-    root = _vault_root(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     abs_path = root / relpath
     if not abs_path.exists():
         raise FileNotFoundError(relpath)
@@ -97,7 +86,7 @@ def move(
     dest_folder: str,
 ) -> str:
     """Move file to dest_folder, preserve filename. Returns new relpath."""
-    root = _vault_root(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     src = root / relpath
     if not src.exists():
         raise FileNotFoundError(relpath)
@@ -123,7 +112,7 @@ def delete(
 
     Returns the trash relpath for soft delete, None for hard delete.
     """
-    root = _vault_root(db_path, vault_id)
+    root = registry.get_vault_root(db_path, vault_id)
     src = root / relpath
     if not src.exists():
         raise FileNotFoundError(relpath)
