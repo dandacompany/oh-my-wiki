@@ -73,9 +73,6 @@ jobs:
           assert isinstance(data, list) and data, "personas list must be a non-empty JSON array"
           print(f"personas: {len(data)} entries")
           PY
-          # both plugin manifests are valid JSON
-          python -c "import json; json.load(open('.claude-plugin/plugin.json'))"
-          python -c "import json; json.load(open('.claude-plugin/marketplace.json'))"
           # install/uninstall scripts keep their executable bit
           test -x bin/install.sh
           test -x bin/uninstall.sh

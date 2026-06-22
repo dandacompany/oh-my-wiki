@@ -9,7 +9,6 @@ graft commands
 graft omw
 graft references
 graft hooks
-graft .claude-plugin
 
 # Root files the build-time bundle copy needs in the sdist (README is also the
 # PyPI long-description source; SKILL.md is the skill entry point).

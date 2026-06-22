@@ -30,7 +30,6 @@ _BUNDLE_DIRS = [
     "omw",
     "references",
     "hooks",
-    ".claude-plugin",
     "scripts",
 ]
 # Root files the skill tree needs (SKILL.md is the discoverable entry point;
