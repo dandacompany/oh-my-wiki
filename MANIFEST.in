@@ -1,0 +1,19 @@
+# Include the repo-root bundle dirs in the sdist so a wheel built FROM the sdist
+# (e.g. `pip install --no-binary oh-my-wiki`) can still run setup.py's build_py
+# bundle copy. A directly-built wheel doesn't need these (build_py reads them
+# from the working tree), but an sdist must carry the source to stay buildable.
+graft schemas
+graft personas
+graft backends
+graft commands
+graft omw
+graft references
+graft hooks
+graft .claude-plugin
+
+# README is the PyPI long-description source.
+include README.md
+
+global-exclude __pycache__ *.pyc *.pyo
+global-exclude *.egg-info
+prune scripts/_bundle
