@@ -50,3 +50,52 @@ def test_marker_pending_maps_kinds_stably():
                {"kind": "recall-stale", "at": "z"}]
     assert gate.marker_pending(markers) == ["capture", "reindex", "recall"]
     assert gate.marker_pending([]) == []
+
+
+ORDER = ["capture", "reindex", "recall", "upkeep"]
+CLEAN = {"stale": 0, "expired": 0, "lint_issues": 0, "nudge": ""}
+DEBT = {"stale": 2, "expired": 0, "lint_issues": 0, "nudge": ""}
+
+
+def _cfg(**kw):
+    base = {"cooldown_min": 30, "marker_ttl_min": 120, "threshold": {"stale": 1, "lint": 3}}
+    base.update(kw)
+    return base
+
+
+def test_decide_closed_when_nothing_pending(tmp_path, monkeypatch):
+    monkeypatch.setattr(gate, "omw_home", lambda: tmp_path)
+    d = gate.decide(gate.load_state(), CLEAN, now=_now(), cfg=_cfg())
+    assert d["open"] is False and d["pending"] == []
+
+
+def test_decide_open_on_fresh_marker(tmp_path, monkeypatch):
+    monkeypatch.setattr(gate, "omw_home", lambda: tmp_path)
+    gate.note("synthesis", now=_now())
+    d = gate.decide(gate.load_state(), CLEAN, now=_now(), cfg=_cfg())
+    assert d["open"] is True
+    assert d["pending"] == ["capture", "reindex"]
+    assert [p for p in d["pending"] if p in ORDER] == d["pending"]  # stable order
+
+
+def test_decide_open_on_debt_only(tmp_path, monkeypatch):
+    monkeypatch.setattr(gate, "omw_home", lambda: tmp_path)
+    d = gate.decide(gate.load_state(), DEBT, now=_now(), cfg=_cfg())
+    assert d["open"] is True and d["pending"] == ["upkeep"]
+
+
+def test_decide_blocked_by_cooldown(tmp_path, monkeypatch):
+    monkeypatch.setattr(gate, "omw_home", lambda: tmp_path)
+    gate.note("synthesis", now=_now())
+    st = gate.record_prompt(gate.load_state(), now=_now())
+    d = gate.decide(st, CLEAN, now=_now() + timedelta(minutes=10), cfg=_cfg(cooldown_min=30))
+    assert d["open"] is False and d["reason"] == "cooldown"
+
+
+def test_defer_snoozes_and_clears(tmp_path, monkeypatch):
+    monkeypatch.setattr(gate, "omw_home", lambda: tmp_path)
+    gate.note("synthesis", now=_now())
+    st = gate.defer(gate.load_state(), now=_now(), cooldown_min=30)
+    assert st["markers"] == []
+    d = gate.decide(st, DEBT, now=_now() + timedelta(minutes=5), cfg=_cfg())
+    assert d["open"] is False and d["reason"] == "snoozed"

@@ -8,7 +8,7 @@ raises to the host. The engine takes an injected `now` for deterministic tests.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from scripts.paths import omw_home
@@ -88,3 +88,54 @@ def marker_pending(markers: list[dict]) -> list[str]:
     if "recall-stale" in kinds:
         out += ["recall"]
     return out
+
+
+_PENDING_ORDER = ["capture", "reindex", "recall", "upkeep"]
+
+
+def _minutes_since(ts, now):
+    if not ts:
+        return None
+    try:
+        return (now - _parse(ts)).total_seconds() / 60.0
+    except (ValueError, TypeError):
+        return None
+
+
+def decide(state, maint_status, *, now, cfg) -> dict:
+    ttl = cfg.get("marker_ttl_min", 120)
+    threshold = cfg.get("threshold", DEFAULT_THRESHOLD)
+    fresh = fresh_markers(state, now=now, ttl_min=ttl)
+    pending = marker_pending(fresh) + debt_pending(maint_status, threshold=threshold)
+    pending = [p for p in _PENDING_ORDER if p in set(pending)]
+    if not pending:
+        return {"open": False, "pending": [], "reason": "nothing-pending"}
+    snooze = state.get("snooze_until")
+    if snooze:
+        rem = _minutes_since(snooze, now)
+        if rem is not None and rem < 0:
+            return {"open": False, "pending": pending, "reason": "snoozed"}
+    since = _minutes_since(state.get("last_prompt_at"), now)
+    if since is not None and since < cfg.get("cooldown_min", 30):
+        return {"open": False, "pending": pending, "reason": "cooldown"}
+    return {"open": True, "pending": pending, "reason": "open"}
+
+
+def record_prompt(state, *, now) -> dict:
+    state["last_prompt_at"] = now.isoformat()
+    save_state(state)
+    return state
+
+
+def defer(state, *, now, cooldown_min) -> dict:
+    state["snooze_until"] = (now + timedelta(minutes=cooldown_min)).isoformat()
+    state["markers"] = []
+    save_state(state)
+    return state
+
+
+def accept(state, *, now) -> dict:
+    state["markers"] = []
+    state["last_prompt_at"] = now.isoformat()
+    save_state(state)
+    return state
