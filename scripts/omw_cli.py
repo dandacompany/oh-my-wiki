@@ -449,6 +449,10 @@ def _cmd_connections(args) -> int:
             pass  # best-effort; analyze still runs on whatever is already indexed
     rep = community.analyze(db, vault_id=vault["id"], min_bridge_score=args.min_bridge_score)
     print(json.dumps(rep, ensure_ascii=False, indent=2))
+    if not rep.get("communities"):
+        print("hint: empty graph — no resolved wiki↔wiki [[wikilinks]] were found. Add links "
+              "between pages (and finish writing them) before analyzing; connections auto-reindexes, "
+              "but pages with no [[wikilinks]] produce no graph.", file=sys.stderr)
     return 0
 
 

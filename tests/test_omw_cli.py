@@ -555,6 +555,16 @@ def test_connections_auto_reindexes_body_wikilinks(capsys):
     assert any("gamma" in m for m in members)
 
 
+def test_connections_empty_graph_prints_hint(capsys):
+    """An empty connections graph must nudge the user toward linking pages."""
+    assert _run(["vault", "create", "emptyg", "--mode", "wiki", "--type", "markdown"]) == 0
+    capsys.readouterr()
+    assert _run(["connections"]) == 0
+    out = capsys.readouterr()
+    assert json.loads(out.out)["communities"] == []
+    assert "empty graph" in out.err and "[[wikilinks]]" in out.err
+
+
 def test_reindex_command_reports_indexed_count(capsys):
     assert _run(["vault", "create", "rx", "--mode", "wiki", "--type", "markdown"]) == 0
     capsys.readouterr()
