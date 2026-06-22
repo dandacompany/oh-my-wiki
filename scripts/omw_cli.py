@@ -268,14 +268,6 @@ def _resolve_vault_path(db, name):
     return row["path"] if row else None
 
 
-def _resolve_vault_row(db, name):
-    """Resolve vault row silently (no error output). Returns row or None."""
-    if name:
-        match = [v for v in registry.list_vaults(db) if v["name"] == name]
-        return match[0] if match else None
-    return registry.get_active(db)
-
-
 def _require_vault_row(db, name):
     """Resolve the target vault row (explicit --vault name, else active) with a
     consistent CLI error to stderr + None on failure. Single source for vault-scoped
