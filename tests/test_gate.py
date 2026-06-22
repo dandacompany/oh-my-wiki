@@ -180,3 +180,18 @@ def test_cli_note_records_marker(tmp_path):
     r = _run(["gate", "note", "synthesis"], env)
     assert r.returncode == 0 and '"noted": "synthesis"' in r.stdout
     assert (tmp_path / "gate-state.json").exists()
+
+
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+def test_skill_documents_gate_note():
+    skill = (REPO / "omw" / "SKILL.md").read_text(encoding="utf-8")
+    assert "omw gate note" in skill
+    assert "foreground" in skill and "background" in skill
+
+
+def test_commands_gate_md_exists():
+    assert (REPO / "commands" / "gate.md").is_file()
