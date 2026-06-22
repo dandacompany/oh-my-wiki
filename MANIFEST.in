@@ -11,8 +11,10 @@ graft references
 graft hooks
 graft .claude-plugin
 
-# README is the PyPI long-description source.
+# Root files the build-time bundle copy needs in the sdist (README is also the
+# PyPI long-description source; SKILL.md is the skill entry point).
 include README.md
+include SKILL.md
 
 global-exclude __pycache__ *.pyc *.pyo
 global-exclude *.egg-info

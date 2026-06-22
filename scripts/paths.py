@@ -70,15 +70,16 @@ _bundled_root_cache: "Path | None" = None
 def bundled_root() -> Path:
     """Base dir for bundled data (schemas/personas/backends/commands/omw/.claude-plugin).
 
-    Dev + skill-copy checkouts keep the data at the repo root (authoritative); an
-    installed wheel ships it under <scripts>/_bundle.  Prefer the root, fall back to
-    the package bundle.
+    Sentinel is self-scoped: an installed wheel ships the data under THIS package's
+    own <scripts>/_bundle (created by setup.py's build_py), so its presence is an
+    unambiguous "I am an installed wheel" marker — immune to an unrelated top-level
+    schemas/ appearing in site-packages. When _bundle is absent (dev + skill-copy
+    checkout) the data lives at the repo root, which is authoritative there.
     """
     global _bundled_root_cache
     if _bundled_root_cache is None:
-        _bundled_root_cache = (
-            _REPO_ROOT if (_REPO_ROOT / "schemas").is_dir() else (_PKG_DIR / "_bundle")
-        )
+        packaged = _PKG_DIR / "_bundle"
+        _bundled_root_cache = packaged if packaged.is_dir() else _REPO_ROOT
     return _bundled_root_cache
 
 
