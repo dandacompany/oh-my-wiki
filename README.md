@@ -63,6 +63,24 @@ bash bin/install.sh
 
 The installer checks for Python 3.10+, pip-installs the package editable, creates `~/.claude/skills/oh-my-wiki` and `~/.claude/skills/omw` symlinks (idempotent), runs `pytest -q` to verify, and prints next steps. Add `--dev` to include pytest/ruff extras. Use `--force` to replace existing symlinks without a prompt; `--no-test` to skip the test step. Run `bash bin/install.sh --help` for all flags.
 
+### Path D — PyPI (`pip` / `pipx`)
+
+Install the `omw` CLI from [PyPI](https://pypi.org/project/oh-my-wiki/) without cloning:
+
+```bash
+pipx install oh-my-wiki        # isolated CLI (recommended)
+# or
+pip install oh-my-wiki         # into the current environment
+```
+
+Both give you a working `omw` command (`omw status`, `omw vault create …`, `omw lint`, …). The published wheel is self-contained — it bundles the schemas, personas, backends, and the full skill. To register the bundled skill with your agents afterwards, run:
+
+```bash
+omw setup agents
+```
+
+Installing straight from GitHub works the same way: `pipx install git+https://github.com/dandacompany/oh-my-wiki`.
+
 ### Verify the install
 
 ```
