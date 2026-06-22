@@ -17,6 +17,11 @@ A storage-agnostic LLM Wiki skill. Implements Andrej Karpathy's three-layer patt
    It is FORBIDDEN to run `python3 -m scripts.<anything>`, `python3 -c "from scripts import …"`,
    or to import / execute `scripts/*.py` modules (registry, adapters, reindex, wizard, …)
    directly. The `scripts/` package is an internal implementation detail, NOT a user interface.
+   - **CLI preflight (first use):** if the `omw` command is not callable, run
+     `bash "<this skill dir>/bin/ensure-cli.sh"` once. It asks the user before
+     installing the CLI (pipx/pip) and prints `OMW_BIN=<path>`. Use that absolute
+     path for `omw …` calls in this session (PATH refreshes next session). Never
+     fall back to `python3 -m scripts.*`.
 2. **Web search MUST go through `omw search "<query>"`.** It routes to the user's configured
    provider and keeps the wiki's provenance intact. Do NOT use your own / native web-search
    tool for OMW work.
