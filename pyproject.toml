@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "oh-my-wiki"
 version = "2.6.0"
@@ -23,12 +27,18 @@ embedding = ["sqlite-vec>=0.1", "openai>=1.0"]
 [tool.setuptools.packages.find]
 include = ["scripts*"]
 
+[tool.setuptools.package-data]
+# db/*.sql is source-tree package-data (needs a glob); scripts/_bundle/ is
+# injected into the build by setup.py's build_py, so it needs no glob here.
+"scripts" = ["db/*.sql"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra -q --strict-markers"
+addopts = "-ra -q --strict-markers -m 'not packaging'"
 markers = [
     "integration: end-to-end tests that require tmux and fake backends",
     "flaky: known-flaky test (auto-reruns via pytest-rerunfailures)",
+    "packaging: builds a wheel (slow); run explicitly with -m packaging",
 ]
 
 [tool.ruff]
