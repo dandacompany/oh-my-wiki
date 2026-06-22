@@ -139,3 +139,29 @@ def accept(state, *, now) -> dict:
     state["last_prompt_at"] = now.isoformat()
     save_state(state)
     return state
+
+
+PART_LABEL = {
+    "capture": "capture this session's research/synthesis into the wiki",
+    "reindex": "reindex + refresh connections",
+    "recall": "review recalled pages for staleness",
+    "upkeep": "clear lint / refresh stale pages",
+}
+
+
+def render(decision: dict, *, mode: str) -> str:
+    if mode == "off" or not decision.get("open"):
+        return ""
+    items = "\n".join(f"  - {PART_LABEL.get(p, p)}" for p in decision["pending"])
+    if mode == "enforce":
+        body = (
+            "Pending wiki upkeep detected:\n" + items + "\n"
+            "Before ending this turn, ask the user whether to run it now (foreground), "
+            "in the background (omw team-run), or later. Apply nothing without confirmation."
+        )
+    else:  # advisory
+        body = (
+            "Pending wiki upkeep:\n" + items + "\n"
+            "If it fits the moment, offer to run the upkeep cycle (foreground or background)."
+        )
+    return f"<{MARKER}>\n{body}\n</{MARKER}>"

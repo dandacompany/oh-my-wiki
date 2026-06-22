@@ -99,3 +99,26 @@ def test_defer_snoozes_and_clears(tmp_path, monkeypatch):
     assert st["markers"] == []
     d = gate.decide(st, DEBT, now=_now() + timedelta(minutes=5), cfg=_cfg())
     assert d["open"] is False and d["reason"] == "snoozed"
+
+
+def test_render_empty_when_closed_or_off():
+    closed = {"open": False, "pending": [], "reason": "nothing-pending"}
+    assert gate.render(closed, mode="enforce") == ""
+    opend = {"open": True, "pending": ["capture"], "reason": "open"}
+    assert gate.render(opend, mode="off") == ""
+
+
+def test_render_enforce_is_forcing_and_lists_parts():
+    opend = {"open": True, "pending": ["capture", "upkeep"], "reason": "open"}
+    out = gate.render(opend, mode="enforce")
+    assert "<omw-gate>" in out and "</omw-gate>" in out
+    assert "foreground" in out and "background" in out and "later" in out
+    assert "capture this session's research" in out
+    assert "clear lint" in out
+
+
+def test_render_advisory_is_softer():
+    opend = {"open": True, "pending": ["upkeep"], "reason": "open"}
+    out = gate.render(opend, mode="advisory")
+    assert "<omw-gate>" in out
+    assert "offer" in out.lower()
