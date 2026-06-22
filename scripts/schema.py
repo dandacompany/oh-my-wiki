@@ -11,7 +11,9 @@ from pathlib import Path
 
 import yaml
 
-_BUNDLED_DIR = Path(__file__).resolve().parent.parent / "schemas"
+from scripts import paths
+
+_BUNDLED_DIR = paths.bundled_dir("schemas")
 
 
 def _coarse_ok(value, want: str) -> bool:

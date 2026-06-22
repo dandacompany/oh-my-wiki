@@ -55,3 +55,21 @@ def test_resolve_vault_root_branches(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     assert paths.resolve_vault_root("v", "project") == tmp_path / ".omw" / "v"
     assert paths.resolve_vault_root("v", "/abs/x") == Path("/abs/x")
+
+
+def test_bundled_root_prefers_repo_root_in_checkout():
+    root = paths.bundled_root()
+    # in this dev checkout the repo root (with schemas/) is authoritative
+    assert (root / "schemas").is_dir()
+    assert paths.bundled_dir("personas") == root / "personas"
+
+
+def test_bundled_root_falls_back_to_package_bundle(monkeypatch, tmp_path):
+    # simulate an installed wheel: repo-root sentinel absent → use <scripts>/_bundle
+    fake_scripts = tmp_path / "scripts"
+    (fake_scripts / "_bundle").mkdir(parents=True)
+    monkeypatch.setattr(paths, "_PKG_DIR", fake_scripts, raising=False)
+    monkeypatch.setattr(paths, "_REPO_ROOT", tmp_path / "nonexistent_root", raising=False)
+    paths._bundled_root_cache = None  # reset cache
+    assert paths.bundled_root() == fake_scripts / "_bundle"
+    paths._bundled_root_cache = None  # clean up for other tests

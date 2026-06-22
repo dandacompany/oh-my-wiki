@@ -56,3 +56,33 @@ def legacy_registry_candidates() -> list[Path]:
     [<skill_dir>/data/registry.db, <cwd>/data/registry.db]."""
     skill_dir = Path(__file__).resolve().parent.parent
     return [skill_dir / "data" / "registry.db", Path.cwd() / "data" / "registry.db"]
+
+
+# ---------------------------------------------------------------------------
+# Bundled data resolver (dev checkout vs installed wheel)
+# ---------------------------------------------------------------------------
+
+_PKG_DIR = Path(__file__).resolve().parent            # .../scripts
+_REPO_ROOT = _PKG_DIR.parent                          # repo root (dev/skill checkout)
+_bundled_root_cache: "Path | None" = None
+
+
+def bundled_root() -> Path:
+    """Base dir for bundled data (schemas/personas/backends/commands/omw/.claude-plugin).
+
+    Sentinel is self-scoped: an installed wheel ships the data under THIS package's
+    own <scripts>/_bundle (created by setup.py's build_py), so its presence is an
+    unambiguous "I am an installed wheel" marker — immune to an unrelated top-level
+    schemas/ appearing in site-packages. When _bundle is absent (dev + skill-copy
+    checkout) the data lives at the repo root, which is authoritative there.
+    """
+    global _bundled_root_cache
+    if _bundled_root_cache is None:
+        packaged = _PKG_DIR / "_bundle"
+        _bundled_root_cache = packaged if packaged.is_dir() else _REPO_ROOT
+    return _bundled_root_cache
+
+
+def bundled_dir(name: str) -> Path:
+    """Return bundled_root() / name."""
+    return bundled_root() / name

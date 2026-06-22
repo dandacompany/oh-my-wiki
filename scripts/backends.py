@@ -9,10 +9,12 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from scripts import paths
+
 # ---------------------------------------------------------------------------
-# Root of the repo (parent of this file's parent directory)
+# Base dir for bundled backends/ data (repo root in dev, scripts/_bundle in a wheel)
 # ---------------------------------------------------------------------------
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = paths.bundled_root()
 
 # ---------------------------------------------------------------------------
 # BACKENDS table

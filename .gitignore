@@ -43,6 +43,11 @@ data/*.migrated
 # Editable install metadata
 *.egg-info/
 
+# Build artifacts (sdist/wheel + the build-time bundle copy — never committed)
+build/
+dist/
+scripts/_bundle/
+
 # OS
 .DS_Store
 

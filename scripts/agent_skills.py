@@ -13,7 +13,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from scripts import paths
+
+REPO_ROOT = paths.bundled_root()
 SKILL_ID = "dandacompany/oh-my-wiki@oh-my-wiki"
 
 _AGENT_BINS = {"claude": "claude", "codex": "codex", "hermes": "hermes", "gemini": "gemini"}

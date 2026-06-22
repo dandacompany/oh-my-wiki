@@ -14,10 +14,10 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from scripts import frontmatter, registry
+from scripts import frontmatter, paths, registry
 from scripts.paths import registry_path
 
-PERSONAS_ROOT = Path(__file__).resolve().parents[1] / "personas"
+PERSONAS_ROOT = paths.bundled_dir("personas")
 
 VALID_OUTPUT_KINDS = {"sibling_file", "sibling_suffix", "inplace", "new_page", "stdout"}
 VALID_MODEL_HINTS = {"fast", "standard", "most_capable"}
