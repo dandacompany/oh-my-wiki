@@ -122,3 +122,39 @@ def test_render_advisory_is_softer():
     out = gate.render(opend, mode="advisory")
     assert "<omw-gate>" in out
     assert "offer" in out.lower()
+
+
+import json
+
+
+def test_wire_host_is_idempotent(tmp_path):
+    cfg = tmp_path / "settings.json"
+    changed1, _ = gate.wire_host("claude", config_path=cfg)
+    changed2, _ = gate.wire_host("claude", config_path=cfg)
+    assert changed1 is True and changed2 is False
+    data = json.loads(cfg.read_text())
+    stop = data["hooks"]["Stop"]
+    cmds = [h["command"] for grp in stop for h in grp["hooks"]]
+    assert sum("gate check" in c for c in cmds) == 1
+
+
+def test_wire_host_preserves_existing(tmp_path):
+    cfg = tmp_path / "settings.json"
+    cfg.write_text(json.dumps({"hooks": {"Stop": [
+        {"hooks": [{"type": "command", "command": "echo keep"}]}]}}), encoding="utf-8")
+    gate.wire_host("claude", config_path=cfg)
+    data = json.loads(cfg.read_text())
+    cmds = [h["command"] for grp in data["hooks"]["Stop"] for h in grp["hooks"]]
+    assert "echo keep" in cmds and any("gate check" in c for c in cmds)
+    assert (tmp_path / "settings.json.omw-bak").exists()
+
+
+def test_unwire_removes_only_gate(tmp_path):
+    cfg = tmp_path / "settings.json"
+    cfg.write_text(json.dumps({"hooks": {"Stop": [
+        {"hooks": [{"type": "command", "command": "echo keep"}]}]}}), encoding="utf-8")
+    gate.wire_host("claude", config_path=cfg)
+    gate.unwire_host("claude", config_path=cfg)
+    data = json.loads(cfg.read_text())
+    cmds = [h["command"] for grp in data["hooks"].get("Stop", []) for h in grp["hooks"]]
+    assert "echo keep" in cmds and not any("gate check" in c for c in cmds)

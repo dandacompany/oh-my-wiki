@@ -165,3 +165,97 @@ def render(decision: dict, *, mode: str) -> str:
             "If it fits the moment, offer to run the upkeep cycle (foreground or background)."
         )
     return f"<{MARKER}>\n{body}\n</{MARKER}>"
+
+
+import shutil
+
+
+def _omw_bin() -> str:
+    return shutil.which("omw") or "omw"
+
+
+def _gate_hook_specs() -> dict:
+    omw = _omw_bin()
+    return {"Stop": (f'"{omw}" gate check', "omw wiki upkeep gate")}
+
+
+def _event_has_gate(entries: list) -> bool:
+    for group in entries or []:
+        for h in (group or {}).get("hooks", []):
+            if "gate check" in (h or {}).get("command", ""):
+                return True
+    return False
+
+
+def _host_path(host, config_path):
+    from scripts import recall
+    return Path(config_path) if config_path else recall.host_hook_configs().get(host)
+
+
+def _load_host(path):
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (OSError, ValueError) as e:
+        return None, f"unreadable {path}: {e}"
+    if not isinstance(data, dict):
+        return None, f"unexpected config shape in {path}"
+    return data, None
+
+
+def _backup_write(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        bak = path.with_suffix(path.suffix + ".omw-bak")
+        if not bak.exists():
+            bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def wire_host(host, *, config_path=None) -> tuple[bool, str]:
+    path = _host_path(host, config_path)
+    if path is None:
+        return False, f"unknown host {host!r}"
+    data, err = _load_host(path)
+    if err:
+        return False, err
+    hooks = data.setdefault("hooks", {})
+    added = []
+    for event, (command, status) in _gate_hook_specs().items():
+        entries = hooks.setdefault(event, [])
+        if _event_has_gate(entries):
+            continue
+        entries.append({"hooks": [{"type": "command", "command": command,
+                                   "timeout": 5, "statusMessage": status}]})
+        added.append(event)
+    if not added:
+        return False, f"already wired ({path})"
+    try:
+        _backup_write(path, data)
+    except OSError as e:
+        return False, f"write failed {path}: {e}"
+    return True, f"wired {'+'.join(added)} → {path}"
+
+
+def unwire_host(host, *, config_path=None) -> tuple[bool, str]:
+    path = _host_path(host, config_path)
+    if path is None or not path.exists():
+        return False, "nothing to unwire"
+    data, err = _load_host(path)
+    if err:
+        return False, err
+    hooks = data.get("hooks", {})
+    changed = False
+    for event in list(hooks):
+        kept = [g for g in hooks[event]
+                if not any("gate check" in (h or {}).get("command", "")
+                           for h in (g or {}).get("hooks", []))]
+        if len(kept) != len(hooks[event]):
+            hooks[event] = kept
+            changed = True
+    if not changed:
+        return False, "nothing to unwire"
+    try:
+        _backup_write(path, data)
+    except OSError as e:
+        return False, f"write failed {path}: {e}"
+    return True, f"unwired → {path}"
