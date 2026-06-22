@@ -158,3 +158,25 @@ def test_unwire_removes_only_gate(tmp_path):
     data = json.loads(cfg.read_text())
     cmds = [h["command"] for grp in data["hooks"].get("Stop", []) for h in grp["hooks"]]
     assert "echo keep" in cmds and not any("gate check" in c for c in cmds)
+
+
+import subprocess, sys, os
+
+
+def _run(args, env):
+    return subprocess.run([sys.executable, "-m", "scripts.omw_cli", *args],
+                          capture_output=True, text=True, env=env)
+
+
+def test_cli_note_and_check_off_is_silent(tmp_path, monkeypatch):
+    env = dict(os.environ, OMW_HOME=str(tmp_path))
+    # no gate.mode in config → off → check prints nothing
+    r = _run(["gate", "check"], env)
+    assert r.returncode == 0 and r.stdout.strip() == ""
+
+
+def test_cli_note_records_marker(tmp_path):
+    env = dict(os.environ, OMW_HOME=str(tmp_path))
+    r = _run(["gate", "note", "synthesis"], env)
+    assert r.returncode == 0 and '"noted": "synthesis"' in r.stdout
+    assert (tmp_path / "gate-state.json").exists()

@@ -456,6 +456,46 @@ def _cmd_connections(args) -> int:
     return 0
 
 
+def _cmd_gate(args) -> int:
+    from datetime import datetime
+    from scripts import gate
+    now = datetime.now()
+    if args.gate_cmd == "note":
+        try:
+            gate.note(args.kind, now=now)
+            print(json.dumps({"noted": args.kind}, ensure_ascii=False))
+        except ValueError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        return 0
+    # check (best-effort, non-blocking)
+    try:
+        from scripts import config, maint
+        cfg_all = config.load_config().get("gate", {}) or {}
+        mode = cfg_all.get("mode", "off")
+        if mode == "off":
+            return 0
+        db = registry_path()
+        vault = _require_vault_row(db, args.vault)
+        if vault is None:
+            return 0
+        from datetime import date
+        today = args.today or date.today().isoformat()
+        st = maint.status(db, vault_id=vault["id"], today=today)
+        cfg = {"cooldown_min": cfg_all.get("cooldown_min", 30),
+               "marker_ttl_min": cfg_all.get("marker_ttl_min", 120),
+               "threshold": cfg_all.get("debt_threshold", gate.DEFAULT_THRESHOLD)}
+        state = gate.load_state()
+        decision = gate.decide(state, st, now=now, cfg=cfg)
+        out = gate.render(decision, mode=mode)
+        if out:
+            gate.record_prompt(state, now=now)
+            print(out)
+    except Exception:
+        return 0
+    return 0
+
+
 def _cmd_maint(args) -> int:
     from datetime import date
     from scripts import maint
@@ -513,7 +553,7 @@ def _cmd_setup(args) -> int:
             return setup_wizard.run_all(noninteractive=False, base_dir=args.base_dir)
         return setup_wizard.run(
             section=None, noninteractive=args.noninteractive,
-            name=args.name, mode=args.mode, type_=args.type, location=args.location,
+            name=args.name, mode=args.mode or "wiki", type_=args.type, location=args.location,
         )
     if args.section == "serve":
         return setup_wizard.setup_serve(
@@ -549,11 +589,15 @@ def _cmd_setup(args) -> int:
             hosts=hosts, base_dir=args.base_dir, noninteractive=args.noninteractive,
             provider=args.embed_provider, model=args.embed_model, dim=args.embed_dim,
         )
+    if args.section == "gate":
+        hosts = [s.strip() for s in args.host.split(",") if s.strip()] if args.host else None
+        return setup_wizard.setup_gate(
+            mode=args.mode or "enforce", hosts=hosts, noninteractive=args.noninteractive)
     return setup_wizard.run(
         section=args.section,
         noninteractive=args.noninteractive,
         name=args.name,
-        mode=args.mode,
+        mode=args.mode or "wiki",
         type_=args.type,
         location=args.location,
     )
@@ -761,17 +805,29 @@ def build_parser() -> argparse.ArgumentParser:
                      help="exit 1 if any maintenance is due (for cron)")
     pms.set_defaults(func=_cmd_maint)
 
+    pg = sub.add_parser("gate", help="Maintenance gate: note semantic moments / check at turn end.")
+    gsub = pg.add_subparsers(dest="gate_cmd", required=True)
+    pgn = gsub.add_parser("note", help="Record a semantic moment (research|synthesis|ingest|recall-stale).")
+    pgn.add_argument("kind", choices=["research", "synthesis", "ingest", "recall-stale"])
+    pgn.set_defaults(func=_cmd_gate)
+    pgc = gsub.add_parser("check", help="Turn-end gate check (hook entrypoint). Silent unless open.")
+    pgc.add_argument("--vault", default=None)
+    pgc.add_argument("--today", default=None)
+    pgc.set_defaults(func=_cmd_gate)
+
     pset = sub.add_parser("setup", help="Interactive setup wizard (run after install).")
     pset.add_argument(
         "section", nargs="?",
-        choices=["vault", "hosts", "search", "serve", "personas", "import", "viewer", "agents", "recall"], default=None,
+        choices=["vault", "hosts", "search", "serve", "personas", "import", "viewer", "agents", "recall", "gate"], default=None,
     )
     pset.add_argument(
         "--noninteractive", action="store_true",
         help="create from flags/defaults without prompting",
     )
     pset.add_argument("--name", default="default")
-    pset.add_argument("--mode", choices=["memo", "wiki"], default="wiki")
+    pset.add_argument("--mode", default=None,
+                      help="vault mode (memo|wiki) for `omw setup vault`, "
+                           "or gate mode (off|advisory|enforce) for `omw setup gate`")
     pset.add_argument("--type", choices=["markdown", "obsidian"], default="markdown")
     pset.add_argument("--location", default="global")
     pset.add_argument("--provider", default=None)
