@@ -41,14 +41,17 @@ Always invoke this before doing anything else:
 > and NO standalone script CLIs. Do **not** invent filenames like `omw_db.py`,
 > `vault.py`, `cli.py`, or `bootstrap.py` — they do not exist.
 >
-> 1. **Deterministic ops** (status, vault management, lint, search, serve, schema, supersede, review, links, fields, view, visibility, inbox, fetch): run the
+> 1. **Deterministic ops** (status, vault management, lint, search, serve, schema, supersede, review, links, fields, view, visibility, inbox, fetch, reindex, connections): run the
 >    `omw` CLI — `omw status`, `omw vault list`, `omw vault create <name> --mode wiki`,
 >    `omw vault use <name>`, `omw lint`, `omw schema list`, `omw supersede <relpath> --by <slug>`,
 >    `omw review due`, `omw serve` (the retrieve-only messenger query API — see `references/messenger-api.md`),
 >    `omw view [page] [--search Q] [--viewer obsidian|logseq] [--vault <name>] [--print]` (open vault/page/search in Obsidian or Logseq via URI scheme; companion: `omw setup viewer`),
 >    `omw visibility get <relpath>` / `omw visibility set <relpath...> public|private` (per-page visibility management),
 >    `omw inbox add <url>` / `omw inbox list` / `omw inbox remove <url>` / `omw inbox run` (queue URLs then batch-fetch into `raw/`),
->    `omw fetch <url> [--backend auto|urllib|chromium|cloud] [--vault] [--today YYYY-MM-DD]` (fetch one URL or YouTube transcript into `raw/`, tiered urllib → chromium → cloud, SSRF-guarded).
+>    `omw fetch <url> [--backend auto|urllib|chromium|cloud] [--vault] [--today YYYY-MM-DD]` (fetch one URL or YouTube transcript into `raw/`, tiered urllib → chromium → cloud, SSRF-guarded),
+>    `omw reindex [--full]` (rescan files into the registry — **registers body `[[wikilinks]]`** for search/connections; run it after writing or hand-editing wiki pages directly so the link graph is current),
+>    `omw connections [--no-reindex]` (link-graph communities / hubs / surprising bridges; **auto-reindexes first** so freshly-written page links are already in the graph).
+>    **Wiki pages you write directly are NOT indexed until a reindex.** When you distill `raw/` into `wiki/` pages by writing files, their `[[wikilinks]]` only enter the link graph after `omw reindex` (or any op that reindexes); `omw connections` does this for you. Never run `python3 -m scripts.reindex` — use `omw reindex`.
 >    **Visibility (secure-by-default):** `omw serve` returns only pages with
 >    `visibility: public` in their frontmatter. Pages without the field are treated as
 >    private and never served. Publish pages explicitly with

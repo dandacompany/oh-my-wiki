@@ -515,3 +515,51 @@ def test_cmd_import_missing_vault_uses_consistent_message(tmp_path, monkeypatch,
     src = tmp_path / "s"; src.mkdir(); (src / "x.md").write_text("hi", encoding="utf-8")
     rc = omw_cli.main(["import", "--source", "folder", "--src-dir", str(src), "--vault", "ghost"])
     assert rc == 1 and "vault 'ghost' not found" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# reindex command + connections auto-reindex (body [[wikilinks]] → graph)
+# ---------------------------------------------------------------------------
+
+def _write_page(conc, name, refs):
+    body = " ".join(f"[[{r}]]" for r in refs)
+    (conc / f"{name}.md").write_text(
+        f"---\ntitle: {name}\ntype: concept\ntags: [t]\n---\nrelated: {body}\n",
+        encoding="utf-8",
+    )
+
+
+def test_connections_auto_reindexes_body_wikilinks(capsys):
+    """Pages written directly (as an agent does during ingest) must show up in the
+    connections graph without a manual reindex — this was the empty-graph bug."""
+    assert _run(["vault", "create", "graphtest", "--mode", "wiki", "--type", "markdown"]) == 0
+    capsys.readouterr()
+    db = registry_path()
+    vid = next(v["id"] for v in registry.list_vaults(db) if v["name"] == "graphtest")
+    conc = registry.get_vault_root(db, vid) / "wiki" / "concepts"
+    conc.mkdir(parents=True, exist_ok=True)
+    _write_page(conc, "alpha", ["beta", "gamma"])
+    _write_page(conc, "beta", ["alpha", "gamma"])
+    _write_page(conc, "gamma", ["alpha", "beta"])
+
+    # --no-reindex reads the stale index → the freshly-written links are invisible
+    assert _run(["connections", "--no-reindex"]) == 0
+    assert json.loads(capsys.readouterr().out)["communities"] == []
+
+    # default connections auto-reindexes → the triangle becomes one community
+    assert _run(["connections"]) == 0
+    rep = json.loads(capsys.readouterr().out)
+    members = {m for c in rep["communities"] for m in c["members"]}
+    assert any("alpha" in m for m in members)
+    assert any("beta" in m for m in members)
+    assert any("gamma" in m for m in members)
+
+
+def test_reindex_command_reports_indexed_count(capsys):
+    assert _run(["vault", "create", "rx", "--mode", "wiki", "--type", "markdown"]) == 0
+    capsys.readouterr()
+    assert _run(["reindex"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["vault"] == "rx" and out["mode"] == "incremental" and "indexed" in out
+    assert _run(["reindex", "--full"]) == 0
+    assert json.loads(capsys.readouterr().out)["mode"] == "full"

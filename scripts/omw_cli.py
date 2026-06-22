@@ -416,13 +416,37 @@ def _cmd_view(args) -> int:
     return view.run(args)
 
 
-def _cmd_connections(args) -> int:
+def _cmd_reindex(args) -> int:
     import json
-    from scripts import community
+    from scripts import reindex
     db = registry_path()
     vault = _require_vault_row(db, args.vault)
     if vault is None:
         return 1
+    mode = "full" if args.full else "incremental"
+    fn = reindex.full if args.full else reindex.incremental
+    indexed = fn(db, vault_id=vault["id"])
+    print(json.dumps({"vault": vault["name"], "mode": mode, "indexed": indexed},
+                     ensure_ascii=False))
+    return 0
+
+
+def _cmd_connections(args) -> int:
+    import json
+    from scripts import community, reindex
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    # Refresh the index first so body [[wikilinks]] written directly into pages
+    # (e.g. during ingest distillation) are registered before the graph is built.
+    # Incremental is mtime-gated (cheap) and re-resolves links globally; opt out
+    # with --no-reindex for a pure read of the current index.
+    if not getattr(args, "no_reindex", False):
+        try:
+            reindex.incremental(db, vault_id=vault["id"])
+        except Exception:
+            pass  # best-effort; analyze still runs on whatever is already indexed
     rep = community.analyze(db, vault_id=vault["id"], min_bridge_score=args.min_bridge_score)
     print(json.dumps(rep, ensure_ascii=False, indent=2))
     return 0
@@ -585,11 +609,20 @@ def build_parser() -> argparse.ArgumentParser:
     pl.add_argument("--vault", default=None, help="vault name (default: active)")
     pl.set_defaults(func=_cmd_lint)
 
+    prx = sub.add_parser("reindex",
+                         help="Rescan vault files into the registry (registers body [[wikilinks]] for search/connections).")
+    prx.add_argument("--vault", default=None, help="vault name (default: active)")
+    prx.add_argument("--full", action="store_true",
+                     help="full rescan (default: incremental, mtime-gated)")
+    prx.set_defaults(func=_cmd_reindex)
+
     pcon = sub.add_parser("connections",
-                          help="Detect link-graph communities + surprising bridges/hubs (read-only).")
+                          help="Detect link-graph communities + surprising bridges/hubs (auto-reindexes first).")
     pcon.add_argument("--vault", default=None, help="vault name (default: active)")
     pcon.add_argument("--min-bridge-score", dest="min_bridge_score", type=int, default=0,
                       help="drop bridges below this score (deg(src)*deg(dst))")
+    pcon.add_argument("--no-reindex", dest="no_reindex", action="store_true",
+                      help="skip the incremental reindex that registers newly-written page links first")
     pcon.set_defaults(func=_cmd_connections)
 
     pfl = sub.add_parser("fields", help="Show a page's frontmatter + inline key:: value fields.")
