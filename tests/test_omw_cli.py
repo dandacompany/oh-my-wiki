@@ -265,8 +265,17 @@ def test_schema_show_unknown_type_exits_1(capsys):
     assert "valid types" in capsys.readouterr().err.lower()
 
 
-def test_schema_show_bad_vault_exits_1(capsys):
-    rc = omw_cli.main(["schema", "show", "entity", "--vault", "__nope__"])
+def test_schema_show_no_registry_exits_1(capsys):
+    # No registry at all → unified "no registry" message via _require_vault_row.
+    rc = omw_cli.main(["schema", "show", "entity", "--vault", "ghost"])
+    assert rc == 1
+    assert "no registry" in capsys.readouterr().err.lower()
+
+
+def test_schema_show_missing_vault_exits_1(tmp_path, capsys):
+    # Registry exists but vault name not found → "not found" message.
+    _seed_vault(tmp_path, "exists")
+    rc = omw_cli.main(["schema", "show", "entity", "--vault", "ghost"])
     assert rc == 1
     assert "not found" in capsys.readouterr().err.lower()
 

@@ -116,7 +116,11 @@ def resolve_input(
     # vault_relpath
     if db_path is None or vault_id is None:
         raise PersonaError("vault_relpath requires db_path and vault_id")
-    abs_path = registry.get_vault_root(db_path, vault_id) / vault_relpath
+    try:
+        vault_root = registry.get_vault_root(db_path, vault_id)
+    except registry.VaultError as e:
+        raise PersonaError(f"unknown vault_id={vault_id}") from e
+    abs_path = vault_root / vault_relpath
     if not abs_path.exists():
         raise PersonaError(f"vault page not found: {vault_relpath}")
     return (
@@ -175,7 +179,11 @@ def resolve_output_path(
         if db_path is None or vault_id is None:
             raise PersonaError("new_page output requires db_path and vault_id")
         slug = _slugify.slugify(title)
-        return registry.get_vault_root(db_path, vault_id) / "wiki" / "syntheses" / f"{slug}.md"
+        try:
+            vault_root = registry.get_vault_root(db_path, vault_id)
+        except registry.VaultError as e:
+            raise PersonaError(f"unknown vault_id={vault_id}") from e
+        return vault_root / "wiki" / "syntheses" / f"{slug}.md"
 
     raise PersonaError(f"unsupported output_kind: {kind!r}")
 

@@ -257,17 +257,6 @@ def _cmd_supersede(args) -> int:
     return 0
 
 
-def _resolve_vault_path(db, name):
-    """Return a vault's content path by name (or active). None if unresolved."""
-    if not db.exists():
-        return None
-    if name:
-        row = next((v for v in registry.list_vaults(db) if v["name"] == name), None)
-    else:
-        row = registry.get_active(db)
-    return row["path"] if row else None
-
-
 def _require_vault_row(db, name):
     """Resolve the target vault row (explicit --vault name, else active) with a
     consistent CLI error to stderr + None on failure. Single source for vault-scoped
@@ -349,10 +338,10 @@ def _cmd_schema(args) -> int:
     db = registry_path()
     vault_path = None
     if args.vault:
-        vault_path = _resolve_vault_path(db, args.vault)
-        if vault_path is None:
-            print(f"error: vault {args.vault!r} not found", file=sys.stderr)
+        row = _require_vault_row(db, args.vault)
+        if row is None:
             return 1
+        vault_path = row["path"]
     schemas = schema.load_schemas(vault_path=vault_path)
 
     def _public(name):
