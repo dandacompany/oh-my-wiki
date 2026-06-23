@@ -164,13 +164,32 @@ def test_installer_is_executable_and_valid():
 
 def test_omw_search_returns_json(capsys, monkeypatch):
     import scripts.search as _search
+    monkeypatch.setattr(_search, "search_with_fallback",
+                        lambda q, *, provider=None, limit=10: {
+                            "results": [{"title": "T", "url": "u", "snippet": "s"}],
+                            "provider": "brave",
+                            "tried": ["brave"],
+                        })
+    assert _run(["search", "ai agents", "--limit", "3"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["provider"] == "brave"
+    assert out["results"] == [{"title": "T", "url": "u", "snippet": "s"}]
+
+
+def test_omw_search_no_fallback_returns_bare_list(capsys, monkeypatch):
+    import scripts.search as _search
     monkeypatch.setattr(_search, "search",
                         lambda q, *, provider=None, limit=10: [{"title": "T", "url": "u", "snippet": "s"}])
-    assert _run(["search", "ai agents", "--limit", "3"]) == 0
+    assert _run(["search", "ai agents", "--no-fallback", "--limit", "3"]) == 0
     assert json.loads(capsys.readouterr().out) == [{"title": "T", "url": "u", "snippet": "s"}]
 
 
-def test_omw_search_unconfigured_errors(capsys):
+def test_omw_search_unconfigured_errors(capsys, monkeypatch):
+    import scripts.search as _search
+    from scripts.search.base import SearchError
+    monkeypatch.setattr(_search, "search_with_fallback",
+                        lambda q, *, provider=None, limit=10: (_ for _ in ()).throw(
+                            SearchError("no provider configured — run omw setup search")))
     rc = _run(["search", "q"])
     assert rc == 1
     assert "omw setup search" in capsys.readouterr().err

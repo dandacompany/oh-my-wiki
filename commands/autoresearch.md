@@ -53,7 +53,14 @@ If multiple claims share search terms, batch via `mcp__brightdata__search_engine
 > Two search paths: **(in a Claude session)** invoke the Bright Data MCP tools as
 > above — no API key needed. **(outside a session, or if a provider is configured)**
 > run the deterministic CLI: `omw search "<query>" --limit 5` and read its JSON
-> (`[{title,url,snippet}]`). `omw search` uses the provider set via `omw setup search`.
+> (`{"results": [{title,url,snippet}, ...], "provider": "...", "tried": [...]}`).
+> With `--no-fallback` the bare list `[{title,url,snippet}]` is returned instead.
+> `omw search` auto-falls back across keyed providers on 429/empty; use the provider
+> set via `omw setup search`.
+>
+> **Scout first:** run `omw search "<query>"` (auto-falls back across providers) to
+> find target URLs, then collect them with `omw fetch` (native fetch first — see
+> `commands/fetch.md`). Do not hand-scrape search-engine HTML.
 
 **(c) Read + judge.** For each claim, read the returned sources and decide a confidence tag:
 

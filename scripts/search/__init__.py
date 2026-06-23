@@ -56,3 +56,51 @@ def resolve_scrape_provider(name: str | None = None) -> Provider:
 
 def search(query: str, *, provider: str | None = None, limit: int = 10) -> list[dict]:
     return resolve_provider(provider).search(query, limit=limit)
+
+
+def available_providers() -> list[str]:
+    """Provider names whose secrets all resolve, in PROVIDERS declaration order."""
+    out = []
+    for name, (_cls, secret_spec) in PROVIDERS.items():
+        ok = True
+        for env_vars in secret_spec.values():
+            env_vars = (env_vars,) if isinstance(env_vars, str) else env_vars
+            if not any(config.read_secret(v) for v in env_vars):
+                ok = False
+                break
+        if ok:
+            out.append(name)
+    return out
+
+
+def search_with_fallback(query: str, *, provider: str | None = None,
+                         limit: int = 10) -> dict:
+    """Try the configured/named provider, then remaining available providers on
+    SearchError or empty results. Returns {results, provider, tried}; raises
+    SearchError naming the tried providers if all fail."""
+    cfg = config.load_config()
+    configured = provider or (cfg.get("search") or {}).get("provider")
+    avail = available_providers()
+    order: list[str] = []
+    if configured:
+        order.append(configured)
+    for name in avail:
+        if name not in order:
+            order.append(name)
+    if not order:
+        raise SearchError("no search provider configured — run `omw setup search`")
+
+    tried: list[str] = []
+    failures: list[str] = []
+    for name in order:
+        tried.append(name)
+        try:
+            results = resolve_provider(name).search(query, limit=limit)
+        except SearchError as exc:
+            failures.append(f"{name}({exc})")
+            continue
+        if not results:
+            failures.append(f"{name}(empty)")
+            continue
+        return {"results": results, "provider": name, "tried": tried}
+    raise SearchError("all search providers failed: " + ", ".join(failures))

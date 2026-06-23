@@ -403,11 +403,16 @@ def _cmd_import(args) -> int:
 def _cmd_search(args) -> int:
     from scripts import search as _search
     try:
-        results = _search.search(args.query, provider=args.provider, limit=args.limit)
+        if getattr(args, "no_fallback", False):
+            results = _search.search(args.query, provider=args.provider, limit=args.limit)
+            print(json.dumps(results, ensure_ascii=False, indent=2))
+        else:
+            out = _search.search_with_fallback(args.query, provider=args.provider,
+                                               limit=args.limit)
+            print(json.dumps(out, ensure_ascii=False, indent=2))
     except _search.SearchError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    print(json.dumps(results, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -824,6 +829,8 @@ def build_parser() -> argparse.ArgumentParser:
     psr.add_argument("query")
     psr.add_argument("--provider", default=None)
     psr.add_argument("--limit", type=int, default=10)
+    psr.add_argument("--no-fallback", dest="no_fallback", action="store_true",
+                     help="disable provider fallback (single configured provider only)")
     psr.set_defaults(func=_cmd_search)
 
     pfd = sub.add_parser("find", help="Deterministic full-text search over the vault index.")

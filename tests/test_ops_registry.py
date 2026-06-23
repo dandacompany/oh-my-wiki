@@ -87,3 +87,19 @@ def test_gate_prose_points_at_real_persona_run():
         assert reg.get("persona-run") is not None  # referenced op must exist
     # and the Workstream-D placeholder must be gone from gate prose
     assert "Workstream D" not in text
+
+
+def test_search_op_has_no_fallback_flag():
+    names = [a.name for a in reg.get("search").args]
+    assert "--no-fallback" in names
+
+
+def test_fetch_command_doc_exists_and_clean():
+    from pathlib import Path
+    p = Path(__file__).resolve().parent.parent / "commands" / "fetch.md"
+    assert p.exists(), "commands/fetch.md should document native-fetch-first"
+    text = p.read_text(encoding="utf-8")
+    # every backtick `omw <verb>` in it must be a registered op
+    import re
+    for verb in re.findall(r"`omw ([a-z][a-z-]+)", text):
+        assert reg.get(verb) is not None, f"fetch.md references unknown op: {verb}"
