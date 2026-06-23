@@ -38,3 +38,19 @@ def test_all_fail_raises_naming_tried(monkeypatch):
     with pytest.raises(SearchError) as e:
         S.search_with_fallback("q", provider="brave")
     assert "brave" in str(e.value) and "tavily" in str(e.value)
+
+
+def test_cli_fallback_reports_provider(monkeypatch, capsys):
+    import json
+    from scripts import omw_cli
+    _patch(monkeypatch, ["brave", "tavily"], {"brave": "error", "tavily": "hits"})
+    rc = omw_cli.main(["search", "q"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["provider"] == "tavily"
+
+
+def test_cli_no_fallback_single_provider(monkeypatch, capsys):
+    from scripts import omw_cli
+    _patch(monkeypatch, ["brave", "tavily"], {"brave": "error", "tavily": "hits"})
+    rc = omw_cli.main(["search", "q", "--no-fallback"])
+    assert rc == 1  # bare search() raises on the configured provider's error

@@ -87,3 +87,8 @@ def test_gate_prose_points_at_real_persona_run():
         assert reg.get("persona-run") is not None  # referenced op must exist
     # and the Workstream-D placeholder must be gone from gate prose
     assert "Workstream D" not in text
+
+
+def test_search_op_has_no_fallback_flag():
+    names = [a.name for a in reg.get("search").args]
+    assert "--no-fallback" in names
