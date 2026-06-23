@@ -4,6 +4,8 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
+import sysconfig
 from pathlib import Path
 
 _WIN_USERS = Path("/mnt/c/Users")
@@ -65,3 +67,45 @@ def to_unc_path(linux_path, distro: str | None = None) -> str:
     distro = distro or wsl_distro() or "Ubuntu"
     p = str(linux_path).replace("/", "\\")
     return f"\\\\wsl.localhost\\{distro}{p}"
+
+
+def _prefix() -> str:
+    return sys.prefix
+
+
+def _base_prefix() -> str:
+    return sys.base_prefix
+
+
+def _executable() -> str:
+    return sys.executable
+
+
+def omw_install_context() -> str:
+    """How omw's interpreter is installed: 'pipx' | 'venv' | 'system'."""
+    prefix = _prefix()
+    if "pipx" in prefix and "venvs" in prefix:   # ~/.local/share/pipx/venvs/oh-my-wiki
+        return "pipx"
+    if _prefix() != _base_prefix():
+        return "venv"
+    return "system"
+
+
+def pep668_managed() -> bool:
+    """True if the active stdlib is PEP 668 externally-managed (Debian/Ubuntu)."""
+    try:
+        return (Path(sysconfig.get_path("stdlib")) / "EXTERNALLY-MANAGED").exists()
+    except (OSError, KeyError):
+        return False
+
+
+def pip_install_argv(pkg: str) -> list[str]:
+    """The correct install command for `pkg` into omw's own environment."""
+    ctx = omw_install_context()
+    if ctx == "pipx":
+        return ["pipx", "inject", "oh-my-wiki", pkg, "--include-apps"]
+    if ctx == "venv":
+        return [_executable(), "-m", "pip", "install", pkg]
+    if pep668_managed():
+        return [_executable(), "-m", "pip", "install", "--break-system-packages", pkg]
+    return [_executable(), "-m", "pip", "install", pkg]

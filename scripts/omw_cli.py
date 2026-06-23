@@ -593,6 +593,8 @@ def _cmd_setup(args) -> int:
         hosts = [s.strip() for s in args.host.split(",") if s.strip()] if args.host else None
         return setup_wizard.setup_gate(
             mode=args.mode or "enforce", hosts=hosts, noninteractive=args.noninteractive)
+    if args.section == "playwright":
+        return setup_wizard.setup_playwright(noninteractive=args.noninteractive)
     return setup_wizard.run(
         section=args.section,
         noninteractive=args.noninteractive,
@@ -818,7 +820,7 @@ def build_parser() -> argparse.ArgumentParser:
     pset = sub.add_parser("setup", help="Interactive setup wizard (run after install).")
     pset.add_argument(
         "section", nargs="?",
-        choices=["vault", "hosts", "search", "serve", "personas", "import", "viewer", "agents", "recall", "gate"], default=None,
+        choices=["vault", "hosts", "search", "serve", "personas", "import", "viewer", "agents", "recall", "gate", "playwright"], default=None,
     )
     pset.add_argument(
         "--noninteractive", action="store_true",

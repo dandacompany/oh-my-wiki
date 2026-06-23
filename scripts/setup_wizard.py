@@ -10,6 +10,7 @@ import json
 import os
 import secrets
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -541,6 +542,49 @@ def run_all(*, noninteractive: bool = False, base_dir=None) -> int:
     return first_error
 
 
+def playwright_installed() -> bool:
+    try:
+        from scripts import fetch_chromium
+        return fetch_chromium.available()
+    except Exception:
+        return False
+
+
+def install_playwright(*, assume_yes: bool = False, interactive: bool = True) -> tuple[bool, str]:
+    from scripts import platform_env
+    if playwright_installed():
+        return True, "Playwright(chromium)가 이미 설치돼 있습니다."
+    argv = platform_env.pip_install_argv("playwright")
+    browser = [sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"]
+    manual = " ".join(argv) + " && " + " ".join(browser)
+    if not assume_yes:
+        if not interactive:
+            return False, f"설치를 건너뜁니다. 직접: {manual}"
+        try:
+            ans = input("Playwright(chromium)가 없습니다. 지금 설치할까요? [y/N] ")
+        except EOFError:
+            return False, f"설치를 건너뜁니다. 직접: {manual}"
+        if not ans.strip().lower().startswith("y"):
+            return False, f"설치를 건너뜁니다. 직접: {manual}"
+    try:
+        subprocess.run(argv, check=True)
+        subprocess.run(browser, check=True)
+    except Exception as e:
+        return False, f"설치 실패 ({e}). 직접: {manual}"
+    return True, "Playwright + chromium 설치 완료."
+
+
+def setup_playwright(*, noninteractive: bool = False) -> int:
+    """Set up Playwright (chromium). Best-effort: returns 0 even if not installed."""
+    import os
+    interactive = (not noninteractive) and sys.stdin.isatty()
+    _ok, msg = install_playwright(
+        assume_yes=os.environ.get("OMW_BOOTSTRAP_YES") == "1",
+        interactive=interactive)
+    print(f"playwright: {msg}")
+    return 0
+
+
 def doctor() -> int:
     home = omw_home()
     db = registry_path()
@@ -564,14 +608,17 @@ def doctor() -> int:
     else:
         print("  no vaults registered — run: omw setup")
     import scripts.fetch_chromium as _fc
-    ytdlp = "ok" if shutil.which("yt-dlp") else "missing (pip install yt-dlp — for YouTube)"
-    chromium = "ok" if _fc.available() else "missing (pip install playwright && playwright install chromium — for SPA pages)"
+    from scripts import platform_env as _pe
+    _ytcmd = " ".join(_pe.pip_install_argv("yt-dlp"))
+    ytdlp = "ok" if shutil.which("yt-dlp") else f"missing ({_ytcmd} — for YouTube)"
+    chromium = "ok" if _fc.available() else "missing (run: omw setup playwright — for SPA pages)"
     print(f"fetch yt-dlp:  {ytdlp}")
     print(f"fetch chromium: {chromium}")
     try:
         import questionary  # noqa: F401
         wizard_ui = "ok"
     except Exception:
-        wizard_ui = "missing (pip install 'oh-my-wiki[wizard]' — arrow-key setup UI; falls back to plain text)"
+        _wzcmd = " ".join(_pe.pip_install_argv("oh-my-wiki[wizard]"))
+        wizard_ui = f"missing ({_wzcmd} — arrow-key setup UI; falls back to plain text)"
     print(f"wizard UI:     {wizard_ui}")
     return 0
