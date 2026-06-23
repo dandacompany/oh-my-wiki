@@ -14,7 +14,7 @@ from scripts import adapters, lint, registry, reindex, wizard
 from scripts.paths import ensure_home, registry_path, resolve_vault_root
 
 AGENTIC_OPS = [
-    "ingest", "query", "find", "open", "edit", "move", "delete",
+    "ingest", "query", "open", "edit", "move", "delete",
     "autoresearch", "persona-factcheck", "persona-consistency",
     "persona-terminology",
 ]
@@ -611,12 +611,15 @@ def _cmd_doctor(args) -> int:
 
 
 def _cmd_agentic(args) -> int:
-    op = args.op
-    print(
-        f"'{op}' needs natural-language reasoning — it is not a deterministic CLI "
-        f"command.\nOpen Claude Code and use the omw skill (e.g. say '{op} ...'); "
-        f"the skill runs the commands/{op}.md procedure."
-    )
+    from scripts import ops_registry as reg
+    from scripts import cards
+    spec = reg.get(args.op)
+    bound = {a.name.lstrip("-").replace("-", "_"): getattr(args, a.name.lstrip("-").replace("-", "_"), None)
+             for a in spec.args}
+    if getattr(args, "card_json", False):
+        print(cards.render_card_json(spec, bound))
+    else:
+        print(cards.render_card(spec, bound))
     return 0
 
 
@@ -870,9 +873,22 @@ def build_parser() -> argparse.ArgumentParser:
         "doctor", help="Validate omw config + install."
     ).set_defaults(func=_cmd_doctor)
 
-    for op in AGENTIC_OPS:
-        ap = sub.add_parser(op, help=f"(needs a Claude session) {op}")
-        ap.set_defaults(func=_cmd_agentic, op=op)
+    from scripts import ops_registry as _reg
+    for _name in _reg.PROCEDURE_NAMES:
+        _spec = _reg.get(_name)
+        ap = sub.add_parser(_name, help=f"(omw skill procedure) {_spec.summary}")
+        for _a in _spec.args:
+            if _a.name.startswith("--"):
+                if _a.name == "--no-synthesis":
+                    ap.add_argument(_a.name, dest="no_synthesis", action="store_true", help=_a.hint)
+                else:
+                    ap.add_argument(_a.name, default=None, help=_a.hint)
+            else:
+                _req = _a.required
+                ap.add_argument(_a.name, nargs=None if _req else "?", default=None, help=_a.hint)
+        ap.add_argument("--json", dest="card_json", action="store_true",
+                        help="emit the procedure card as JSON")
+        ap.set_defaults(func=_cmd_agentic, op=_name)
 
     return p
 
