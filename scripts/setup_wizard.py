@@ -310,7 +310,7 @@ def setup_viewer(*, viewer: str | None = None, vault: str | None = None,
         from scripts.viewers import obsidian as _ob
         interactive = (not noninteractive) and sys.stdin.isatty()
         if not _ob.obsidian_installed():
-            ok, msg = _ob.install_obsidian(
+            _ok, msg = _ob.install_obsidian(
                 assume_yes=os.environ.get("OMW_BOOTSTRAP_YES") == "1",
                 interactive=interactive)
             print(f"  obsidian: {msg}")

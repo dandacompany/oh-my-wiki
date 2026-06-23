@@ -51,10 +51,13 @@ def windows_user_profile() -> Path | None:
         p = _win_to_wsl(wp)
         if p is not None:
             return p
-    if _WIN_USERS.is_dir():
-        for d in sorted(_WIN_USERS.iterdir()):
-            if d.is_dir() and d.name not in _SKIP_USERS:
-                return d
+    try:
+        if _WIN_USERS.is_dir():
+            for d in sorted(_WIN_USERS.iterdir()):
+                if d.is_dir() and d.name not in _SKIP_USERS:
+                    return d
+    except OSError:
+        return None
     return None
 
 

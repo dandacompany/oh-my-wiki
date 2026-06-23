@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -40,8 +41,7 @@ def vault_registered(root: Path, *, config_path: Path | None = None) -> bool:
 
 def _register_target(cp, target: str) -> bool:
     """Idempotently add `target` (a path string) to an obsidian.json registry at `cp`."""
-    from pathlib import Path as _P
-    cp = _P(cp)
+    cp = Path(cp)
     try:
         data = json.loads(cp.read_text(encoding="utf-8")) if cp.is_file() else {}
     except (OSError, json.JSONDecodeError):
@@ -73,10 +73,9 @@ def register_vault(root: Path, *, config_path: Path | None = None) -> bool:
 
 def windows_vault_path(root) -> str:
     """Convert `/mnt/<d>/…` to `D:\…`; else use `platform_env.to_unc_path(root)`."""
-    import re as _re
     from scripts import platform_env
     s = str(root)
-    m = _re.match(r"^/mnt/([a-z])/(.*)$", s)
+    m = re.match(r"^/mnt/([a-z])/(.*)$", s)
     if m:
         return f"{m.group(1).upper()}:\\" + m.group(2).replace("/", "\\")
     return platform_env.to_unc_path(root)
@@ -203,10 +202,9 @@ def _is_debian_like() -> bool:
 
 
 def _latest_deb_url() -> str:
-    import json as _json
     api = "https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest"
     with urllib.request.urlopen(api, timeout=15) as r:  # noqa: S310 (trusted host)
-        data = _json.loads(r.read().decode("utf-8"))
+        data = json.loads(r.read().decode("utf-8"))
     for asset in data.get("assets", []):
         name = asset.get("name", "")
         if name.endswith("_amd64.deb"):

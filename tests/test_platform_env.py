@@ -28,3 +28,19 @@ def test_to_unc_path(monkeypatch):
     monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
     got = pe.to_unc_path("/home/dante/.omw/vaults/x")
     assert got == r"\\wsl.localhost\Ubuntu\home\dante\.omw\vaults\x"
+
+
+def test_windows_user_profile_returns_none_on_oserror(monkeypatch):
+    """windows_user_profile() must return None (not raise) when /mnt/c/Users scan raises OSError."""
+    monkeypatch.setattr(pe, "_userprofile_windows", lambda: None)
+
+    class _FakePath:
+        def is_dir(self):
+            return True
+
+        def iterdir(self):
+            raise OSError("permission denied")
+
+    monkeypatch.setattr(pe, "_WIN_USERS", _FakePath())
+    result = pe.windows_user_profile()
+    assert result is None
