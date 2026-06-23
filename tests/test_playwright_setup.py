@@ -51,3 +51,19 @@ def test_cli_setup_playwright_known_section():
     # `omw setup playwright --noninteractive` must be a recognized section (rc 0), not argparse error (rc 2).
     r = _run_cli(["setup", "playwright", "--noninteractive"], env)
     assert r.returncode == 0, r.stderr
+
+
+from pathlib import Path as _Path
+
+REPO = _Path(__file__).resolve().parents[1]
+
+
+def test_no_bare_pip_install_playwright_in_code_or_skill():
+    for rel in ["scripts/setup_wizard.py", "commands/inbox.md"]:
+        t = (REPO / rel).read_text(encoding="utf-8")
+        assert "pip install playwright" not in t, f"{rel} still has the PEP668-broken hint"
+
+
+def test_doctor_points_to_setup_playwright():
+    t = (REPO / "scripts" / "setup_wizard.py").read_text(encoding="utf-8")
+    assert "omw setup playwright" in t  # chromium-missing hint routes here

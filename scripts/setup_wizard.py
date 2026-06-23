@@ -608,8 +608,10 @@ def doctor() -> int:
     else:
         print("  no vaults registered — run: omw setup")
     import scripts.fetch_chromium as _fc
-    ytdlp = "ok" if shutil.which("yt-dlp") else "missing (pip install yt-dlp — for YouTube)"
-    chromium = "ok" if _fc.available() else "missing (pip install playwright && playwright install chromium — for SPA pages)"
+    from scripts import platform_env as _pe
+    _ytcmd = " ".join(_pe.pip_install_argv("yt-dlp"))
+    ytdlp = "ok" if shutil.which("yt-dlp") else f"missing ({_ytcmd} — for YouTube)"
+    chromium = "ok" if _fc.available() else "missing (run: omw setup playwright — for SPA pages)"
     print(f"fetch yt-dlp:  {ytdlp}")
     print(f"fetch chromium: {chromium}")
     try:
