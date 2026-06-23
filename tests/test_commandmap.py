@@ -1,4 +1,3 @@
-from pathlib import Path
 from scripts import commandmap
 from scripts import ops_registry as reg
 

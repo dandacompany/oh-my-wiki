@@ -33,6 +33,7 @@ def test_find_json(seeded, capsys):
 def test_find_limit(seeded, capsys):
     rc = omw_cli.main(["find", "menswear", "--limit", "1", "--json"])
     data = json.loads(capsys.readouterr().out)
+    assert rc == 0
     assert len(data) <= 1
 
 

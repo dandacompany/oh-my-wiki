@@ -1,4 +1,7 @@
-import pytest
+import re
+from pathlib import Path
+
+from scripts import omw_cli
 from scripts import ops_registry as reg
 
 
@@ -37,10 +40,6 @@ def test_autoresearch_args():
     assert "--rounds" in a
     assert reg.get("autoresearch").uses == ("search", "fetch", "reindex")
 
-
-import re
-from pathlib import Path
-from scripts import omw_cli
 
 _ROOT = Path(__file__).resolve().parent.parent
 
