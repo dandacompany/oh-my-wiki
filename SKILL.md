@@ -36,7 +36,7 @@ A storage-agnostic LLM Wiki skill. Implements Andrej Karpathy's three-layer patt
 
 v1 (Plans A + B + C) is complete: dispatcher + foundation scripts, vault management (`vault-setup`, `vault-use`, `vault-list`, `vault-forget`, `vault-import-memo`), memo-mode ops (`create`, `find`, `open`, `edit`, `move`, `delete`), wiki-mode ops (`ingest`, `query`), and the common `lint` op (with wiki-mode structural extensions). 91 pytest tests pass on GitHub Actions matrix (Python 3.10/3.11/3.12 × ubuntu/macos). See `README.md`, `TUTORIAL.md`, `TUTORIAL.ko.md` for usage.
 
-v2 adds plugin-marketplace install, session hot cache, 6 vault-setup modes, extended wiki-lint categories, autoresearch, wiki-maintenance personas (wiki-librarian / curator / fact-checker / consistency-checker / terminology-manager), Obsidian/Logseq viewers, URL fetch + inbox, and per-prompt wiki recall hooks. (Earlier prototypes of a tmux-based multi-agent swarm/team runtime were removed — omw stays focused on the wiki; the host AI agent handles orchestration.)
+v2 adds session hot cache, 6 vault-setup modes, extended wiki-lint categories, autoresearch, wiki-maintenance personas (wiki-librarian / curator / fact-checker / consistency-checker / terminology-manager), Obsidian/Logseq viewers, URL fetch + inbox, and per-prompt wiki recall hooks. (Earlier prototypes of a tmux-based multi-agent swarm/team runtime were removed — omw stays focused on the wiki; the host AI agent handles orchestration.)
 
 ## Step 1 — Read registry state
 
