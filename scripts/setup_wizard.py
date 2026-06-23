@@ -498,6 +498,8 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
         recall.upsert_block(path, recall.render_always_on_block(),
                             marker=recall.ALWAYS_ON_MARKER)  # wiki-first (soft enforcement)
         written.append(path)
+    from scripts import commandmap
+    commandmap.export(base, hosts)
     print(f"✓ recall mode '{mode}'; guidance injected into "
           f"{', '.join(p.name for p in written) or '(none)'}.")
     # Tier 2: wire the host's native SessionStart + UserPromptSubmit hooks (global config).
