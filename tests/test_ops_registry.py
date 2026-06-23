@@ -59,20 +59,10 @@ def test_recall_hook_verbs_are_registered_deterministic():
 
 def test_no_dangling_op_references():
     known = set(reg.names())
-    # Tokens after "omw" in prose/headings that are NOT op names.
-    # Keep this list minimal — add only non-op English words caught by the regex.
-    allow = {
-        "team",          # leftover substring guard (belt-and-suspenders)
-        "deliberately",  # SKILL.md prose: "omw deliberately does not ship its own runtime"
-        "has",           # SKILL.md prose: "omw has exactly two ways to run things"
-        "stays",         # SKILL.md prose: "omw stays focused on the wiki"
-        "without",       # SKILL.md/menu.md prose: "opens omw without a specific verb"
-        "maintenance",   # gate.py module docstring: "omw maintenance gate"
-        "wiki",          # gate.py display label: "omw wiki upkeep gate"
-        "menu",          # commands/menu.md heading: "# omw menu — interactive entry point"
-                         # (menu is the bare-invocation handler, not a registered op)
-        "op",            # SKILL.md command-map prose: "omw <op> --help shows one op's args"
-    }
+    # Backtick-anchored scan: every genuine op reference in docs is written as `omw verb …`,
+    # never in raw prose. This excludes prose ("omw deliberately"), module docstrings,
+    # headings, and placeholders (e.g. `omw <op> --help`).
+    allow = set()  # Backtick-anchored regex needs no prose allowlist
     sources = [
         _ROOT / "SKILL.md",
         _ROOT / "scripts" / "gate.py",
@@ -81,7 +71,7 @@ def test_no_dangling_op_references():
     bad = []
     for path in sources:
         text = path.read_text(encoding="utf-8")
-        for verb in re.findall(r"omw ([a-z][a-z-]+)", text):
+        for verb in re.findall(r"`omw ([a-z][a-z-]+)", text):
             if verb not in known and verb not in allow:
                 bad.append(f"{path.name}: omw {verb}")
     assert not bad, f"dangling op references: {sorted(set(bad))}"
