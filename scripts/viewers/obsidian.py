@@ -5,8 +5,11 @@ import json
 import os
 import secrets
 import shutil
+import subprocess
 import sys
+import tempfile
 import time
+import urllib.request
 from pathlib import Path
 
 from scripts.viewers.base import VaultRef, Viewer, quote_value
@@ -146,3 +149,68 @@ class ObsidianViewer(Viewer):
             hints.append("Dataview(인라인 필드 표)는 커뮤니티 플러그인입니다. "
                          "Obsidian에서 설치 후 다시 실행하면 community-plugins.json에 추가됩니다.")
         return written, hints
+
+
+_MANUAL = "https://obsidian.md/download 에서 설치하세요."
+
+
+def _confirm(assume_yes: bool, interactive: bool) -> bool:
+    if assume_yes:
+        return True
+    if not interactive:
+        return False
+    try:
+        ans = input("Obsidian이 설치돼 있지 않습니다. 지금 설치할까요? [y/N] ")
+    except EOFError:
+        return False
+    return ans.strip().lower().startswith("y")
+
+
+def _is_debian_like() -> bool:
+    return shutil.which("apt") is not None or shutil.which("apt-get") is not None
+
+
+def _latest_deb_url() -> str:
+    import json as _json
+    api = "https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest"
+    with urllib.request.urlopen(api, timeout=15) as r:  # noqa: S310 (trusted host)
+        data = _json.loads(r.read().decode("utf-8"))
+    for asset in data.get("assets", []):
+        name = asset.get("name", "")
+        if name.endswith("_amd64.deb"):
+            return asset["browser_download_url"]
+    raise RuntimeError("no amd64 .deb asset found in latest release")
+
+
+def _download(url: str, dest) -> None:
+    with urllib.request.urlopen(url, timeout=60) as r, open(dest, "wb") as f:  # noqa: S310
+        shutil.copyfileobj(r, f)
+
+
+def _install_deb() -> tuple[bool, str]:
+    try:
+        url = _latest_deb_url()
+        dest = Path(tempfile.gettempdir()) / "obsidian.deb"
+        _download(url, dest)
+        subprocess.run(["sudo", "apt", "install", "-y", str(dest)], check=True)
+    except Exception as e:  # network/apt/sudo failure → manual fallback
+        return False, f".deb 설치 실패 ({e}). {_MANUAL}"
+    return True, "Obsidian(.deb) 설치 완료. WSL이면 `obsidian`으로 WSLg에서 실행하세요."
+
+
+def install_obsidian(*, assume_yes: bool = False, interactive: bool = True) -> tuple[bool, str]:
+    if obsidian_installed():
+        return True, "Obsidian이 이미 설치돼 있습니다."
+    if not _confirm(assume_yes, interactive):
+        return False, f"설치를 건너뜁니다. 직접 설치: {_MANUAL}"
+    if sys.platform == "darwin":
+        if shutil.which("brew"):
+            try:
+                subprocess.run(["brew", "install", "--cask", "obsidian"], check=True)
+            except Exception as e:
+                return False, f"brew 설치 실패 ({e}). {_MANUAL}"
+            return True, "Obsidian 설치 완료(brew cask)."
+        return False, f"brew가 없습니다. {_MANUAL}"
+    if _is_debian_like():
+        return _install_deb()
+    return False, f"자동 설치를 지원하지 않는 플랫폼입니다. {_MANUAL}"
