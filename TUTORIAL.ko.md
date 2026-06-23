@@ -45,29 +45,27 @@ supersede 처리, lint 수정)을 실행합니다. 이 구조 덕분에 추론 �
 
 ## Part 2 — 설치
 
-환경에 맞는 방법을 선택하세요. 어떤 경로를 선택하든 설치 후 `omw doctor`를 실행해
-모든 것이 올바르게 연결되었는지 확인하세요.
+환경에 맞는 방법을 선택하세요. PyPI 또는 git 경로를 선택한 경우 설치 후 `omw doctor`를
+실행해 모든 것이 올바르게 연결되었는지 확인하세요. Skills CLI 경로를 선택한 경우 CLI는
+처음 사용 시 설치됩니다(이후 `omw doctor` 실행).
 
-### Path A — Skills CLI (Claude Code 사용자에게 권장)
+### Path A — PyPI (`pip` / `pipx`) — 권장
+
+레포를 클론하지 않고 [PyPI](https://pypi.org/project/oh-my-wiki/)에서 `omw` CLI를
+설치합니다:
 
 ```bash
-skills add dandacompany/oh-my-wiki@oh-my-wiki -g -y --copy -a claude-code
+pipx install oh-my-wiki        # 격리된 CLI (권장)
+# 또는
+pip install oh-my-wiki         # 현재 환경에 설치
 ```
 
-이 명령은 스킬을 `~/.claude/skills/`에 설치하고 `oh-my-wiki`와 `omw` 단축 별칭 스킬 이름을 모두 등록합니다.
+배포되는 wheel은 self-contained입니다 — schemas, personas, backends, 그리고 전체
+스킬을 함께 담고 있어 바로 동작하는 `omw`를 얻습니다. 설치 후 번들된 스킬을 에이전트에
+등록하려면 `omw setup agents`를 실행하세요. GitHub에서 직접 설치하는 것도 동일하게
+동작합니다: `pipx install git+https://github.com/dandacompany/oh-my-wiki`.
 
-### Path B — Claude Code 플러그인 마켓플레이스
-
-Claude Code 세션에서:
-
-```
-/plugin marketplace add dandacompany/oh-my-wiki
-/plugin install oh-my-wiki@oh-my-wiki-marketplace
-```
-
-이후 업데이트는 `/plugin marketplace update oh-my-wiki-marketplace`로 할 수 있습니다.
-
-### Path C — git clone + install script (개발자, Codex CLI 사용자)
+### Path B — git clone + install script (개발자, Codex CLI 사용자)
 
 ```bash
 git clone https://github.com/dandacompany/oh-my-wiki
@@ -86,21 +84,16 @@ bash bin/install.sh
 재실행해도 안전합니다. `--force`를 사용하면 프롬프트 없이 기존 symlink를 교체합니다.
 전체 플래그는 `bash bin/install.sh --help`로 확인하세요.
 
-### Path D — PyPI (`pip` / `pipx`)
-
-레포를 클론하지 않고 [PyPI](https://pypi.org/project/oh-my-wiki/)에서 `omw` CLI를
-설치합니다:
+### Path C — Skills CLI (Claude Code 사용자)
 
 ```bash
-pipx install oh-my-wiki        # 격리된 CLI (권장)
-# 또는
-pip install oh-my-wiki         # 현재 환경에 설치
+skills add dandacompany/oh-my-wiki@oh-my-wiki -g -y --copy -a claude-code
 ```
 
-배포되는 wheel은 self-contained입니다 — schemas, personas, backends, 그리고 전체
-스킬을 함께 담고 있어 바로 동작하는 `omw`를 얻습니다. 설치 후 번들된 스킬을 에이전트에
-등록하려면 `omw setup agents`를 실행하세요. GitHub에서 직접 설치하는 것도 동일하게
-동작합니다: `pipx install git+https://github.com/dandacompany/oh-my-wiki`.
+이 명령은 스킬을 `~/.claude/skills/`에 설치하고 `oh-my-wiki`와 `omw` 단축 별칭 스킬
+이름을 모두 등록합니다. 스킬만 설치됩니다. `omw` CLI는 처음 사용 시 설치됩니다 — 에이전트를
+열고 **`omw 셋업 점검해줘`**(또는 `set up omw`)라고 말하면 스킬이 CLI 사전 확인을 실행하고
+확인 후 CLI를 설치합니다. 지금 바로 설치하려면: `pipx install oh-my-wiki`.
 
 ### 설치 확인
 

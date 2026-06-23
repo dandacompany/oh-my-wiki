@@ -32,38 +32,9 @@ oh-my-wiki exposes exactly two surfaces. The **`omw` CLI** handles deterministic
 
 ## Install
 
-Choose whichever path fits your environment. After any path, run `omw doctor` to confirm everything is wired correctly.
+Choose whichever path fits your environment. After the PyPI or git path, run `omw doctor` to confirm everything is wired correctly. After the Skills CLI path, the CLI is set up on first use (then `omw doctor`).
 
-### Path A — Skills CLI (recommended for Claude Code users)
-
-```bash
-skills add dandacompany/oh-my-wiki@oh-my-wiki -g -y --copy -a claude-code
-```
-
-This installs the skill into `~/.claude/skills/` and registers both the `oh-my-wiki` and `omw` short-alias skill names.
-
-### Path B — Claude Code plugin marketplace
-
-In any Claude Code session:
-
-```
-/plugin marketplace add dandacompany/oh-my-wiki
-/plugin install oh-my-wiki@oh-my-wiki-marketplace
-```
-
-Update later with `/plugin marketplace update oh-my-wiki-marketplace`.
-
-### Path C — git clone + install script (developers, Codex CLI users)
-
-```bash
-git clone https://github.com/dandacompany/oh-my-wiki
-cd oh-my-wiki
-bash bin/install.sh
-```
-
-The installer checks for Python 3.10+, pip-installs the package editable, creates `~/.claude/skills/oh-my-wiki` and `~/.claude/skills/omw` symlinks (idempotent), runs `pytest -q` to verify, and prints next steps. Add `--dev` to include pytest/ruff extras. Use `--force` to replace existing symlinks without a prompt; `--no-test` to skip the test step. Run `bash bin/install.sh --help` for all flags.
-
-### Path D — PyPI (`pip` / `pipx`)
+### Path A — PyPI (`pip` / `pipx`) — recommended
 
 Install the `omw` CLI from [PyPI](https://pypi.org/project/oh-my-wiki/) without cloning:
 
@@ -80,6 +51,24 @@ omw setup agents
 ```
 
 Installing straight from GitHub works the same way: `pipx install git+https://github.com/dandacompany/oh-my-wiki`.
+
+### Path B — git clone + install script (developers, Codex CLI users)
+
+```bash
+git clone https://github.com/dandacompany/oh-my-wiki
+cd oh-my-wiki
+bash bin/install.sh
+```
+
+The installer checks for Python 3.10+, pip-installs the package editable, creates `~/.claude/skills/oh-my-wiki` and `~/.claude/skills/omw` symlinks (idempotent), runs `pytest -q` to verify, and prints next steps. Add `--dev` to include pytest/ruff extras. Use `--force` to replace existing symlinks without a prompt; `--no-test` to skip the test step. Run `bash bin/install.sh --help` for all flags.
+
+### Path C — Skills CLI (Claude Code users)
+
+```bash
+skills add dandacompany/oh-my-wiki@oh-my-wiki -g -y --copy -a claude-code
+```
+
+This installs the skill into `~/.claude/skills/` and registers both the `oh-my-wiki` and `omw` short-alias skill names. This installs the skill only. The `omw` CLI is installed on first use — open your agent and say **`set up omw`** (or `omw 셋업 점검해줘`); the skill runs its CLI preflight and installs the CLI with your confirmation. Or install it yourself now: `pipx install oh-my-wiki`.
 
 ### Verify the install
 

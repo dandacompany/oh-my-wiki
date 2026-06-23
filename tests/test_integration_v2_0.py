@@ -1,30 +1,13 @@
 """End-to-end v2.0 scenario."""
-import json
-import subprocess
-import sys
-from pathlib import Path
-
 import pytest
 
 from scripts import adapters, hot_cache, ingest, registry, reindex, wiki_lint
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
 def fresh_db(tmp_db):
     registry.init_db(tmp_db)
     return tmp_db
-
-
-def test_plugin_marketplace_pair_loads_without_error(fresh_db):
-    """Smoke: plugin.json + marketplace.json parse and reference real files."""
-    plugin = json.loads((REPO_ROOT / ".claude-plugin/plugin.json").read_text())
-    marketplace = json.loads((REPO_ROOT / ".claude-plugin/marketplace.json").read_text())
-    assert plugin["name"] == "oh-my-wiki"
-    assert marketplace["name"].endswith("-marketplace")
-    for op in plugin["ops"]:
-        assert (REPO_ROOT / "commands" / f"{op}.md").exists()
 
 
 def test_personal_mode_setup_then_hot_cache_then_lint(fresh_db, tmp_path):

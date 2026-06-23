@@ -45,30 +45,28 @@ reasoning transparent and the file changes auditable.
 
 ## Part 2 — Install
 
-Choose whichever path fits your environment. After any path, run `omw doctor`
-to confirm everything is wired correctly.
+Choose whichever path fits your environment. After the PyPI or git path, run
+`omw doctor` to confirm everything is wired correctly. After the Skills CLI
+path, the CLI is set up on first use (then `omw doctor`).
 
-### Path A — Skills CLI (recommended for Claude Code users)
+### Path A — PyPI (`pip` / `pipx`) — recommended
+
+Install the `omw` CLI from [PyPI](https://pypi.org/project/oh-my-wiki/) without
+cloning the repo:
 
 ```bash
-skills add dandacompany/oh-my-wiki@oh-my-wiki -g -y --copy -a claude-code
+pipx install oh-my-wiki        # isolated CLI (recommended)
+# or
+pip install oh-my-wiki         # into the current environment
 ```
 
-This installs the skill into `~/.claude/skills/` and registers both the
-`oh-my-wiki` and `omw` short-alias skill names.
+The published wheel is self-contained — it bundles the schemas, personas,
+backends, and the full skill — so you get a working `omw` immediately. To
+register the bundled skill with your agents afterwards, run `omw setup agents`.
+Installing straight from GitHub works the same way:
+`pipx install git+https://github.com/dandacompany/oh-my-wiki`.
 
-### Path B — Claude Code plugin marketplace
-
-In any Claude Code session:
-
-```
-/plugin marketplace add dandacompany/oh-my-wiki
-/plugin install oh-my-wiki@oh-my-wiki-marketplace
-```
-
-Update later with `/plugin marketplace update oh-my-wiki-marketplace`.
-
-### Path C — git clone + install script (developers, Codex CLI users)
+### Path B — git clone + install script (developers, Codex CLI users)
 
 ```bash
 git clone https://github.com/dandacompany/oh-my-wiki
@@ -87,22 +85,18 @@ The installer:
 It is safe to re-run. Use `--force` to replace existing symlinks without a
 prompt. Run `bash bin/install.sh --help` for all flags.
 
-### Path D — PyPI (`pip` / `pipx`)
-
-Install the `omw` CLI from [PyPI](https://pypi.org/project/oh-my-wiki/) without
-cloning the repo:
+### Path C — Skills CLI (Claude Code users)
 
 ```bash
-pipx install oh-my-wiki        # isolated CLI (recommended)
-# or
-pip install oh-my-wiki         # into the current environment
+skills add dandacompany/oh-my-wiki@oh-my-wiki -g -y --copy -a claude-code
 ```
 
-The published wheel is self-contained — it bundles the schemas, personas,
-backends, and the full skill — so you get a working `omw` immediately. To
-register the bundled skill with your agents afterwards, run `omw setup agents`.
-Installing straight from GitHub works the same way:
-`pipx install git+https://github.com/dandacompany/oh-my-wiki`.
+This installs the skill into `~/.claude/skills/` and registers both the
+`oh-my-wiki` and `omw` short-alias skill names. This installs the skill only.
+The `omw` CLI is installed on first use — open your agent and say
+**`set up omw`** (or `omw 셋업 점검해줘`); the skill runs its CLI preflight
+and installs the CLI with your confirmation. Or install it yourself now:
+`pipx install oh-my-wiki`.
 
 ### Verify the install
 
@@ -824,7 +818,7 @@ reports `ok`.
 file in the skill directory (or `<cwd>/data/registry.db`). This happens in a
 **source-tree checkout** where `data/registry.db` is present on disk.
 
-Real end-users who install via Skills CLI, marketplace, PyPI (`pip`/`pipx`), or
+Real end-users who install via Skills CLI, PyPI (`pip`/`pipx`), or
 `bin/install.sh` see `needs: "setup"` on a fresh machine — `data/` is gitignored
 and not included in the distributed package.
 

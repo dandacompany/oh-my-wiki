@@ -37,11 +37,12 @@ def version() -> str:
     try:
         return m.version("oh-my-wiki")
     except Exception:
-        import json
+        import re
         from scripts import paths
-        pj = paths.bundled_root() / ".claude-plugin" / "plugin.json"
         try:
-            return json.loads(pj.read_text(encoding="utf-8")).get("version", "0.0.0")
+            pj = (paths.bundled_root() / "pyproject.toml").read_text(encoding="utf-8")
+            mt = re.search(r'^version\s*=\s*"([^"]+)"', pj, re.M)
+            return mt.group(1) if mt else "0.0.0"
         except Exception:
             return "0.0.0"
 

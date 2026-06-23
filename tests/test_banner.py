@@ -1,25 +1,23 @@
 import io
 import re
 
-from scripts import banner
+from scripts import banner, paths
 
 
-def test_version_is_semver_and_matches_plugin_json():
+def test_version_is_semver_and_matches_pyproject():
     v = banner.version()
-    assert re.fullmatch(r"\d+\.\d+\.\d+", v), v
-    import json, pathlib
-    pj = json.loads((pathlib.Path(banner.__file__).resolve().parents[1]
-                     / ".claude-plugin" / "plugin.json").read_text())
-    assert v == pj["version"]
+    pj = (paths.bundled_root() / "pyproject.toml").read_text(encoding="utf-8")
+    m = re.search(r'^version\s*=\s*"([^"]+)"', pj, re.M)
+    assert m and v == m.group(1)
 
 
-def test_version_plugin_json_fallback(monkeypatch):
+def test_version_pyproject_fallback(monkeypatch):
     import importlib.metadata as m
-    def boom(_name):
-        raise m.PackageNotFoundError("oh-my-wiki")
+    def boom(_):
+        raise m.PackageNotFoundError
     monkeypatch.setattr(m, "version", boom)
     v = banner.version()
-    assert re.fullmatch(r"\d+\.\d+\.\d+", v)  # came from plugin.json
+    assert re.fullmatch(r"\d+\.\d+\.\d+", v)  # came from pyproject.toml
 
 
 def test_banner_text_has_wordmark_footer_and_version():

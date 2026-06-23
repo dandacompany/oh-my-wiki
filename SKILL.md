@@ -17,6 +17,11 @@ A storage-agnostic LLM Wiki skill. Implements Andrej Karpathy's three-layer patt
    It is FORBIDDEN to run `python3 -m scripts.<anything>`, `python3 -c "from scripts import …"`,
    or to import / execute `scripts/*.py` modules (registry, adapters, reindex, wizard, …)
    directly. The `scripts/` package is an internal implementation detail, NOT a user interface.
+   - **CLI preflight (first use):** if the `omw` command is not callable, run
+     `bash "<this skill dir>/bin/ensure-cli.sh"` once. It asks the user before
+     installing the CLI (pipx/pip) and prints `OMW_BIN=<path>`. Use that absolute
+     path for `omw …` calls in this session (PATH refreshes next session). Never
+     fall back to `python3 -m scripts.*`.
 2. **Web search MUST go through `omw search "<query>"`.** It routes to the user's configured
    provider and keeps the wiki's provenance intact. Do NOT use your own / native web-search
    tool for OMW work.
@@ -31,7 +36,7 @@ A storage-agnostic LLM Wiki skill. Implements Andrej Karpathy's three-layer patt
 
 v1 (Plans A + B + C) is complete: dispatcher + foundation scripts, vault management (`vault-setup`, `vault-use`, `vault-list`, `vault-forget`, `vault-import-memo`), memo-mode ops (`create`, `find`, `open`, `edit`, `move`, `delete`), wiki-mode ops (`ingest`, `query`), and the common `lint` op (with wiki-mode structural extensions). 91 pytest tests pass on GitHub Actions matrix (Python 3.10/3.11/3.12 × ubuntu/macos). See `README.md`, `TUTORIAL.md`, `TUTORIAL.ko.md` for usage.
 
-v2 adds plugin-marketplace install, session hot cache, 6 vault-setup modes, extended wiki-lint categories, autoresearch, wiki-maintenance personas (wiki-librarian / curator / fact-checker / consistency-checker / terminology-manager), Obsidian/Logseq viewers, URL fetch + inbox, and per-prompt wiki recall hooks. (Earlier prototypes of a tmux-based multi-agent swarm/team runtime were removed — omw stays focused on the wiki; the host AI agent handles orchestration.)
+v2 adds session hot cache, 6 vault-setup modes, extended wiki-lint categories, autoresearch, wiki-maintenance personas (wiki-librarian / curator / fact-checker / consistency-checker / terminology-manager), Obsidian/Logseq viewers, URL fetch + inbox, and per-prompt wiki recall hooks. (Earlier prototypes of a tmux-based multi-agent swarm/team runtime were removed — omw stays focused on the wiki; the host AI agent handles orchestration.)
 
 ## Step 1 — Read registry state
 

@@ -26,7 +26,6 @@ def test_built_wheel_is_self_contained(tmp_path):
     assert any(n.startswith("scripts/_bundle/schemas/") for n in names)
     assert any(n.startswith("scripts/_bundle/personas/") for n in names)
     assert any(n.startswith("scripts/_bundle/backends/") for n in names)
-    assert any(n == "scripts/_bundle/.claude-plugin/plugin.json" for n in names)
     assert any(n == "scripts/db/schema.sql" for n in names)
     # The bundle must reproduce a runnable skill: scripts package + SKILL.md entry.
     assert any(n.startswith("scripts/_bundle/scripts/") for n in names)
@@ -64,4 +63,3 @@ def test_installed_wheel_bundle_yields_runnable_skill_copy(tmp_path):
     assert (skill / "scripts" / "omw_cli.py").is_file(), "copied skill missing scripts package"
     assert (skill / "commands").is_dir()
     assert (skill / "schemas").is_dir()
-    assert (skill / ".claude-plugin" / "plugin.json").is_file()

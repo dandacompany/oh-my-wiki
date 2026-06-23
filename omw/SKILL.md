@@ -19,7 +19,7 @@ The canonical skill provides:
 - Multi-vault sqlite registry (`scripts/wizard.py`, `scripts/registry.py`)
 - memo-mode and wiki-mode dual ops
 - 11 user-facing ops (vault-setup / vault-use / vault-list / vault-forget / vault-import-memo / create / find / open / edit / move / delete / ingest / query / lint)
-- v2 in progress (plugin install, hot cache, autoresearch, writing-agent personas, multi-agent runtime, swarm protocol)
+- v2 in progress (hot cache, autoresearch, writing-agent personas, Obsidian/Logseq viewers, URL fetch + inbox, per-prompt recall)
 
 ## Why this stub exists
 
