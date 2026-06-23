@@ -158,7 +158,7 @@ def render(decision: dict, *, mode: str) -> str:
         body = (
             "Pending wiki upkeep detected:\n" + items + "\n"
             "Before ending this turn, ask the user whether to run it now (foreground), "
-            "in the background (omw team-run), or later. Apply nothing without confirmation."
+            "in the background (dispatch the persona upkeep subagent — Workstream D), or later. Apply nothing without confirmation."
         )
     else:  # advisory
         body = (
