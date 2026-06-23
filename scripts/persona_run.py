@@ -10,11 +10,13 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from scripts import backends
 from scripts import links as _links
 from scripts import personas
+from scripts import registry
 from scripts import wiki_lint as _wiki_lint
 
 
@@ -103,3 +105,98 @@ def _dispatch(persona_body: str, task_prompt: str, *, backend: str, model: str,
         raise RunError(f"{backend} dispatch failed (rc={cp.returncode}): "
                        f"{(cp.stderr or '').strip()[:200]}")
     return cp.stdout
+
+
+# ---------------------------------------------------------------------------
+# Filing helpers
+# ---------------------------------------------------------------------------
+
+def _stage_proposal(target: Path, content: str) -> Path:
+    """Write content to a .proposed.md sidecar; never touch target. Return proposal path."""
+    proposal = target.with_name(target.name + ".proposed.md")
+    proposal.write_text(content, encoding="utf-8")
+    return proposal
+
+
+def apply_proposal(proposal: Path) -> Path:
+    """Move a .proposed.md onto its target. Raises RunError if not a proposal file."""
+    if not proposal.name.endswith(".proposed.md"):
+        raise RunError(f"not a proposal file: {proposal}")
+    target = proposal.with_name(proposal.name[: -len(".proposed.md")])
+    target.write_text(proposal.read_text(encoding="utf-8"), encoding="utf-8")
+    proposal.unlink()
+    return target
+
+
+# Roles whose output rewrites an existing page — never auto-applied.
+_MUTATION_ROLES: frozenset[str] = frozenset({"curator"})
+
+
+def run(
+    role: str,
+    *,
+    db_path,
+    vault_id,
+    source=None,
+    backend=None,
+    apply=False,
+    override_cli_path=None,
+) -> int:
+    """Full pipeline: gather → pick backend → dispatch → file. Returns exit code."""
+    override_cli_path = override_cli_path or _override_path()
+    try:
+        persona = personas.load_persona(role)
+        task, meta = _gather_inputs(role, db_path=db_path, vault_id=vault_id, source=source)
+        chosen = _pick_backend(
+            backends.detect_available(override_path=override_cli_path), backend
+        )
+        model = _resolve_model(persona.get("model_hint", ""), chosen)
+        out = _dispatch(
+            persona["body"], task,
+            backend=chosen, model=model,
+            override_cli_path=override_cli_path,
+        )
+    except RunError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    if role in _MUTATION_ROLES:
+        target = registry.get_vault_root(db_path, vault_id) / "wiki" / "index.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        prop = _stage_proposal(target, out)
+        print(
+            f"proposal staged: {prop}\n"
+            f"Review, then `omw persona-run {role} --apply` to apply."
+        )
+        return 0
+
+    # Non-mutation: resolve output path and file directly.
+    output_kind = persona.get("output_kind", "stdout")
+    target_path: Path | None = None
+    if output_kind != "stdout":
+        # Prefer explicit output_suffix from persona frontmatter; fall back to
+        # role name with hyphens stripped (e.g. "fact-checker" → "factchecker").
+        suffix = persona.get("output_suffix") or role.replace("-", "")
+        try:
+            target_path = personas.resolve_output_path(
+                persona=persona,
+                source_meta=meta,
+                db_path=Path(db_path),
+                vault_id=vault_id,
+                suffix=suffix,
+            )
+        except personas.PersonaError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+
+    written = personas.write_output(
+        persona=persona,
+        target_path=target_path,
+        content=out,
+        source_meta=meta,
+    )
+    print(json.dumps(
+        {"role": role, "backend": chosen, "filed": str(written) if written else None},
+        ensure_ascii=False,
+    ))
+    return 0

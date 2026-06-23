@@ -64,3 +64,30 @@ def test_gather_factcheck_uses_source(tmp_path, monkeypatch):
     task, meta = persona_run._gather_inputs(
         "fact-checker", db_path=db, vault_id=vid, source={"vault_relpath": "p.md"})
     assert "claim" in task.lower()
+
+
+# ---------------------------------------------------------------------------
+# Filing tests: additive direct and mutation staged
+# ---------------------------------------------------------------------------
+
+def test_additive_output_filed_directly(tmp_path, monkeypatch):
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"p.md": "# P\n\nClaim."})
+    monkeypatch.setenv("OMW_BACKEND_OVERRIDE_PATH", FAKES)
+    rc = persona_run.run("fact-checker", db_path=db, vault_id=vid,
+                         source={"vault_relpath": "p.md"}, backend="codex",
+                         override_cli_path=FAKES)
+    assert rc == 0
+    # fact-checker output_kind is sibling_suffix → a sibling report exists
+    sib = list((tmp_path).rglob("*.factcheck.md"))
+    assert sib, "additive sibling report should be filed directly"
+
+
+def test_mutation_staged_not_applied(tmp_path):
+    target = tmp_path / "index.md"
+    target.write_text("ORIGINAL", encoding="utf-8")
+    prop = persona_run._stage_proposal(target, "PROPOSED")
+    assert prop.exists() and prop.read_text() == "PROPOSED"
+    assert target.read_text() == "ORIGINAL"  # never auto-applied
+    out = persona_run.apply_proposal(prop)
+    assert out == target and target.read_text() == "PROPOSED"
+    assert not prop.exists()
