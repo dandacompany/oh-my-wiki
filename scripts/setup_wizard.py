@@ -7,6 +7,7 @@ The first slice writes config.yaml; secrets (search/persona/TTS) come in later s
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import shutil
 import sys
@@ -303,6 +304,29 @@ def setup_viewer(*, viewer: str | None = None, vault: str | None = None,
     root = Path(row["path"])
     v = viewers.get_viewer(choice)
     ref = VaultRef(root=root, name=root.name)
+
+    if choice == "obsidian":
+        from scripts import platform_env
+        from scripts.viewers import obsidian as _ob
+        interactive = (not noninteractive) and sys.stdin.isatty()
+        if not _ob.obsidian_installed():
+            _ok, msg = _ob.install_obsidian(
+                assume_yes=os.environ.get("OMW_BOOTSTRAP_YES") == "1",
+                interactive=interactive)
+            print(f"  obsidian: {msg}")
+        if platform_env.is_wsl():
+            wp = platform_env.windows_user_profile()
+            winuser = wp.name if wp is not None else "<windows-user>"
+            print("  ⚠️  WSL 감지 — Windows Obsidian으로 \\\\wsl.localhost 경로를 열면 "
+                  "fs.watch EISDIR로 실패합니다. 두 가지 중 하나로 여세요:")
+            print("    ① 리눅스 Obsidian을 WSL에 설치(위 부트스트랩) → `obsidian`으로 WSLg 실행 "
+                  "(vault는 그대로, 네이티브 watch).")
+            print("    ② 기존 Windows Obsidian을 쓰려면 vault를 Windows 드라이브에 두세요:")
+            print(f"         omw vault create {row['name']} --mode wiki --type obsidian \\")
+            print(f"           --location \"/mnt/c/Users/{winuser}/omw-vaults/{row['name']}\"")
+            if _ob.register_vault_windows(root):
+                print("  → Windows obsidian.json에도 등록했습니다(앱 재시작 후 인식).")
+
     written, hints = v.scaffold_config(ref)
     print(f"viewer: {choice}  vault: {row['name']}  ({root})")
     for p in written:
