@@ -8,6 +8,7 @@ tools: [mcp__brightdata__search_engine]
 model_hint: most_capable
 input_kinds: [text, file, vault_page]
 output_kind: sibling_suffix
+output_suffix: factcheck
 ---
 
 # Fact-checker persona

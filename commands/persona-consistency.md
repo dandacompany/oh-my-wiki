@@ -17,47 +17,21 @@ within a doc or across a vault. JSON report to stdout.
 
 ## Procedure
 
-1. **Show the persona spec.** Read `personas/consistency-checker.md`
-   so the user sees the judgment categories.
+Dispatch the persona via `omw persona-run consistency-checker` — this spawns
+an isolated one-shot subagent on any backend (claude/codex/gemini/opencode)
+with the persona spec as its system prompt. Show the user the result.
 
-2. **Pick the mode.** If a source was given → single_doc. If only
-   `--vault-id` → vault_wide.
+Pass the source as input. In vault-wide mode, first gather the candidate
+list (`python3 -m scripts.wiki_lint --vault-id <id>`) and feed the
+`contradiction_candidates` output to the subagent. In single-doc mode,
+pass the source directly.
 
-3. **For vault-wide mode**, first gather the candidate list:
+The subagent classifies each candidate pair as `confirmed` / `nuanced` /
+`false_positive` with a 1-2 sentence explanation per verdict, then emits
+JSON following the persona's output format.
 
-   ```bash
-   python3 -m scripts.wiki_lint --vault-id <id>
-   ```
-
-   The output contains `contradiction_candidates` — feed those to
-   the persona body's judgment step.
-
-4. **For single-doc mode**, read the source and look for
-   contradiction patterns within it (same patterns
-   wiki_lint uses: `is X` vs `is not X`, `supports X` vs
-   `contradicts X`, etc.).
-
-5. **Apply the persona's judgment.** For each candidate pair,
-   classify as `confirmed` / `nuanced` / `false_positive`. Write
-   a 1-2 sentence explanation per verdict.
-
-6. **Emit JSON on stdout.** Follow the persona's "Output format"
-   exactly. Run via:
-
-   ```bash
-   python3 -m scripts.personas run consistency-checker \
-     --vault-id <id> \
-     --vault-relpath <relpath>   # for single_doc; omit for vault_wide
-     --output-file /tmp/consistency-<ts>.json
-   ```
-
-   For vault_wide, `--vault-relpath` is required for the runtime
-   even if the LLM judges across many pages — pick the most
-   relevant index page (e.g. `wiki/index.md`) as the symbolic
-   source.
-
-7. **Summarize to the user**: counts per category + the most
-   important confirmed contradictions.
+Summarize to the user: counts per category + the most important confirmed
+contradictions.
 
 ## Pitfalls
 

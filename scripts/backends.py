@@ -222,8 +222,10 @@ def build_invocation(
     if skip_permissions and spec.get("skip_perm_flag"):
         argv.append(spec["skip_perm_flag"])
 
-    # model
-    argv += [spec["model_flag"], model]
+    # model — omit the flag when empty so the backend picks its own default
+    # (a soft "use default" instead of passing an invalid empty --model value)
+    if model:
+        argv += [spec["model_flag"], model]
 
     # system / persona body
     argv += [spec["system_prompt_flag"], persona_body]
