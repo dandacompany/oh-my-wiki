@@ -99,3 +99,4 @@ def test_cli_persona_run_files_report(tmp_path, monkeypatch):
     from scripts import omw_cli
     rc = omw_cli.main(["persona-run", "fact-checker", "--page", "p.md", "--backend", "codex"])
     assert rc == 0
+    assert list(tmp_path.rglob("*.factcheck.md")), "CLI persona-run should file the sibling report"
