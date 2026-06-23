@@ -578,7 +578,7 @@ def setup_playwright(*, noninteractive: bool = False) -> int:
     """Set up Playwright (chromium). Best-effort: returns 0 even if not installed."""
     import os
     interactive = (not noninteractive) and sys.stdin.isatty()
-    ok, msg = install_playwright(
+    _ok, msg = install_playwright(
         assume_yes=os.environ.get("OMW_BOOTSTRAP_YES") == "1",
         interactive=interactive)
     print(f"playwright: {msg}")
@@ -618,6 +618,7 @@ def doctor() -> int:
         import questionary  # noqa: F401
         wizard_ui = "ok"
     except Exception:
-        wizard_ui = "missing (pip install 'oh-my-wiki[wizard]' — arrow-key setup UI; falls back to plain text)"
+        _wzcmd = " ".join(_pe.pip_install_argv("oh-my-wiki[wizard]"))
+        wizard_ui = f"missing ({_wzcmd} — arrow-key setup UI; falls back to plain text)"
     print(f"wizard UI:     {wizard_ui}")
     return 0
