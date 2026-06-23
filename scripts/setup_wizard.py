@@ -6,6 +6,7 @@ The first slice writes config.yaml; secrets (search/persona/TTS) come in later s
 """
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import secrets
@@ -17,6 +18,48 @@ from pathlib import Path
 from scripts import adapters, config, registry, reindex, viewers
 from scripts.paths import ensure_home, omw_home, registry_path, resolve_vault_root
 from scripts.viewers.base import VaultRef
+
+
+_WIZARD_UI_TRIED = False
+
+
+def _questionary_available() -> bool:
+    try:
+        import questionary  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def ensure_wizard_ui() -> bool:
+    """Best-effort: make the questionary arrow-key TUI available for interactive setup.
+
+    Confirm-first; never silent; one attempt per process. Returns True if available.
+    Any failure degrades silently to the comma-text fallback (never raises).
+    """
+    global _WIZARD_UI_TRIED
+    if _questionary_available():
+        return True
+    if _WIZARD_UI_TRIED:
+        return False
+    _WIZARD_UI_TRIED = True
+    assume_yes = os.environ.get("OMW_BOOTSTRAP_YES") == "1"
+    if not assume_yes:
+        if not sys.stdin.isatty():
+            return False
+        try:
+            ans = input("화살표키 선택 UI(questionary)가 없습니다. 지금 설치할까요? [y/N] ")
+        except EOFError:
+            return False
+        if not ans.strip().lower().startswith("y"):
+            return False
+    from scripts import platform_env
+    try:
+        subprocess.run(platform_env.pip_install_argv("questionary"), check=True)
+        importlib.invalidate_caches()
+    except Exception:
+        return False
+    return _questionary_available()
 
 
 def _ensure_vault(name: str, mode: str, type_: str, location: str) -> None:
