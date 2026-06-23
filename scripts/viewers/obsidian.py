@@ -38,17 +38,10 @@ def vault_registered(root: Path, *, config_path: Path | None = None) -> bool:
     return any((v or {}).get("path") == target for v in data.get("vaults", {}).values())
 
 
-def register_vault(root: Path, *, config_path: Path | None = None) -> bool:
-    """Idempotently add `root` to Obsidian's vault registry, preserving existing entries.
-
-    Returns True if a new entry was written; False if already present or unwritable.
-    NOTE: a running Obsidian caches its vault list, so a restart (or a one-time
-    "Open folder as vault") is needed for a live app to pick up the new entry.
-    """
-    cp = config_path or app_config_path()
-    if cp is None:
-        return False
-    target = str(root)
+def _register_target(cp, target: str) -> bool:
+    """Idempotently add `target` (a path string) to an obsidian.json registry at `cp`."""
+    from pathlib import Path as _P
+    cp = _P(cp)
     try:
         data = json.loads(cp.read_text(encoding="utf-8")) if cp.is_file() else {}
     except (OSError, json.JSONDecodeError):
@@ -63,6 +56,45 @@ def register_vault(root: Path, *, config_path: Path | None = None) -> bool:
     except OSError:
         return False
     return True
+
+
+def register_vault(root: Path, *, config_path: Path | None = None) -> bool:
+    """Idempotently add `root` to Obsidian's vault registry, preserving existing entries.
+
+    Returns True if a new entry was written; False if already present or unwritable.
+    NOTE: a running Obsidian caches its vault list, so a restart (or a one-time
+    "Open folder as vault") is needed for a live app to pick up the new entry.
+    """
+    cp = config_path or app_config_path()
+    if cp is None:
+        return False
+    return _register_target(cp, str(root))
+
+
+def windows_vault_path(root) -> str:
+    """Convert `/mnt/<d>/…` to `D:\…`; else use `platform_env.to_unc_path(root)`."""
+    import re as _re
+    from scripts import platform_env
+    s = str(root)
+    m = _re.match(r"^/mnt/([a-z])/(.*)$", s)
+    if m:
+        return f"{m.group(1).upper()}:\\" + m.group(2).replace("/", "\\")
+    return platform_env.to_unc_path(root)
+
+
+def windows_obsidian_config() -> Path | None:
+    """Windows-side obsidian.json: `<win profile>/AppData/Roaming/obsidian/obsidian.json`."""
+    from scripts import platform_env
+    wp = platform_env.windows_user_profile()
+    return (wp / "AppData" / "Roaming" / "obsidian" / "obsidian.json") if wp else None
+
+
+def register_vault_windows(root, *, config_path=None) -> bool:
+    """Idempotently add Windows-side vault path to obsidian.json."""
+    cp = config_path or windows_obsidian_config()
+    if cp is None:
+        return False
+    return _register_target(cp, windows_vault_path(root))
 
 
 def obsidian_installed() -> bool:
