@@ -62,6 +62,18 @@ def register_vault(root: Path, *, config_path: Path | None = None) -> bool:
     return True
 
 
+def obsidian_installed() -> bool:
+    if sys.platform == "darwin":
+        return Path("/Applications/Obsidian.app").exists() or shutil.which("obsidian") is not None
+    if sys.platform.startswith("win"):
+        return shutil.which("obsidian") is not None
+    # linux / wsl
+    if shutil.which("obsidian") is not None:
+        return True
+    return any(Path(p).exists() for p in (
+        "/usr/bin/obsidian", "/usr/local/bin/obsidian", "/opt/Obsidian/obsidian"))
+
+
 _CORE_PLUGINS = [
     "file-explorer", "switcher", "command-palette", "outline", "bookmarks",
     "graph", "backlink", "outgoing-link", "page-preview",
