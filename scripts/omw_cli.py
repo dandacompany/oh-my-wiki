@@ -14,7 +14,7 @@ from scripts import adapters, lint, registry, reindex, wizard
 from scripts.paths import ensure_home, registry_path, resolve_vault_root
 
 AGENTIC_OPS = [
-    "ingest", "query", "find", "open", "edit", "move", "delete",
+    "ingest", "query", "open", "edit", "move", "delete",
     "autoresearch", "persona-factcheck", "persona-consistency",
     "persona-terminology",
 ]
@@ -411,6 +411,26 @@ def _cmd_search(args) -> int:
     return 0
 
 
+def _cmd_find(args) -> int:
+    from scripts import search_index
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    hits = search_index.query(db, vault_id=vault["id"], query=args.query, limit=args.limit)
+    if args.find_json:
+        print(json.dumps(hits, ensure_ascii=False, indent=2))
+        return 0
+    if not hits:
+        print(f"(no matches for {args.query!r} in {vault['name']})")
+        return 0
+    for h in hits:
+        title = h.get("title") or h.get("relpath")
+        score = h.get("score", 0)
+        print(f"{score:>6.2f}  {h['relpath']}  —  {title}")
+    return 0
+
+
 def _cmd_view(args) -> int:
     from scripts import view
     return view.run(args)
@@ -611,12 +631,15 @@ def _cmd_doctor(args) -> int:
 
 
 def _cmd_agentic(args) -> int:
-    op = args.op
-    print(
-        f"'{op}' needs natural-language reasoning — it is not a deterministic CLI "
-        f"command.\nOpen Claude Code and use the omw skill (e.g. say '{op} ...'); "
-        f"the skill runs the commands/{op}.md procedure."
-    )
+    from scripts import ops_registry as reg
+    from scripts import cards
+    spec = reg.get(args.op)
+    bound = {a.name.lstrip("-").replace("-", "_"): getattr(args, a.name.lstrip("-").replace("-", "_"), None)
+             for a in spec.args}
+    if getattr(args, "card_json", False):
+        print(cards.render_card_json(spec, bound))
+    else:
+        print(cards.render_card(spec, bound))
     return 0
 
 
@@ -777,6 +800,13 @@ def build_parser() -> argparse.ArgumentParser:
     psr.add_argument("--limit", type=int, default=10)
     psr.set_defaults(func=_cmd_search)
 
+    pfd = sub.add_parser("find", help="Deterministic full-text search over the vault index.")
+    pfd.add_argument("query")
+    pfd.add_argument("--limit", type=int, default=10)
+    pfd.add_argument("--vault", default=None)
+    pfd.add_argument("--json", dest="find_json", action="store_true")
+    pfd.set_defaults(func=_cmd_find)
+
     pse = sub.add_parser("serve", help="Run the local query HTTP API (retrieve-only).")
     pse.add_argument("--host", default="127.0.0.1", help="bind host (default: localhost)")
     pse.add_argument("--port", type=int, default=8765)
@@ -870,9 +900,22 @@ def build_parser() -> argparse.ArgumentParser:
         "doctor", help="Validate omw config + install."
     ).set_defaults(func=_cmd_doctor)
 
-    for op in AGENTIC_OPS:
-        ap = sub.add_parser(op, help=f"(needs a Claude session) {op}")
-        ap.set_defaults(func=_cmd_agentic, op=op)
+    from scripts import ops_registry as _reg
+    for _name in _reg.PROCEDURE_NAMES:
+        _spec = _reg.get(_name)
+        ap = sub.add_parser(_name, help=f"(omw skill procedure) {_spec.summary}")
+        for _a in _spec.args:
+            if _a.name.startswith("--"):
+                if _a.name == "--no-synthesis":
+                    ap.add_argument(_a.name, dest="no_synthesis", action="store_true", help=_a.hint)
+                else:
+                    ap.add_argument(_a.name, default=None, help=_a.hint)
+            else:
+                _req = _a.required
+                ap.add_argument(_a.name, nargs=None if _req else "?", default=None, help=_a.hint)
+        ap.add_argument("--json", dest="card_json", action="store_true",
+                        help="emit the procedure card as JSON")
+        ap.set_defaults(func=_cmd_agentic, op=_name)
 
     return p
 

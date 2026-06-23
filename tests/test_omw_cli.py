@@ -138,11 +138,17 @@ def test_lint_vault_flag_no_registry_errors(capsys):
     assert "no registry" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("op", ["ingest", "query", "autoresearch", "persona-factcheck"])
-def test_agentic_op_bridges_to_claude(op, capsys):
-    assert _run([op]) == 0
+@pytest.mark.parametrize("op,placeholder", [
+    ("ingest", "path/to/file"),
+    ("query", "what is this?"),
+    ("autoresearch", "research topic"),
+    ("persona-factcheck", "page.md"),
+])
+def test_agentic_op_prints_procedure_card(op, placeholder, capsys):
+    """Agentic ops now require args and print a procedure card (not a Claude bridge)."""
+    assert _run([op, placeholder]) == 0
     out = capsys.readouterr().out
-    assert "Claude" in out and op in out
+    assert f"procedure: {op}" in out
     db = registry_path()
     assert (not db.exists()) or registry.list_vaults(db) == []
 

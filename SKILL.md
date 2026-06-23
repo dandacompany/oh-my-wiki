@@ -152,13 +152,13 @@ When the user has enabled the gate (`omw setup gate --enable`), help it work:
 
 - **When the gate opens** (an `<omw-gate>` block appears at turn end), ask the
   user whether to run the upkeep/capture cycle **now (foreground)**, in the
-  **background** (`omw team-run <bg_team>`), or **later**. Show only the pending
+  **background** (dispatch the persona upkeep subagent — Workstream D), or **later**. Show only the pending
   parts the block lists.
   - Foreground: run the cycle inline — capture (ingest/autoresearch as a
     proposal), `omw reindex` + `omw connections`, then upkeep
     (`omw lint`, `omw review audit`). **Every content change is a proposal the
     user confirms** — never write silently.
-  - Background: dispatch `omw team-run`; read-only steps run, writes are staged
+  - Background: dispatch the persona upkeep subagent (Workstream D); read-only steps run, writes are staged
     as proposals for later confirmation.
   - Later: do nothing; the gate snoozes itself.
 
@@ -194,6 +194,23 @@ If the user input matches an op keyword, prefer that op over the wizard:
 | "connections", "의외의 연결점", "어떤 주제들이 이어지나", "what links my topics"   | `connections` → `commands/connections.md`                       |
 | `recall.strategy=llm` (hook emits `<omw-recall>` instruction)                      | agent retrieval procedure → `commands/recall-llm.md`            |
 | "run upkeep", "maintenance gate", an `<omw-gate>` block appears                    | gate cycle → `commands/gate.md`                                 |
+
+## Command map (deterministic vs procedure)
+
+Every omw op is one of two kinds — know which before you act:
+
+- **run** (deterministic command): shell it and trust the JSON/text result —
+  e.g. `omw status`, `omw lint`, `omw reindex`, `omw connections`, `omw find <query>`,
+  `omw fetch <url>`, `omw search <query>`, `omw gate …`, `omw inbox …`.
+- **procedure** (needs this session): execute `commands/<op>.md` yourself; the CLI
+  only prints a procedure card binding your args — do NOT expect a result from
+  shelling it. Procedures: `ingest`, `query`, `open`, `edit`, `move`, `delete`,
+  `autoresearch`, `persona-factcheck`, `persona-consistency`, `persona-terminology`.
+
+The authoritative per-op table (args + hints) is the generated
+`<!-- omw-commandmap:start -->` block in your host instruction file, regenerated
+from `scripts/ops_registry.py`. Do not hand-maintain an op table here — it would
+drift. `omw <op> --help` shows one op's args.
 
 ### Multi-step requests
 
