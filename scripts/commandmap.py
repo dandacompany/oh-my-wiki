@@ -26,7 +26,7 @@ def _row(op) -> str:
 def render_block() -> str:
     lines = [
         _START,
-        "## omw command map (managed by `omw setup agents` — do not edit between markers)",
+        "## omw command map (managed by `omw setup recall` — do not edit between markers)",
         "",
         "Each op is either **run** (a deterministic command — shell it, trust the result)",
         "or a **procedure** (execute the steps file in your session; do not trust a shelled result).",

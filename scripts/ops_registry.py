@@ -76,7 +76,7 @@ OPS: tuple[OpSpec, ...] = (
                ArgSpec("--json", False, "emit JSON instead of a text table"))),
     # --- agentic procedures (you execute commands/<op>.md; do NOT trust a shelled result) ---
     _proc("ingest", "Pull a source (path/URL) into raw/ and reindex.",
-          args=(ArgSpec("source", True, "file path or URL (repeatable)"),), uses=("fetch", "reindex")),
+          args=(ArgSpec("source", True, "file path or URL"),), uses=("fetch", "reindex")),
     _proc("query", "Answer a question from the wiki (LLM synthesis).",
           args=(ArgSpec("question", True, "natural-language question"),
                 ArgSpec("--vault", False, "vault name (default: active)"))),
