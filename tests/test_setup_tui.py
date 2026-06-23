@@ -49,3 +49,12 @@ def test_ensure_one_attempt_per_process(monkeypatch):
     sw.ensure_wizard_ui()
     sw.ensure_wizard_ui()
     assert len(runs) == 1  # second call short-circuits on the flag
+
+
+def test_prompt_invokes_ensure(monkeypatch):
+    spy = []
+    monkeypatch.setattr(sw, "ensure_wizard_ui", lambda: spy.append(True) or True)
+    # Use a kind whose fallback needs no input(): patch input to avoid blocking if questionary absent.
+    monkeypatch.setattr("builtins.input", lambda *a, **k: "")
+    sw._prompt("text", "Vault name", default="v")
+    assert spy == [True]

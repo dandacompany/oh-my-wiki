@@ -148,6 +148,7 @@ def _prompt(kind: str, message: str, *, choices=None, default=None):
     kind: "text" | "password" | "select" | "confirm" | "checkbox".
     Returns: str | bool | list[str] | None depending on kind.
     """
+    ensure_wizard_ui()  # one-shot, best-effort: install the arrow-key TUI if interactive & missing
     try:
         import questionary  # type: ignore
         if kind == "password":
