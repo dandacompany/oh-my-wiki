@@ -37,3 +37,29 @@ def test_recall_is_floor_for_healthy_vault():
 def test_research_marker_yields_collect():
     out = nextstep.suggest(_sig(markers=["research"]))
     assert any(s["phase"] == "collect" for s in out)
+
+
+import json
+
+from scripts import omw_cli
+
+
+def test_cli_next_json_ranked(tmp_path, monkeypatch, capsys):
+    from tests.conftest import make_vault_with_pages
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "raw/a.md": "# A\n\nsome collected source text about widgets.",
+    })
+    rc = omw_cli.main(["next", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and isinstance(out, list) and out
+    assert all("phase" in s and "command" in s for s in out)
+
+
+def test_cli_next_readonly_gate(tmp_path, monkeypatch):
+    from tests.conftest import make_vault_with_pages
+    from scripts import gate
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"raw/a.md": "# A\n\nx"})
+    before = gate.state_path().read_text(encoding="utf-8") if gate.state_path().exists() else None
+    omw_cli.main(["next", "--json"])
+    after = gate.state_path().read_text(encoding="utf-8") if gate.state_path().exists() else None
+    assert before == after  # omw next must not mutate gate state

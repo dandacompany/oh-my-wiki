@@ -94,6 +94,11 @@ def test_search_op_has_no_fallback_flag():
     assert "--no-fallback" in names
 
 
+def test_next_registered_deterministic():
+    assert reg.get("next") is not None
+    assert reg.get("next").kind == "deterministic"
+
+
 def test_fetch_command_doc_exists_and_clean():
     from pathlib import Path
     p = Path(__file__).resolve().parent.parent / "commands" / "fetch.md"
