@@ -98,7 +98,7 @@ OPS: tuple[OpSpec, ...] = (
                 ArgSpec("--rounds", False, "search rounds (default 3)"),
                 ArgSpec("--no-synthesis", False, "collect raw only; build no synthesis page")),
           uses=("search", "fetch", "reindex")),
-    # Personas: dispatched as an isolated subagent (Workstream D), NOT inline role-play.
+    # Personas: dispatched as an isolated subagent via `omw persona-run <role>`, NOT inline role-play.
     _proc("persona-factcheck", "Fact-checker persona — dispatched via `omw persona-run <role>` (isolated subagent).",
           args=(ArgSpec("page", True, "page/text/file to fact-check"),)),
     _proc("persona-consistency", "Consistency-checker persona — dispatched via `omw persona-run <role>` (isolated subagent).",

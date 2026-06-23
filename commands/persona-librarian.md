@@ -11,26 +11,31 @@ User says: "tidy the wiki structure", "what's orphaned?", "suggest cross-links",
 
 ## Procedure
 
-1. **Show the persona spec** (`personas/wiki-librarian.md`).
-2. **Gather the deterministic link graph** for the active vault:
-   ```bash
-   python3 -c "
-   from scripts.paths import registry_path
-   from scripts import links, registry
-   import json
-   db = registry_path(); vid = registry.get_active(db)['id']
-   print(json.dumps({'orphans': links.orphans(db, vid), 'graph': links.graph(db, vid)}))
-   "
-   ```
-   (If that one-liner is awkward, run `omw lint` and read its `links` section, which
-   already contains `orphans`/`broken`.)
-3. **Run the persona** with that JSON as input text:
-   ```bash
-   python3 -m scripts.personas run wiki-librarian \
-     --text "<the links JSON + any focus note>" \
-     --output-file /tmp/librarian-<ts>.json
-   ```
-4. **Show proposals and ask** which to apply (propose → confirm → execute).
-5. **On confirm**, apply the chosen edits (add the `[[link]]`/markdown link, move
-   a page to `.trash` for archive, etc.) and `python3 -m scripts.reindex --vault-id <id>`.
-6. **Report** what changed.
+Dispatch the persona via `omw persona-run wiki-librarian` — this spawns an
+isolated one-shot subagent on any backend (claude/codex/gemini/opencode)
+with the persona spec as its system prompt. Show the user the result.
+
+Before dispatching, gather the deterministic link graph for the active vault:
+
+```bash
+python3 -c "
+from scripts.paths import registry_path
+from scripts import links, registry
+import json
+db = registry_path(); vid = registry.get_active(db)['id']
+print(json.dumps({'orphans': links.orphans(db, vid), 'graph': links.graph(db, vid)}))
+"
+```
+
+(If that one-liner is awkward, run `omw lint` and read its `links` section,
+which already contains `orphans`/`broken`.)
+
+Pass this JSON as `--text` input to the subagent. The subagent produces JSON
+proposals (add cross-links, move orphans, merge candidates).
+
+Show proposals and ask which to apply (propose → confirm → execute). On
+confirm, apply the chosen edits and run `omw reindex`. Report what changed.
+
+For a mutation proposal (curator's `index.md` rewrite), review the staged
+`.proposed.md` and confirm before
+`omw persona-run wiki-librarian --apply <proposal>`.

@@ -152,13 +152,13 @@ When the user has enabled the gate (`omw setup gate --enable`), help it work:
 
 - **When the gate opens** (an `<omw-gate>` block appears at turn end), ask the
   user whether to run the upkeep/capture cycle **now (foreground)**, in the
-  **background** (dispatch the persona upkeep subagent — Workstream D), or **later**. Show only the pending
+  **background** (dispatch a persona subagent via `omw persona-run consistency-checker`), or **later**. Show only the pending
   parts the block lists.
   - Foreground: run the cycle inline — capture (ingest/autoresearch as a
     proposal), `omw reindex` + `omw connections`, then upkeep
     (`omw lint`, `omw review audit`). **Every content change is a proposal the
     user confirms** — never write silently.
-  - Background: dispatch the persona upkeep subagent (Workstream D); read-only steps run, writes are staged
+  - Background: dispatch a persona subagent via `omw persona-run consistency-checker`; read-only steps run, writes are staged
     as proposals for later confirmation.
   - Later: do nothing; the gate snoozes itself.
 

@@ -11,28 +11,33 @@ User says: "update the index", "the TOC is stale", "reorder the wiki index",
 
 ## Procedure
 
-1. **Show the persona spec** (`personas/curator.md`).
-2. **Compute drift** for the active vault:
-   ```bash
-   python3 -c "
-   from scripts.paths import registry_path
-   from scripts import links, registry
-   import json
-   db = registry_path(); vid = registry.get_active(db)['id']
-   print(json.dumps(links.index_drift(db, vid)))
-   "
-   ```
-   (Or read `omw lint`'s `links.index_drift`.)
-3. **Run the persona** with the drift JSON + the current index.md as input:
-   ```bash
-   python3 -m scripts.personas run curator \
-     --vault-relpath wiki/index.md --vault-id <id> \
-     --db "$(python3 -c 'from scripts.paths import registry_path; print(registry_path())')" \
-     --output-file /tmp/curate-index-<ts>.md
-   ```
-   (output_kind stdout — capture the proposed index.)
-4. **Show the proposed index.md and ask** to apply (propose → confirm → execute).
-5. **On confirm**, write the proposed content to `wiki/index.md` and
-   `python3 -m scripts.reindex --vault-id <id>`. Re-run the drift check to confirm
-   `missing_from_index`/`dangling_in_index` are now empty.
-6. **Report** the result.
+Dispatch the persona via `omw persona-run curator` — this spawns an isolated
+one-shot subagent on any backend (claude/codex/gemini/opencode) with the
+persona spec as its system prompt. Show the user the result.
+
+Before dispatching, compute drift for the active vault:
+
+```bash
+python3 -c "
+from scripts.paths import registry_path
+from scripts import links, registry
+import json
+db = registry_path(); vid = registry.get_active(db)['id']
+print(json.dumps(links.index_drift(db, vid)))
+"
+```
+
+(Or read `omw lint`'s `links.index_drift`.)
+
+Pass the drift JSON plus the current `wiki/index.md` content as `--text`
+input to the subagent. The subagent produces a proposed full rewrite of
+`index.md`.
+
+Show the proposed index.md and ask to apply (propose → confirm → execute).
+For a mutation proposal (curator's `index.md` rewrite), review the staged
+`.proposed.md` and confirm before
+`omw persona-run curator --apply <proposal>`.
+
+On confirm, write the proposed content to `wiki/index.md` and run
+`omw reindex`. Re-run the drift check to confirm
+`missing_from_index`/`dangling_in_index` are now empty. Report the result.

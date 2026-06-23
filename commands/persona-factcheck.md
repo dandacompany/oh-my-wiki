@@ -23,50 +23,27 @@ One of:
 
 ## Procedure
 
-1. **Show the persona spec.** Read `personas/fact-checker.md` and
-   show the user the capabilities + output format so they know what
-   they're getting.
+Dispatch the persona via `omw persona-run fact-checker` — this spawns an
+isolated one-shot subagent on any backend (claude/codex/gemini/opencode)
+with the persona spec as its system prompt. Show the user the result.
 
-2. **Identify the source.** Confirm the source (text/file/vault page)
-   and the active vault if applicable.
+Pass the source document as input (via `--text`, `--file`, or
+`--vault-id`/`--vault-relpath`). The subagent decomposes the document
+into atomic claims, verifies each via `mcp__brightdata__search_engine`
+(max 3 searches per claim), judges verdict + confidence, and writes a
+markdown report to `<stem>.factcheck.md`.
 
-3. **Decompose + verify.** Follow the fact-checker persona body's
-   protocol: decompose into atomic claims, call
-   `mcp__brightdata__search_engine` per claim (max 3 searches),
-   judge verdict + confidence, collect source URLs.
-
-4. **Draft the markdown report** following the persona's "Output
-   format" template. Write it to a temp file
-   (e.g., `/tmp/factcheck-<timestamp>.md`).
-
-5. **File the report** by running:
-
-   ```bash
-   python3 -m scripts.personas run fact-checker \
-     --file <source-path>   # or --vault-relpath + --vault-id
-     --suffix factcheck \
-     --output-file /tmp/factcheck-<ts>.md
-   ```
-
-   The script writes `<stem>.factcheck.md` next to the source.
-
-6. **Reindex if the source is in a vault.** Run:
-
-   ```bash
-   python3 -m scripts.reindex --vault-id <id>
-   ```
-
-7. **Report to the user.** Print the report path + a 3-line summary
-   (supported / contradicted / unverifiable counts).
+After the subagent completes, show the report path and a 3-line summary
+(supported / contradicted / unverifiable counts). If the source is in a
+vault, run `omw reindex` to pick up the new report file.
 
 ## Common pitfalls
 
-- **Source is `--text` (no origin).** sibling_suffix needs an
-  origin path. If user gave only text, write the report to a
-  filename they specify or to `/tmp/`. Don't try to file it
-  back to a vault that wasn't named.
+- **Source is `--text` (no origin).** The report needs an output path.
+  If the user gave only text, write the report to a filename they specify
+  or to `/tmp/`. Don't try to file it back to a vault that wasn't named.
 - **MCP not available.** If `mcp__brightdata__search_engine` is
   unavailable, tell the user and offer to run with reduced rigor
   (mark every claim "unverifiable — search unavailable").
-- **Source is huge (1000+ claims candidates).** Ask the user to
+- **Source is huge (1000+ claim candidates).** Ask the user to
   scope (a section, a heading) before burning the search budget.

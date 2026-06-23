@@ -19,62 +19,17 @@ per-vault glossary and surface inconsistent surface forms.
 
 ## Procedure
 
-1. **Show the persona spec.** Read `personas/terminology-manager.md`.
+Dispatch the persona via `omw persona-run terminology-manager` — this spawns
+an isolated one-shot subagent on any backend (claude/codex/gemini/opencode)
+with the persona spec as its system prompt. Show the user the result.
 
-2. **Resolve vault root.** Look up via:
+Pass `--vault-id` (and optionally `--vault-relpath`) as input. The subagent
+scans wiki pages, extracts candidate terms per the persona's "What counts as
+a term" rules, upserts new terms into the glossary DB, runs lint, and emits
+JSON following the persona's output format.
 
-   ```bash
-   python3 -m scripts.registry vaults
-   ```
-
-   to map vault-id → vault path.
-
-3. **List current glossary state.** Run:
-
-   ```bash
-   python3 -m scripts.glossary list \
-     --vault-root <vault-path> --vault-id <id>
-   ```
-
-4. **Scan pages.** Read all `wiki/**/*.md` (or just the targeted
-   page if `--vault-relpath` provided). Extract candidate terms
-   per the persona's "What counts as a term" rules. Skip terms
-   already in the glossary.
-
-5. **Upsert each new term.** For each new term:
-
-   ```bash
-   python3 -m scripts.glossary upsert \
-     --vault-root <vault-path> --vault-id <id> \
-     --canonical "<form>" \
-     --alias "<alt1>" --alias "<alt2>" \
-     --definition "<one-sentence definition>" \
-     --first-seen-relpath "<wiki/path/page.md>"
-   ```
-
-6. **Run lint.**
-
-   ```bash
-   python3 -m scripts.glossary lint \
-     --vault-root <vault-path> --vault-id <id>
-   ```
-
-7. **Emit JSON on stdout** following the persona's output
-   format. File via:
-
-   ```bash
-   python3 -m scripts.personas run terminology-manager \
-     --vault-id <id> \
-     --vault-relpath wiki/index.md \
-     --output-file /tmp/terminology-<ts>.json
-   ```
-
-   `wiki/index.md` is a symbolic source — the actual work is
-   vault-wide and the output is stdout.
-
-8. **Summarize to the user**: total terms in glossary,
-   N added this run, K inconsistencies flagged, top 3
-   suggested actions.
+Summarize to the user: total terms in glossary, N added this run, K
+inconsistencies flagged, top 3 suggested actions.
 
 ## Pitfalls
 

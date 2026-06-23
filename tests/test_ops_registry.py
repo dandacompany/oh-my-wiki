@@ -79,3 +79,11 @@ def test_no_dangling_op_references():
             if verb not in known and verb not in allow:
                 bad.append(f"{path.name}: omw {verb}")
     assert not bad, f"dangling op references: {sorted(set(bad))}"
+
+
+def test_gate_prose_points_at_real_persona_run():
+    text = (_ROOT / "scripts" / "gate.py").read_text(encoding="utf-8")
+    if "persona-run" in text:
+        assert reg.get("persona-run") is not None  # referenced op must exist
+    # and the Workstream-D placeholder must be gone from gate prose
+    assert "Workstream D" not in text
