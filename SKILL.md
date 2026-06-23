@@ -164,6 +164,10 @@ When the user has enabled the gate (`omw setup gate --enable`), help it work:
     as proposals for later confirmation.
   - Later: do nothing; the gate snoozes itself.
 
+## After-task next-step proposal
+
+After completing a unit of work, run `omw next` and propose the top next action (collect / structure / synthesize / maintain / review / recall); the user picks now / background / later.
+
 ## Trigger-phrase routing hint
 
 If the user input matches an op keyword, prefer that op over the wizard:

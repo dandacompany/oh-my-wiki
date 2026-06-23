@@ -108,3 +108,12 @@ def test_fetch_command_doc_exists_and_clean():
     import re
     for verb in re.findall(r"`omw ([a-z][a-z-]+)", text):
         assert reg.get(verb) is not None, f"fetch.md references unknown op: {verb}"
+
+
+def test_next_command_doc_exists_and_clean():
+    from pathlib import Path
+    import re
+    p = Path(__file__).resolve().parent.parent / "commands" / "next.md"
+    assert p.exists(), "commands/next.md should document the after-each-task proposal"
+    for verb in re.findall(r"`omw ([a-z][a-z-]+)", p.read_text(encoding="utf-8")):
+        assert reg.get(verb) is not None, f"next.md references unknown op: {verb}"
