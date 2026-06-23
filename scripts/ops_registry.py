@@ -7,7 +7,7 @@ block, and the anti-drift test pins SKILL.md / hooks / gate prose to this list.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
