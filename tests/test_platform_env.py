@@ -44,3 +44,46 @@ def test_windows_user_profile_returns_none_on_oserror(monkeypatch):
     monkeypatch.setattr(pe, "_WIN_USERS", _FakePath())
     result = pe.windows_user_profile()
     assert result is None
+
+
+def test_install_context_pipx(monkeypatch):
+    monkeypatch.setattr(pe, "_prefix", lambda: "/home/d/.local/share/pipx/venvs/oh-my-wiki")
+    monkeypatch.setattr(pe, "_base_prefix", lambda: "/usr")
+    assert pe.omw_install_context() == "pipx"
+
+
+def test_install_context_venv(monkeypatch):
+    monkeypatch.setattr(pe, "_prefix", lambda: "/home/d/proj/.venv")
+    monkeypatch.setattr(pe, "_base_prefix", lambda: "/usr")
+    assert pe.omw_install_context() == "venv"
+
+
+def test_install_context_system(monkeypatch):
+    monkeypatch.setattr(pe, "_prefix", lambda: "/usr")
+    monkeypatch.setattr(pe, "_base_prefix", lambda: "/usr")
+    assert pe.omw_install_context() == "system"
+
+
+def test_pip_install_argv_pipx(monkeypatch):
+    monkeypatch.setattr(pe, "omw_install_context", lambda: "pipx")
+    assert pe.pip_install_argv("playwright") == ["pipx", "inject", "oh-my-wiki", "playwright", "--include-apps"]
+
+
+def test_pip_install_argv_venv(monkeypatch):
+    monkeypatch.setattr(pe, "omw_install_context", lambda: "venv")
+    monkeypatch.setattr(pe, "_executable", lambda: "/v/bin/python")
+    assert pe.pip_install_argv("playwright") == ["/v/bin/python", "-m", "pip", "install", "playwright"]
+
+
+def test_pip_install_argv_system_pep668(monkeypatch):
+    monkeypatch.setattr(pe, "omw_install_context", lambda: "system")
+    monkeypatch.setattr(pe, "pep668_managed", lambda: True)
+    monkeypatch.setattr(pe, "_executable", lambda: "/usr/bin/python3")
+    assert pe.pip_install_argv("playwright") == ["/usr/bin/python3", "-m", "pip", "install", "--break-system-packages", "playwright"]
+
+
+def test_pip_install_argv_system_plain(monkeypatch):
+    monkeypatch.setattr(pe, "omw_install_context", lambda: "system")
+    monkeypatch.setattr(pe, "pep668_managed", lambda: False)
+    monkeypatch.setattr(pe, "_executable", lambda: "/usr/bin/python3")
+    assert pe.pip_install_argv("playwright") == ["/usr/bin/python3", "-m", "pip", "install", "playwright"]
