@@ -74,6 +74,11 @@ OPS: tuple[OpSpec, ...] = (
                ArgSpec("--limit", False, "max hits (default 10)"),
                ArgSpec("--vault", False, "vault name (default: active)"),
                ArgSpec("--json", False, "emit JSON instead of a text table"))),
+    _det("persona-run", "Dispatch a persona as an isolated one-shot subagent (any backend).",
+         "omw persona-run <role> [--page P|--file F|--text T] [--backend B] [--apply PROP]",
+         args=(ArgSpec("role", True, "persona name (fact-checker, consistency-checker, curator, terminology-manager, wiki-librarian)"),
+               ArgSpec("--backend", False, "claude|codex|gemini|opencode (default: first authed)",
+                       ("claude", "codex", "gemini", "opencode")))),
     # --- agentic procedures (you execute commands/<op>.md; do NOT trust a shelled result) ---
     _proc("ingest", "Pull a source (path/URL) into raw/ and reindex.",
           args=(ArgSpec("source", True, "file path or URL"),), uses=("fetch", "reindex")),
@@ -94,11 +99,11 @@ OPS: tuple[OpSpec, ...] = (
                 ArgSpec("--no-synthesis", False, "collect raw only; build no synthesis page")),
           uses=("search", "fetch", "reindex")),
     # Personas: dispatched as an isolated subagent (Workstream D), NOT inline role-play.
-    _proc("persona-factcheck", "Dispatch the fact-checker persona subagent (Workstream D).",
+    _proc("persona-factcheck", "Fact-checker persona — dispatched via `omw persona-run <role>` (isolated subagent).",
           args=(ArgSpec("page", True, "page/text/file to fact-check"),)),
-    _proc("persona-consistency", "Dispatch the consistency-checker persona subagent (Workstream D).",
+    _proc("persona-consistency", "Consistency-checker persona — dispatched via `omw persona-run <role>` (isolated subagent).",
           args=(ArgSpec("page", False, "page to check (default: whole vault)"),)),
-    _proc("persona-terminology", "Dispatch the terminology-manager persona subagent (Workstream D).",
+    _proc("persona-terminology", "Terminology-manager persona — dispatched via `omw persona-run <role>` (isolated subagent).",
           args=(ArgSpec("page", False, "page to scan (default: whole vault)"),)),
 )
 

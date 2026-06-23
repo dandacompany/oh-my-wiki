@@ -56,6 +56,11 @@ def test_recall_hook_verbs_are_registered_deterministic():
         assert spec.kind == "deterministic", f"recall hint points at a procedure: {verb}"
 
 
+def test_persona_run_registered_deterministic():
+    assert reg.get("persona-run") is not None
+    assert reg.get("persona-run").kind == "deterministic"
+
+
 def test_no_dangling_op_references():
     known = set(reg.names())
     # Backtick-anchored scan: every genuine op reference in docs is written as `omw verb …`,

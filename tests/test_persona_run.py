@@ -91,3 +91,11 @@ def test_mutation_staged_not_applied(tmp_path):
     out = persona_run.apply_proposal(prop)
     assert out == target and target.read_text() == "PROPOSED"
     assert not prop.exists()
+
+
+def test_cli_persona_run_files_report(tmp_path, monkeypatch):
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"p.md": "# P\n\nClaim."})
+    monkeypatch.setenv("OMW_BACKEND_OVERRIDE_PATH", FAKES)
+    from scripts import omw_cli
+    rc = omw_cli.main(["persona-run", "fact-checker", "--page", "p.md", "--backend", "codex"])
+    assert rc == 0

@@ -625,6 +625,32 @@ def _cmd_setup(args) -> int:
     )
 
 
+def _cmd_persona_run(args) -> int:
+    from pathlib import Path
+    from scripts import persona_run
+    if args.apply_path:
+        try:
+            out = persona_run.apply_proposal(Path(args.apply_path))
+        except persona_run.RunError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(f"applied: {out}")
+        return 0
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    source = None
+    if args.page:
+        source = {"vault_relpath": args.page}
+    elif args.file:
+        source = {"file": args.file}
+    elif args.text:
+        source = {"text": args.text}
+    return persona_run.run(args.role, db_path=db, vault_id=vault["id"],
+                           source=source, backend=args.backend)
+
+
 def _cmd_doctor(args) -> int:
     from scripts import setup_wizard
     return setup_wizard.doctor()
@@ -899,6 +925,18 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser(
         "doctor", help="Validate omw config + install."
     ).set_defaults(func=_cmd_doctor)
+
+    ppr = sub.add_parser("persona-run", help="Dispatch a persona as an isolated one-shot subagent.")
+    ppr.add_argument("role")
+    g = ppr.add_mutually_exclusive_group()
+    g.add_argument("--page", default=None)
+    g.add_argument("--file", default=None)
+    g.add_argument("--text", default=None)
+    ppr.add_argument("--vault", default=None)
+    ppr.add_argument("--backend", choices=["claude", "codex", "gemini", "opencode"], default=None)
+    ppr.add_argument("--apply", dest="apply_path", default=None,
+                     help="apply a staged <target>.proposed.md")
+    ppr.set_defaults(func=_cmd_persona_run)
 
     from scripts import ops_registry as _reg
     for _name in _reg.PROCEDURE_NAMES:
