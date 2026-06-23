@@ -411,6 +411,26 @@ def _cmd_search(args) -> int:
     return 0
 
 
+def _cmd_find(args) -> int:
+    from scripts import search_index
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    hits = search_index.query(db, vault_id=vault["id"], query=args.query, limit=args.limit)
+    if args.find_json:
+        print(json.dumps(hits, ensure_ascii=False, indent=2))
+        return 0
+    if not hits:
+        print(f"(no matches for {args.query!r} in {vault['name']})")
+        return 0
+    for h in hits:
+        title = h.get("title") or h.get("relpath")
+        score = h.get("score", 0)
+        print(f"{score:>6.2f}  {h['relpath']}  —  {title}")
+    return 0
+
+
 def _cmd_view(args) -> int:
     from scripts import view
     return view.run(args)
@@ -779,6 +799,13 @@ def build_parser() -> argparse.ArgumentParser:
     psr.add_argument("--provider", default=None)
     psr.add_argument("--limit", type=int, default=10)
     psr.set_defaults(func=_cmd_search)
+
+    pfd = sub.add_parser("find", help="Deterministic full-text search over the vault index.")
+    pfd.add_argument("query")
+    pfd.add_argument("--limit", type=int, default=10)
+    pfd.add_argument("--vault", default=None)
+    pfd.add_argument("--json", dest="find_json", action="store_true")
+    pfd.set_defaults(func=_cmd_find)
 
     pse = sub.add_parser("serve", help="Run the local query HTTP API (retrieve-only).")
     pse.add_argument("--host", default="127.0.0.1", help="bind host (default: localhost)")

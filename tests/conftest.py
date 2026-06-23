@@ -32,3 +32,38 @@ def db_connect():
 def _isolate_omw_home(monkeypatch, tmp_path):
     """Every test gets an isolated OMW_HOME so the real ~/.omw is never touched."""
     monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw-test"))
+
+
+def make_vault_with_pages(tmp_path, monkeypatch, pages: dict) -> tuple:
+    """Create a registered, reindexed vault populated with the given pages.
+
+    The registry DB is placed at OMW_HOME/registry.db so that omw_cli.main()
+    calls (which resolve via registry_path() → OMW_HOME/registry.db) find it.
+
+    Args:
+        tmp_path: pytest tmp_path fixture value.
+        monkeypatch: pytest monkeypatch fixture value.
+        pages: mapping of relpath → markdown text (relpath is relative to vault root).
+
+    Returns:
+        (db_path, vault_id) — ready for search_index.query and omw_cli.main calls.
+    """
+    from scripts import registry, reindex
+
+    omw_home = tmp_path / ".omw"
+    (omw_home / "vaults").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("OMW_HOME", str(omw_home))
+    db = omw_home / "registry.db"
+    registry.init_db(db)
+    root = tmp_path / "vault"
+    root.mkdir(parents=True, exist_ok=True)
+    v = registry.add_vault(db, name="default", path=root, type_="markdown", mode="wiki")
+    registry.set_active(db, "default")
+
+    for relpath, text in pages.items():
+        abs_path = root / relpath
+        abs_path.parent.mkdir(parents=True, exist_ok=True)
+        abs_path.write_text(text, encoding="utf-8")
+
+    reindex.full(db, vault_id=v["id"])
+    return db, v["id"]
