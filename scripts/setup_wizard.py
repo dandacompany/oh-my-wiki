@@ -10,6 +10,7 @@ import json
 import os
 import secrets
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -539,6 +540,38 @@ def run_all(*, noninteractive: bool = False, base_dir=None) -> int:
             first_error = rc
     print("omw setup complete.")
     return first_error
+
+
+def playwright_installed() -> bool:
+    try:
+        from scripts import fetch_chromium
+        return fetch_chromium.available()
+    except Exception:
+        return False
+
+
+def install_playwright(*, assume_yes: bool = False, interactive: bool = True) -> tuple[bool, str]:
+    from scripts import platform_env
+    if playwright_installed():
+        return True, "Playwright(chromium)가 이미 설치돼 있습니다."
+    argv = platform_env.pip_install_argv("playwright")
+    browser = [sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"]
+    manual = " ".join(argv) + " && " + " ".join(browser)
+    if not assume_yes:
+        if not interactive:
+            return False, f"설치를 건너뜁니다. 직접: {manual}"
+        try:
+            ans = input("Playwright(chromium)가 없습니다. 지금 설치할까요? [y/N] ")
+        except EOFError:
+            return False, f"설치를 건너뜁니다. 직접: {manual}"
+        if not ans.strip().lower().startswith("y"):
+            return False, f"설치를 건너뜁니다. 직접: {manual}"
+    try:
+        subprocess.run(argv, check=True)
+        subprocess.run(browser, check=True)
+    except Exception as e:
+        return False, f"설치 실패 ({e}). 직접: {manual}"
+    return True, "Playwright + chromium 설치 완료."
 
 
 def doctor() -> int:
