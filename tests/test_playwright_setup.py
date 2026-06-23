@@ -30,3 +30,24 @@ def test_reuse_when_installed(monkeypatch):
     monkeypatch.setattr(sw.subprocess, "run", lambda *a, **k: ran.append(a))
     ok, msg = sw.install_playwright(assume_yes=True)
     assert ok is True and ran == []
+
+
+import os, sys as _sys, subprocess as _sp
+
+
+def _run_cli(args, env):
+    return _sp.run([_sys.executable, "-m", "scripts.omw_cli", *args], capture_output=True, text=True, env=env)
+
+
+def test_setup_playwright_section_is_silent_when_present(monkeypatch):
+    # When chromium is available, setup_playwright prints "이미 설치" and exits 0 (no install).
+    monkeypatch.setattr(sw, "playwright_installed", lambda: True)
+    rc = sw.setup_playwright(noninteractive=True)
+    assert rc == 0
+
+
+def test_cli_setup_playwright_known_section():
+    env = dict(os.environ)
+    # `omw setup playwright --noninteractive` must be a recognized section (rc 0), not argparse error (rc 2).
+    r = _run_cli(["setup", "playwright", "--noninteractive"], env)
+    assert r.returncode == 0, r.stderr

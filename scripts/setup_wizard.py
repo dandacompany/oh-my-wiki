@@ -574,6 +574,17 @@ def install_playwright(*, assume_yes: bool = False, interactive: bool = True) ->
     return True, "Playwright + chromium 설치 완료."
 
 
+def setup_playwright(*, noninteractive: bool = False) -> int:
+    """Set up Playwright (chromium). Best-effort: returns 0 even if not installed."""
+    import os
+    interactive = (not noninteractive) and sys.stdin.isatty()
+    ok, msg = install_playwright(
+        assume_yes=os.environ.get("OMW_BOOTSTRAP_YES") == "1",
+        interactive=interactive)
+    print(f"playwright: {msg}")
+    return 0
+
+
 def doctor() -> int:
     home = omw_home()
     db = registry_path()
