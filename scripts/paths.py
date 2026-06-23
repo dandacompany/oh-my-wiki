@@ -68,7 +68,7 @@ _bundled_root_cache: "Path | None" = None
 
 
 def bundled_root() -> Path:
-    """Base dir for bundled data (schemas/personas/backends/commands/omw/.claude-plugin).
+    """Base dir for bundled data (schemas/personas/backends/commands/omw).
 
     Sentinel is self-scoped: an installed wheel ships the data under THIS package's
     own <scripts>/_bundle (created by setup.py's build_py), so its presence is an
