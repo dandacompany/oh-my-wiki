@@ -20,7 +20,9 @@ Detect the source type from user input:
 | Path ending in `.md`/`.txt` | text file         | `Path(p).read_text()` → body                                                                                                                                               |
 | URL                         | `omw fetch <url>` | runs the deterministic fetch cascade (yt-dlp/urllib/chromium/cloud) → saves raw/, returns the relpath; then continue from step 2 (Discuss takeaways) reading that raw file |
 
-For a URL, prefer `omw fetch <url>` (deterministic, handles YouTube + SPA) over an ad-hoc MCP fetch; it saves the source to `raw/` and you continue the synthesis steps below against that file.
+For a URL, prefer `omw fetch <url>` (deterministic, handles YouTube + SPA) over an ad-hoc MCP fetch; it saves the source to `raw/` and you continue the synthesis steps below against that file. Try your native fetch first — only fall back to `omw fetch <url>` if native fetch returns empty or is blocked.
+
+**Scout first:** If the target URL is unknown, run `omw search "<query>"` (auto-falls back across providers) to find candidate URLs, then collect them with `omw fetch` (native fetch first — see `commands/fetch.md`). Do not hand-scrape search-engine HTML.
 
 For paste/md/txt, use `ingest.save_raw` with `ext` = `md` or `txt`. For pdf, use `ingest.save_raw_pdf` (returns extracted text for the next step).
 

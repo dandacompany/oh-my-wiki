@@ -28,6 +28,8 @@ A storage-agnostic LLM Wiki skill. Implements Andrej Karpathy's three-layer patt
 3. **Create vaults ONLY with `omw vault create <name> --mode wiki --type <markdown|obsidian>`** —
    never construct a vault by calling registry/adapters yourself.
 4. **Ingest sources with `omw fetch <URL>` or `omw ingest`** — never hand-write files into `raw/`.
+   `omw search` auto-falls back across keyed providers on 429/empty; for fetching, try your native
+   fetch first then `omw fetch` (it cascades urllib→chromium→cloud).
 
 > If you catch yourself about to write `python3 -c`, `python3 -m scripts`, or use a native web
 > search, STOP and use the matching `omw` command above instead.
