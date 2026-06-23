@@ -33,3 +33,34 @@ def test_dispatch_raises_on_backend_failure():
                                   override_cli_path=FAKES)
         finally:
             os.environ.pop("OMW_FAKE_FAIL", None)
+
+
+# ---------------------------------------------------------------------------
+# _gather_inputs tests
+# ---------------------------------------------------------------------------
+from tests.conftest import make_vault_with_pages  # noqa: E402
+
+
+def test_gather_consistency_uses_contradiction_candidates(tmp_path, monkeypatch):
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "a.md": "# A\n\nThe sky is blue.",
+        "b.md": "# B\n\nThe sky is green.",
+    })
+    task, meta = persona_run._gather_inputs("consistency-checker", db_path=db, vault_id=vid)
+    assert "contradiction" in task.lower() or "candidate" in task.lower()
+    assert isinstance(meta, dict)
+
+
+def test_gather_curator_uses_index_drift(tmp_path, monkeypatch):
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "orphan.md": "# Orphan\n\nnot in index.",
+    })
+    task, meta = persona_run._gather_inputs("curator", db_path=db, vault_id=vid)
+    assert "index" in task.lower()
+
+
+def test_gather_factcheck_uses_source(tmp_path, monkeypatch):
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"p.md": "# P\n\nClaim X."})
+    task, meta = persona_run._gather_inputs(
+        "fact-checker", db_path=db, vault_id=vid, source={"vault_relpath": "p.md"})
+    assert "claim" in task.lower()
