@@ -182,3 +182,31 @@ def test_cli_merge_stage(tmp_path, monkeypatch):
     rc = omw_cli.main(["merge", "wiki/concepts/a.md", "wiki/concepts/b.md"])
     assert rc == 0
     assert (root / "wiki/concepts/b.md.proposed.md").exists()
+
+
+def test_cli_apply_multiple_proposals_errors(tmp_path, monkeypatch):
+    """Fix 1: --apply must refuse when multiple staged proposals share the source slug."""
+    from scripts import omw_cli, registry
+    from tests.conftest import make_vault_with_pages
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "wiki/concepts/a.md": "---\ntitle: A\ntype: concept\n---\n\n## Summary\n\nalpha body words here now\n",
+        "wiki/concepts/b.md": "---\ntitle: B\ntype: concept\n---\n\n## Summary\n\nbeta body words here now\n",
+    })
+    root = registry.get_vault_root(db, vid)
+    # Stage a normal merge: creates b.md.proposed.md (winner) + a.md.proposed.md (source tombstone)
+    res = merge.stage(db, vault_id=vid,
+                      source_relpath="wiki/concepts/a.md",
+                      target_relpath="wiki/concepts/b.md")
+    winner_proposal = res["winner_proposal"]
+    # Inject a colliding proposal in a different subdirectory (same stripped-name slug "a")
+    collider = root / "wiki/entities/a.md.proposed.md"
+    collider.parent.mkdir(parents=True, exist_ok=True)
+    collider.write_text(
+        "---\ntitle: A Entity\nstatus: merged\nmerged_into: b\n---\n\n> Merged into [[b]].\n",
+        encoding="utf-8",
+    )
+    # --apply must return rc=1 (ambiguous match) and leave the winner proposal untouched
+    rc = omw_cli.main(["merge", "--apply", winner_proposal])
+    assert rc == 1
+    # Winner proposal must still exist (apply was NOT executed)
+    assert (root / winner_proposal).exists()

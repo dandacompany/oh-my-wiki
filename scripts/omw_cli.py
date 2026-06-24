@@ -663,7 +663,10 @@ def _cmd_merge(args) -> int:
     import json
     from scripts import merge, registry, links, frontmatter
     db = registry_path()
-    vid = registry.get_active(db)["id"]
+    vault = _require_vault_row(db, getattr(args, "vault", None))
+    if vault is None:
+        return 1
+    vid = vault["id"]
     if args.apply_path:
         winner_prop = args.apply_path
         if not winner_prop.endswith(".proposed.md"):
@@ -677,17 +680,29 @@ def _cmd_merge(args) -> int:
             print("error: winner proposal has no '## Merged from' marker", file=sys.stderr)
             return 1
         src_slug = m.group(1)
-        # find the staged source proposal whose slug matches
-        src_prop = None
-        for p in root.rglob("*.proposed.md"):
-            if links._slugify(p.name[: -len(".proposed.md")]) == src_slug:
-                src_prop = str(p.relative_to(root))
-                break
-        if src_prop is None:
+        # collect ALL staged source proposals whose slug matches
+        matches = [
+            str(p.relative_to(root))
+            for p in root.rglob("*.proposed.md")
+            if links._slugify(p.name[: -len(".proposed.md")]) == src_slug
+        ]
+        if not matches:
             print(f"error: no staged source proposal for slug {src_slug!r}", file=sys.stderr)
             return 1
-        out = merge.apply(db, vault_id=vid, winner_proposal=winner_prop,
-                          source_proposal=src_prop)
+        if len(matches) > 1:
+            print(
+                f"error: multiple staged proposals match slug {src_slug!r}: "
+                f"{', '.join(sorted(matches))}; remove the stale one(s) and retry",
+                file=sys.stderr,
+            )
+            return 1
+        src_prop = matches[0]
+        try:
+            out = merge.apply(db, vault_id=vid, winner_proposal=winner_prop,
+                              source_proposal=src_prop)
+        except merge.MergeError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
         print(json.dumps(out, ensure_ascii=False))
         return 0
     if not args.source or not args.target:
