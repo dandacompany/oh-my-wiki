@@ -63,3 +63,12 @@ def test_cli_update_check(monkeypatch, capsys):
     monkeypatch.setattr(update.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no upgrade on --check")))
     rc = omw_cli.main(["update", "--check"])
     assert rc == 0
+
+
+def test_run_already_current_no_upgrade(monkeypatch):
+    # When already on the latest version, never run the upgrade command — even with --yes.
+    monkeypatch.setattr(update, "latest_version", lambda *a, **k: update.banner.version())
+    monkeypatch.setattr(update.subprocess, "run",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("no upgrade when current")))
+    rc = update.run(check_only=False, assume_yes=True, refresh=True)
+    assert rc == 0

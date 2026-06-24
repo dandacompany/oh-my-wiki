@@ -50,8 +50,7 @@ def run(*, check_only: bool, assume_yes: bool, refresh: bool, base_dir=None) -> 
         print(f"omw {cur} (latest version unknown — network?)")
     elif latest == cur:
         print(f"omw {cur} is up to date.")
-        if check_only:
-            return 0
+        return 0   # already current — never re-run the upgrade command (even with --yes)
     else:
         print(f"omw {cur} → {latest} available")
     if check_only:
