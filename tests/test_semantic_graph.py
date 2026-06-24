@@ -109,3 +109,18 @@ def test_type_without_valid_relations_never_flagged():
             "relations": {"applies-to": ["x"]}}
     issues = _schema.validate(meta, "", schemas=_schemas())
     assert not any(i["issue"].startswith("unexpected_relation") for i in issues)
+
+
+def test_write_wiki_page_synthesis_satisfies_contract(tmp_path, monkeypatch):
+    from tests.conftest import make_vault_with_pages
+    from scripts import ingest, frontmatter, registry
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"wiki/seed.md": "# Seed\n\nx"})
+    rel = ingest.write_wiki_page(db, vault_id=vid, layer="syntheses",
+                                 title="My Synthesis", body="Body text.",
+                                 tags=["t"], date_str="2026-01-01",
+                                 extra_meta={"synthesizes": ["a", "b"]})
+    root = registry.get_vault_root(db, vid)
+    meta, body = frontmatter.parse((root / rel).read_text(encoding="utf-8"))
+    issues = [i["issue"] for i in _schema.validate(meta, body, schemas=_schemas())]
+    assert not any("synthesizes" in k or "## Sources" in k for k in issues)
+    assert meta["synthesizes"] == ["a", "b"]
