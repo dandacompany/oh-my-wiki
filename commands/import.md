@@ -24,3 +24,8 @@ preserved — promote later), `--layer wiki` writes pages with a minimal stub.
    Reads JSON `{imported, skipped, source}`.
 4. **Report** counts. For `--layer wiki`, optionally normalize frontmatter (propose
    better title/tags/type per page, then write + `python3 -m scripts.reindex --vault-id <id>`).
+
+> **Note (Notion databases):** `child_database` blocks inside a Notion page are now
+> imported automatically. Each row in the database is treated as a page and imported
+> alongside child pages under `<layer>/import/notion/`. Pagination is handled
+> transparently (100 rows per request).

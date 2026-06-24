@@ -305,6 +305,10 @@ def _cmd_inbox(args) -> int:
     if args.inbox_cmd == "retry":
         print(json.dumps({"retried": inbox.retry(db, vault_id=vault["id"])}, ensure_ascii=False))
         return 0
+    if args.inbox_cmd == "add-feed":
+        res = inbox.add_feed(db, vault_id=vid, feed_url=args.feed_url)
+        print(json.dumps(res, ensure_ascii=False, indent=2))
+        return 0
     return 1
 
 
@@ -954,6 +958,10 @@ def build_parser() -> argparse.ArgumentParser:
     ibt = ibsub.add_parser("retry", help="Reset failed items to queued.")
     ibt.add_argument("--vault", default=None)
     ibt.set_defaults(func=_cmd_inbox)
+    ibf = ibsub.add_parser("add-feed", help="Parse an RSS/Atom feed and queue its entry links.")
+    ibf.add_argument("feed_url")
+    ibf.add_argument("--vault", default=None)
+    ibf.set_defaults(func=_cmd_inbox)
 
     pfe = sub.add_parser("fetch", help="Fetch one URL into raw/ (single-shot, no LLM).")
     pfe.add_argument("url")

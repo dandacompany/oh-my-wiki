@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from scripts import fetch, ingest, reindex, registry, urls
+from scripts import fetch, fetch_rss, ingest, reindex, registry, urls
 
 
 def _now() -> str:
@@ -139,3 +139,13 @@ def run(db_path: Path, *, vault_id: int, today: str, html_backend: str = "auto")
     if fetched:
         reindex.incremental(db_path, vault_id=vault_id)
     return {"fetched": fetched, "failed": failed, "queued_count": len(queued)}
+
+
+def add_feed(db_path: Path, *, vault_id: int, feed_url: str) -> dict:
+    """Parse a feed and enqueue each entry link into the inbox (dedup by URL)."""
+    entries = fetch_rss.fetch_feed(feed_url)
+    added, deduped = [], []
+    for e in entries:
+        row = add(db_path, vault_id=vault_id, url=e["link"])
+        (deduped if row.get("deduped") else added).append(e["link"])
+    return {"feed": feed_url, "added": added, "deduped": deduped, "count": len(entries)}

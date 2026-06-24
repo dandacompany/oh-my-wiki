@@ -57,7 +57,7 @@ OPS: tuple[OpSpec, ...] = (
                ArgSpec("--force", False, "allow merging pages of different types"),
                ArgSpec("--apply", False, "apply a staged <winner>.proposed.md"))),
     _det("visibility", "Get/set a page's serve visibility.", "omw visibility {get|set} …"),
-    _det("inbox", "URL inbox queue (add/list/remove/run/retry).", "omw inbox {add|list|remove|run|retry} …"),
+    _det("inbox", "URL inbox queue (add/list/remove/run/retry).", "omw inbox {add|add-feed|list|remove|run|retry} …"),
     _det("fetch", "Fetch one URL into raw/ (no LLM).", "omw fetch <url> [--backend auto|urllib|chromium|cloud]",
          args=(ArgSpec("url", True, "page URL to fetch"),
                ArgSpec("--backend", False, "fetch backend", ("auto", "urllib", "chromium", "cloud")))),

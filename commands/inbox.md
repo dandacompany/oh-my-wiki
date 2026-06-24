@@ -17,6 +17,10 @@ The user drops one or more URLs (articles, papers, YouTube links) to capture lat
    - `blocked URL` → SSRF guard; the URL targets a local/private host. Skip it.
 5. After `run`, the new `raw/` docs are ready. Offer to **ingest** them (summary + entities + concepts) via the normal `ingest` procedure — one raw doc at a time, propose→confirm as usual.
 
+## Feed ingestion
+
+`omw inbox add-feed <feed-url>` parses an RSS/Atom feed and queues every entry link (then `omw inbox run`).
+
 ## Single URL
 
 For a one-off, `omw fetch <url>` fetches + saves raw immediately (no queue), then run `ingest` on it.
