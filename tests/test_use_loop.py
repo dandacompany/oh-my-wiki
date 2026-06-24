@@ -59,3 +59,16 @@ def test_preamble_no_due_line_when_empty(tmp_path, monkeypatch):
     db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"wiki/a.md": "# A\n\nx"})
     monkeypatch.setattr(review, "due_pages", lambda *a, **k: [])
     assert "리뷰 도래" not in recall.preamble()
+
+
+def test_fetch_routes_pdf_ctype_to_pdf_text(monkeypatch):
+    from scripts import fetch
+    monkeypatch.setattr(fetch, "_pdf_text", lambda raw: "PDF BODY")
+    class _Resp:
+        headers = {"Content-Type": "application/pdf"}
+        def read(self): return b"%PDF-1.4 ..."
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    monkeypatch.setattr(fetch._OPENER, "open", lambda *a, **k: _Resp())
+    ctype, body, text = fetch._http_get_text("https://x/y.pdf")
+    assert "pdf" in ctype and text == "PDF BODY"
