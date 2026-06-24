@@ -36,7 +36,8 @@ def test_inbox_retry_resets_failed(tmp_path, monkeypatch):
     inbox.add(db, vault_id=vid, url="https://example.com/x")
     conn = registry.connect(db)
     conn.execute("UPDATE inbox_queue SET status='failed', error='boom' WHERE vault_id=?", (vid,))
-    conn.commit(); conn.close()
+    conn.commit()
+    conn.close()
     n = inbox.retry(db, vault_id=vid)
     assert n == 1
     assert inbox.list_items(db, vault_id=vid, status="queued")
