@@ -117,3 +117,9 @@ def test_next_command_doc_exists_and_clean():
     assert p.exists(), "commands/next.md should document the after-each-task proposal"
     for verb in re.findall(r"`omw ([a-z][a-z-]+)", p.read_text(encoding="utf-8")):
         assert reg.get(verb) is not None, f"next.md references unknown op: {verb}"
+
+
+def test_ingest_doc_has_link_suggest_step():
+    from pathlib import Path
+    p = Path(__file__).resolve().parent.parent / "commands" / "ingest.md"
+    assert "omw links suggest" in p.read_text(encoding="utf-8")

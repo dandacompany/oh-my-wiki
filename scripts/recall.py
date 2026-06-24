@@ -251,6 +251,16 @@ def preamble() -> str:
             lines.append("유지보수: " + st["nudge"])
     except Exception:
         pass
+    try:
+        from datetime import date
+        from scripts import review
+        due = review.due_pages(db, vault_id=v["id"], today=date.today().isoformat(),
+                               include_unscheduled=False)[:3]
+        names = [d.get("title") or d.get("relpath") for d in due if d.get("title") or d.get("relpath")]
+        if names:
+            lines.append("⏰ 리뷰 도래: " + ", ".join(names))
+    except Exception:
+        pass
     lines.append("</omw-wiki>")
     return "\n".join(lines)
 

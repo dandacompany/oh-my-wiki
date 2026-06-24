@@ -28,6 +28,16 @@ class _SSRFSafeRedirectHandler(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(_SSRFSafeRedirectHandler())
 
 
+def _pdf_text(raw: bytes) -> str:
+    try:
+        import io
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(raw))
+        return "\n\n".join((p.extract_text() or "") for p in reader.pages).strip()
+    except Exception:
+        return ""
+
+
 def _strip_html(html: str) -> str:
     text = re.sub(r"<script.*?</script>|<style.*?</style>", " ", html, flags=re.I | re.S)
     text = re.sub(r"<[^>]+>", " ", text)
@@ -40,11 +50,14 @@ def _http_get_text(url: str) -> tuple[str, str, str]:
     try:
         with _OPENER.open(req, timeout=20) as resp:
             ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
-            body = resp.read().decode("utf-8", errors="replace")
+            raw = resp.read()
     except urllib.error.HTTPError as exc:
         raise FetchError(f"HTTP {exc.code} from {url}") from exc
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         raise FetchError(f"network error to {url}: {exc}") from exc
+    if "pdf" in ctype:
+        return ctype, "", _pdf_text(raw)
+    body = raw.decode("utf-8", errors="replace")
     extracted = _strip_html(body) if "html" in ctype else body
     return ctype, body, extracted
 

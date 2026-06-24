@@ -302,6 +302,9 @@ def _cmd_inbox(args) -> int:
         result = inbox.run(db, vault_id=vid, today=today, html_backend=args.backend)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 1 if result["failed"] else 0
+    if args.inbox_cmd == "retry":
+        print(json.dumps({"retried": inbox.retry(db, vault_id=vault["id"])}, ensure_ascii=False))
+        return 0
     return 1
 
 
@@ -824,6 +827,9 @@ def build_parser() -> argparse.ArgumentParser:
     ibn.add_argument("--backend", choices=["auto", "urllib", "chromium", "cloud"], default="auto")
     ibn.add_argument("--today", default=None, help="YYYY-MM-DD (default: today)")
     ibn.set_defaults(func=_cmd_inbox)
+    ibt = ibsub.add_parser("retry", help="Reset failed items to queued.")
+    ibt.add_argument("--vault", default=None)
+    ibt.set_defaults(func=_cmd_inbox)
 
     pfe = sub.add_parser("fetch", help="Fetch one URL into raw/ (single-shot, no LLM).")
     pfe.add_argument("url")

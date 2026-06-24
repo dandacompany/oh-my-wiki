@@ -11,6 +11,9 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from scripts import config
+from scripts import embed
+from scripts import recall
 from scripts import registry
 from scripts import search_index
 
@@ -68,8 +71,19 @@ def handle_query(
     limit = max(1, min(limit, max_limit))
 
     row = _resolve_vault(db_path, payload.get("vault") or default_vault)
-    hits = search_index.query(db_path, vault_id=row["id"], query=text, limit=limit,
-                              visibility="public")
+    rc = (config.load_config().get("recall") or {})
+    strat = recall.effective_strategy(rc.get("strategy", "fts"), quiet=True)
+    embedder = embed.get_embedder(rc.get("embedding") or {}) if strat != "fts" else None
+    hits = search_index.search_strategy(
+        db_path,
+        vault_id=row["id"],
+        q=text,
+        fts_query=text,
+        limit=limit,
+        strategy=strat,
+        embedder=embedder,
+        visibility="public",
+    )
     return {"query": text, "vault": row["name"], "count": len(hits), "hits": hits}
 
 
