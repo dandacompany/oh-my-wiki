@@ -39,6 +39,40 @@ def test_parse_rejects_doctype_entity_bomb():
     assert fetch_rss.parse_feed(bomb) == []
 
 
+def test_fetch_feed_blocks_ssrf():
+    import pytest
+    from scripts import fetch_rss
+    # link-local (AWS metadata) must be blocked before any network call
+    with pytest.raises(fetch_rss.FeedError, match="SSRF guard"):
+        fetch_rss.fetch_feed("http://169.254.169.254/latest/meta-data/")
+    # loopback must also be blocked
+    with pytest.raises(fetch_rss.FeedError, match="SSRF guard"):
+        fetch_rss.fetch_feed("http://localhost:8080/feed")
+
+
+def test_fetch_feed_caps_size(monkeypatch):
+    import pytest
+    from scripts import fetch_rss
+
+    class _FakeResp:
+        def read(self, n):
+            return b"x" * n
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+    class _FakeOpener:
+        def open(self, req, timeout=None):
+            return _FakeResp()
+
+    monkeypatch.setattr(fetch_rss.fetch, "_OPENER", _FakeOpener())
+    with pytest.raises(fetch_rss.FeedError, match="feed too large"):
+        fetch_rss.fetch_feed("https://example.com/feed")
+
+
 def test_add_feed_enqueues(tmp_path, monkeypatch):
     from tests.conftest import make_vault_with_pages
     from scripts import inbox
