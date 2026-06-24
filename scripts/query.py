@@ -33,9 +33,14 @@ def write_synthesis(
         "tags": list(tags),
         "status": "processed",
         "citations": list(citations),
+        "synthesizes": list(citations),
     }
     if summary:
         meta["summary"] = summary
+    # Ensure the required ## Sources section is present in the body.
+    if not any(line.strip() == "## Sources" for line in body.splitlines()):
+        sources_block = "\n\n## Sources\n" + "".join(f"- {c}\n" for c in citations)
+        body = body.rstrip() + sources_block
     abs_path = root / relpath
     abs_path.parent.mkdir(parents=True, exist_ok=True)
     abs_path.write_text(frontmatter.dump(meta, body), encoding="utf-8")
