@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS notes (
   parse_error  INTEGER NOT NULL DEFAULT 0 CHECK (parse_error IN (0, 1)),
   visibility   TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('public', 'private')),
   aliases      TEXT NOT NULL DEFAULT '[]',
+  type         TEXT,
+  status       TEXT,
   UNIQUE(vault_id, relpath)
 );
 CREATE INDEX IF NOT EXISTS idx_notes_vault ON notes(vault_id);

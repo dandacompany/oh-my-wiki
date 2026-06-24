@@ -28,6 +28,10 @@ def _ensure_note_columns(conn: sqlite3.Connection) -> None:
         )
     if "aliases" not in cols:
         conn.execute("ALTER TABLE notes ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'")
+    if "type" not in cols:
+        conn.execute("ALTER TABLE notes ADD COLUMN type TEXT")
+    if "status" not in cols:
+        conn.execute("ALTER TABLE notes ADD COLUMN status TEXT")
 
 
 def init_db(db_path: Path) -> None:
@@ -172,6 +176,8 @@ def upsert_note(
     parse_error: bool = False,
     visibility: str = "private",
     aliases: list[str] | None = None,
+    type_: str | None = None,
+    status: str | None = None,
 ) -> int:
     if visibility not in ("public", "private"):
         visibility = "private"
@@ -182,8 +188,9 @@ def upsert_note(
             conn.execute(
                 """
                 INSERT INTO notes(vault_id, relpath, layer, title, summary,
-                                  mtime, size_bytes, parse_error, visibility, aliases)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                  mtime, size_bytes, parse_error, visibility, aliases,
+                                  type, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(vault_id, relpath) DO UPDATE SET
                     layer       = excluded.layer,
                     title       = excluded.title,
@@ -192,10 +199,13 @@ def upsert_note(
                     size_bytes  = excluded.size_bytes,
                     parse_error = excluded.parse_error,
                     visibility  = excluded.visibility,
-                    aliases     = excluded.aliases
+                    aliases     = excluded.aliases,
+                    type        = excluded.type,
+                    status      = excluded.status
                 """,
                 (vault_id, relpath, layer, title, summary,
-                 mtime, size_bytes, 1 if parse_error else 0, visibility, aliases_json),
+                 mtime, size_bytes, 1 if parse_error else 0, visibility, aliases_json,
+                 type_, status),
             )
             note_id = conn.execute(
                 "SELECT id FROM notes WHERE vault_id = ? AND relpath = ?",
