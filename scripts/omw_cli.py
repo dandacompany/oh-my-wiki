@@ -419,6 +419,17 @@ def _cmd_search(args) -> int:
     return 0
 
 
+def _cmd_context(args) -> int:
+    from scripts import query_pipeline
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    out = query_pipeline.context(db, vault_id=vault["id"], q=args.query, limit=args.limit)
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _cmd_find(args) -> int:
     from scripts import search_index
     db = registry_path()
@@ -929,6 +940,12 @@ def build_parser() -> argparse.ArgumentParser:
     psr.add_argument("--no-fallback", dest="no_fallback", action="store_true",
                      help="disable provider fallback (single configured provider only)")
     psr.set_defaults(func=_cmd_search)
+
+    pctx = sub.add_parser("context", help="Cited-context retrieval (JSON) for grounded answers.")
+    pctx.add_argument("query")
+    pctx.add_argument("--limit", type=int, default=8)
+    pctx.add_argument("--vault", default=None)
+    pctx.set_defaults(func=_cmd_context)
 
     pfd = sub.add_parser("find", help="Deterministic full-text search over the vault index.")
     pfd.add_argument("query")
