@@ -68,6 +68,40 @@ def test_export_refuses_inside_vault(tmp_path, monkeypatch):
         exporter.export(db, vault_id=vid, out_dir=str(root / "sub"))
 
 
+def test_cli_export_resolves_first(tmp_path, monkeypatch):
+    """omw export must reindex+resolve links before exporting so the dangling
+    manifest is accurate.  Without a prior reindex/resolve, every link has
+    dst_note_id=NULL and all outbound links show as dangling (including in-slice
+    ones).  This test verifies that calling main(["export", ...]) directly — with
+    NO manual reindex/resolve beforehand — still produces a correct manifest
+    where [[b]] (in-slice) is NOT dangling and [[gone]] (out-of-slice) IS."""
+    from tests.conftest import make_vault_with_pages
+    from scripts import omw_cli
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "wiki/concepts/a.md": (
+            "---\ntitle: A\ntype: concept\ntags: [pub]\n---\n\n## Summary\n\n"
+            "see [[b]] and [[gone]]\n"
+        ),
+        "wiki/concepts/b.md": (
+            "---\ntitle: B\ntype: concept\ntags: [pub]\n---\n\n## Summary\n\nb body\n"
+        ),
+        "wiki/concepts/gone.md": (
+            "---\ntitle: Gone\ntype: concept\ntags: [other]\n---\n\n## Summary\n\ng\n"
+        ),
+    })
+    # Intentionally NO reindex.full / links.resolve here — _cmd_export must do it
+    out_dir = tmp_path / "slice"
+    rc = omw_cli.main(["export", "--tag", "pub", "--out", str(out_dir)])
+    assert rc == 0
+    manifest = (out_dir / "EXPORT_MANIFEST.md").read_text()
+    # [[gone]] is out-of-slice → must appear as dangling
+    assert "[[gone]]" in manifest
+    # [[b]] is in-slice → must NOT appear in the dangling section
+    # The manifest format is "## Dangling links ... \n- `page` → [[slug]]"
+    dangling_section = manifest.split("## Dangling")[1] if "## Dangling" in manifest else ""
+    assert "[[b]]" not in dangling_section
+
+
 def test_export_zip(tmp_path, monkeypatch):
     import zipfile
     from tests.conftest import make_vault_with_pages

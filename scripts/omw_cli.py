@@ -470,6 +470,14 @@ def _cmd_export(args) -> int:
     vault = _require_vault_row(db, args.vault)
     if vault is None:
         return 1
+    # Refresh the index first so [[wikilinks]] are resolved before computing
+    # the dangling manifest.  Without this, dst_note_id=NULL for every link and
+    # every outbound link would be reported as dangling (even in-slice ones).
+    # Incremental is mtime-gated (cheap) and re-resolves links globally.
+    try:
+        reindex.incremental(db, vault_id=vault["id"])
+    except Exception:
+        pass  # best-effort; export still runs on whatever is already indexed
     try:
         res = exporter.export(db, vault_id=vault["id"], out_dir=args.out,
                               zip_path=args.zip_path, tag=args.tag, type_=args.type,
