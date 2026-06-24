@@ -450,6 +450,20 @@ def _cmd_find(args) -> int:
     return 0
 
 
+def _cmd_list(args) -> int:
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    rows = registry.list_notes_faceted(
+        db, vault_id=vault["id"], tag=args.tag, type_=args.type,
+        status=args.status, layer=args.layer, visibility=args.visibility)
+    out = [{"relpath": r["relpath"], "title": r["title"], "type": r["type"],
+            "status": r["status"], "visibility": r["visibility"]} for r in rows]
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _cmd_view(args) -> int:
     from scripts import view
     return view.run(args)
@@ -953,6 +967,15 @@ def build_parser() -> argparse.ArgumentParser:
     pfd.add_argument("--vault", default=None)
     pfd.add_argument("--json", dest="find_json", action="store_true")
     pfd.set_defaults(func=_cmd_find)
+
+    plist = sub.add_parser("list", help="Faceted note listing as JSON.")
+    plist.add_argument("--tag", default=None)
+    plist.add_argument("--type", default=None)
+    plist.add_argument("--status", default=None)
+    plist.add_argument("--layer", default=None)
+    plist.add_argument("--visibility", default=None)
+    plist.add_argument("--vault", default=None)
+    plist.set_defaults(func=_cmd_list)
 
     pnx = sub.add_parser("next", help="Recommend the next knowledge-lifecycle action(s).")
     pnx.add_argument("--vault", default=None)

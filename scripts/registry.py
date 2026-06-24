@@ -251,6 +251,40 @@ def list_notes(
         conn.close()
 
 
+def list_notes_faceted(
+    db_path: Path,
+    *,
+    vault_id: int,
+    tag: str | None = None,
+    type_: str | None = None,
+    status: str | None = None,
+    layer: str | None = None,
+    visibility: str | None = None,
+) -> list[sqlite3.Row]:
+    """Faceted note listing. Filters AND together; a None facet is ignored.
+    `tag` filters via the note_tags/tags join; the rest are notes columns."""
+    where = ["n.vault_id = ?"]
+    params: list = [vault_id]
+    join = ""
+    if tag is not None:
+        join = ("JOIN note_tags nt ON nt.note_id = n.id "
+                "JOIN tags t ON t.id = nt.tag_id")
+        where.append("t.name = ?")
+        params.append(tag)
+    for col, val in (("type", type_), ("status", status),
+                     ("layer", layer), ("visibility", visibility)):
+        if val is not None:
+            where.append(f"n.{col} = ?")
+            params.append(val)
+    sql = (f"SELECT DISTINCT n.* FROM notes n {join} "
+           f"WHERE {' AND '.join(where)} ORDER BY n.relpath")
+    conn = connect(db_path)
+    try:
+        return list(conn.execute(sql, params))
+    finally:
+        conn.close()
+
+
 def delete_note(db_path: Path, *, vault_id: int, relpath: str) -> None:
     conn = connect(db_path)
     try:

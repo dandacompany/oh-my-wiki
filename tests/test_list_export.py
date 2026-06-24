@@ -18,3 +18,18 @@ def test_reindex_persists_type_and_status(tmp_path, monkeypatch):
         conn.close()
     assert c["type"] == "concept" and c["status"] == "processed"
     assert n["type"] is None and n["status"] is None
+
+
+def test_list_faceted(tmp_path, monkeypatch):
+    from tests.conftest import make_vault_with_pages
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "wiki/concepts/a.md": "---\ntitle: A\ntype: concept\nstatus: processed\ntags: [ml]\n---\n\n## Summary\n\na\n",
+        "wiki/entities/b.md": "---\ntitle: B\ntype: entity\nstatus: superseded\ntags: [ml, x]\n---\n\n## Summary\n\nb\n",
+    })
+    def rels(rows):
+        return {r["relpath"] for r in rows}
+    assert rels(registry.list_notes_faceted(db, vault_id=vid, type_="concept")) == {"wiki/concepts/a.md"}
+    assert rels(registry.list_notes_faceted(db, vault_id=vid, status="superseded")) == {"wiki/entities/b.md"}
+    assert rels(registry.list_notes_faceted(db, vault_id=vid, tag="ml")) == {"wiki/concepts/a.md", "wiki/entities/b.md"}
+    assert rels(registry.list_notes_faceted(db, vault_id=vid, tag="x")) == {"wiki/entities/b.md"}
+    assert rels(registry.list_notes_faceted(db, vault_id=vid, tag="ml", type_="entity")) == {"wiki/entities/b.md"}
