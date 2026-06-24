@@ -70,6 +70,12 @@ print(relpath)
 - `notes` table contains a row for `relpath`.
 - Report back to the user: relpath, full path, and a one-line confirmation.
 
+## Frontmatter conventions
+
+For synthesis or comparison pages, record provenance and follow relation contracts:
+synthesis ⇒ `synthesizes: [slugs]` + `## Sources` section; comparison ⇒ `compared_items: [...]`;
+use precise relation verbs (`derived-from`/`extends`/`illustrates`/`applies-to`/`instances-of`/`see-also`/`synthesizes`).
+
 ## Error handling
 
 - Active vault is wiki-mode → refuse, suggest `vault-use`.

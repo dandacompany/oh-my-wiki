@@ -91,6 +91,15 @@ For paste/md/txt, use `ingest.save_raw` with `ext` = `md` or `txt`. For pdf, use
    "
    ```
 
+   - **Provenance.** When you write a wiki page from a raw source, set
+     `source_raw: [<raw relpath>]` in its frontmatter (a list — a synthesis may derive
+     from several). This makes raw sources traceable from the wiki page.
+   - **Relations.** Prefer the precise relation verbs in `relations:` —
+     `derived-from`, `extends`, `illustrates`, `applies-to`, `instances-of`,
+     `see-also`, `synthesizes` (alongside `uses`/`contradicts`/`supersedes`). A
+     `synthesis` page must set `synthesizes: [slugs]` + a `## Sources` section; a
+     `comparison` must set `compared_items: [...]`.
+
 4. **Write entity / concept pages.** For each new entity:
 
    ```bash

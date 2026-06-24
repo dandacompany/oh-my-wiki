@@ -75,7 +75,9 @@ Always invoke this before doing anything else:
 >    may declare an optional `aliases:` frontmatter list for matching. Pages may also carry inline
 >    `key:: value` fields (Dataview line syntax); relation keys (`uses`/`contradicts`/`supersedes:: [[B]]`)
 >    feed the typed-edge graph like frontmatter `relations:`, and `omw fields <relpath>` lists a
->    page's frontmatter + inline fields.
+>    page's frontmatter + inline fields. Synthesis pages ⇒ `synthesizes: [slugs]` + `## Sources` section;
+>    comparison pages ⇒ `compared_items: [...]`; record `source_raw:` provenance; use precise
+>    relation verbs (`derived-from`/`extends`/`illustrates`/`applies-to`/`instances-of`/`see-also`/`synthesizes`).
 > 2. **Reasoning ops** (ingest, query, autoresearch, personas, …): read the exact
 >    procedure in `commands/<op>.md` and run its inline `python3 -c` snippet /
 >    `python3 -m scripts.<module>` commands verbatim. Never guess a script path.
