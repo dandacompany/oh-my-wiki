@@ -243,26 +243,40 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
     all_names = [p["name"] for p in specs]
     descriptions = {p["name"]: p.get("description", "") for p in specs}
     interactive = (not noninteractive) and sys.stdin.isatty()
+    # Load persisted config to use as fallback (preserve on re-run).
+    cur_cfg = config.load_config().get("personas") or {}
+    cur_enabled = cur_cfg.get("enabled")   # list or None
+    cur_main = cur_cfg.get("main")         # str or None
+    # Validate cur_enabled: drop any persona names that no longer exist.
+    if cur_enabled is not None:
+        cur_enabled = [n for n in cur_enabled if n in all_names] or None
     if interactive and enabled is None:
         picked = _prompt("checkbox", "Enable personas", choices=all_names)
         enabled = picked or list(all_names)
     if interactive and main is None:
-        default_main = ("wiki-librarian" if "wiki-librarian" in (enabled or all_names)
-                        else ((enabled or all_names)[0] if (enabled or all_names) else None))
+        _eff_enabled = enabled or cur_enabled or all_names
+        default_main = (cur_main if cur_main and cur_main in _eff_enabled
+                        else ("wiki-librarian" if "wiki-librarian" in _eff_enabled
+                              else (_eff_enabled[0] if _eff_enabled else None)))
         main = _prompt("select", "Main persona", choices=enabled or all_names,
                        default=default_main) or None
     if interactive and hosts is None:
         hosts = _prompt("checkbox", "Export to hosts",
                         choices=list(persona_export.HOST_FILES)) or None
+    # Non-interactive fallback: preserve previously saved roster if no explicit arg.
     if enabled is None:
-        enabled = list(all_names)
+        enabled = list(cur_enabled) if cur_enabled else list(all_names)
     unknown = [n for n in enabled if n not in all_names]
     if unknown:
         print(f"error: unknown persona(s): {unknown}", file=sys.stderr)
         return 1
     if main is None:
-        main = "wiki-librarian" if "wiki-librarian" in enabled \
-            else (enabled[0] if enabled else None)
+        if cur_main and cur_main in enabled:
+            main = cur_main
+        elif "wiki-librarian" in enabled:
+            main = "wiki-librarian"
+        else:
+            main = enabled[0] if enabled else None
     if main is not None and main not in enabled:
         print(f"error: main persona {main!r} not in enabled set", file=sys.stderr)
         return 1

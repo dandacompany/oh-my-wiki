@@ -40,3 +40,79 @@ def test_setup_recall_first_run_defaults(tmp_path, monkeypatch):
     cfg = config.load_config().get("recall") or {}
     assert cfg.get("strategy") == "fts", "First-run default strategy must be 'fts'"
     assert cfg.get("mode") == "auto", "First-run default mode must be 'auto'"
+
+
+def test_setup_personas_preserves_roster(tmp_path, monkeypatch):
+    """setup_personas(noninteractive=True) with no args must preserve the existing
+    enabled roster + main persona (G2: non-lossy setup_personas)."""
+    make_vault_with_pages(tmp_path, monkeypatch, pages={"wiki/d.md": "# D\n\nw"})
+    # First call: explicitly set a specific roster
+    rc = setup_wizard.setup_personas(
+        enabled=["wiki-librarian", "curator"],
+        main="curator",
+        hosts=["codex"],
+        noninteractive=True,
+        base_dir=str(tmp_path),
+    )
+    assert rc == 0, "First setup_personas call should succeed"
+    # Second call: no args — must preserve the previously saved roster
+    rc2 = setup_wizard.setup_personas(noninteractive=True, base_dir=str(tmp_path))
+    assert rc2 == 0, "Second setup_personas call should succeed"
+    cfg = config.load_config().get("personas") or {}
+    assert cfg.get("enabled") == ["wiki-librarian", "curator"], (
+        f"Expected enabled=['wiki-librarian','curator'] but got {cfg.get('enabled')!r}; "
+        "setup_personas must not reset enabled to all personas on re-run"
+    )
+    assert cfg.get("main") == "curator", (
+        f"Expected main='curator' but got {cfg.get('main')!r}; "
+        "setup_personas must not reset main to 'wiki-librarian' on re-run"
+    )
+
+
+def test_setup_personas_explicit_args_override(tmp_path, monkeypatch):
+    """Explicitly passed args to setup_personas must still override the existing config."""
+    make_vault_with_pages(tmp_path, monkeypatch, pages={"wiki/e.md": "# E\n\nv"})
+    # First call: set a specific roster
+    setup_wizard.setup_personas(
+        enabled=["wiki-librarian", "curator"],
+        main="curator",
+        hosts=["codex"],
+        noninteractive=True,
+        base_dir=str(tmp_path),
+    )
+    # Second call: explicit args should override saved config
+    rc = setup_wizard.setup_personas(
+        enabled=["wiki-librarian"],
+        main="wiki-librarian",
+        hosts=["codex"],
+        noninteractive=True,
+        base_dir=str(tmp_path),
+    )
+    assert rc == 0
+    cfg = config.load_config().get("personas") or {}
+    assert cfg.get("enabled") == ["wiki-librarian"], (
+        "Explicit enabled=['wiki-librarian'] must override saved ['wiki-librarian','curator']"
+    )
+    assert cfg.get("main") == "wiki-librarian", (
+        "Explicit main='wiki-librarian' must override saved 'curator'"
+    )
+
+
+def test_setup_personas_first_run_defaults(tmp_path, monkeypatch):
+    """On first run (no existing config) default is all personas with wiki-librarian main."""
+    make_vault_with_pages(tmp_path, monkeypatch, pages={"wiki/f.md": "# F\n\nu"})
+    rc = setup_wizard.setup_personas(
+        hosts=["codex"],
+        noninteractive=True,
+        base_dir=str(tmp_path),
+    )
+    assert rc == 0
+    cfg = config.load_config().get("personas") or {}
+    from scripts import personas
+    all_names = [p["name"] for p in personas.list_personas()]
+    assert cfg.get("enabled") == all_names, (
+        f"First-run default enabled must be all personas {all_names!r}, got {cfg.get('enabled')!r}"
+    )
+    assert cfg.get("main") == "wiki-librarian", (
+        f"First-run default main must be 'wiki-librarian', got {cfg.get('main')!r}"
+    )
