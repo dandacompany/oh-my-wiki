@@ -132,3 +132,7 @@ def test_ingest_doc_mentions_source_raw():
 
 def test_update_registered_deterministic():
     assert reg.get("update") is not None and reg.get("update").kind == "deterministic"
+
+
+def test_merge_registered_deterministic():
+    assert reg.get("merge") is not None and reg.get("merge").kind == "deterministic"

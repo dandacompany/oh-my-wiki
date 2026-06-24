@@ -30,6 +30,11 @@ _MDLINK_RE = re.compile(r"\[[^\]]+\]\(\./([^)]+\.md)\)")
 LINK_BIDIR_LAYERS = {"entities", "concepts"}
 TERMINOLOGY_DRIFT_THRESHOLD = 0.85
 
+# v2.0 content-duplicate detection constants
+CONTENT_DUPLICATE_THRESHOLD = 0.55
+CONTENT_DUPLICATE_MIN_TOKENS = 40
+_WORD_RE = re.compile(r"\w+", re.UNICODE)
+
 
 def check(db_path: Path, *, vault_id: int) -> dict:
     """Return wiki structural lint report. Read-only."""
@@ -48,6 +53,7 @@ def check(db_path: Path, *, vault_id: int) -> dict:
         "stale_claim_candidates":   _stale_claim_candidates(pages),
         "link_bidirectionality_gaps":   _link_bidirectionality_gaps(pages, root),
         "terminology_drift_candidates": _terminology_drift_candidates(pages, root),
+        "content_duplicate_candidates": _content_duplicate_candidates(pages),
     }
 
 
@@ -59,6 +65,8 @@ def _scan_pages(root: Path) -> list[tuple[str, str, float]]:
         return out
     for p in sorted(wiki_dir.rglob("*.md")):
         if ".trash" in p.parts:
+            continue
+        if p.name.endswith(".proposed.md"):
             continue
         rel = str(p.relative_to(root)).replace("\\", "/")
         if rel in {"wiki/index.md", "wiki/log.md"}:
@@ -291,6 +299,52 @@ def _link_bidirectionality_gaps(
                     "target": tgt,
                     "same_layer": True,
                 })
+    return out
+
+
+def _word_shingles(text: str, k: int = 3) -> set[tuple[str, ...]]:
+    """k-word shingles (lowercased) of the body text."""
+    toks = [t.lower() for t in _WORD_RE.findall(text)]
+    if len(toks) < k:
+        return set()
+    return {tuple(toks[i:i + k]) for i in range(len(toks) - k + 1)}
+
+
+def _jaccard(a: set, b: set) -> float:
+    if not a and not b:
+        return 0.0
+    union = len(a | b)
+    return len(a & b) / union if union else 0.0
+
+
+def _content_duplicate_candidates(pages: list[tuple[str, str, float]]) -> list[dict]:
+    """Pairs of pages whose BODY (frontmatter stripped) overlaps by word-trigram
+    Jaccard >= CONTENT_DUPLICATE_THRESHOLD. Stubs (< CONTENT_DUPLICATE_MIN_TOKENS
+    word tokens) are skipped. Orthogonal to slug similarity."""
+    enriched: list[tuple[str, set]] = []
+    for rel, text, _mt in pages:
+        body = _strip_frontmatter(text)
+        if len(_WORD_RE.findall(body)) < CONTENT_DUPLICATE_MIN_TOKENS:
+            continue
+        sh = _word_shingles(body)
+        if sh:
+            enriched.append((rel, sh))
+    out: list[dict] = []
+    for i in range(len(enriched)):
+        rel_a, sh_a = enriched[i]
+        for j in range(i + 1, len(enriched)):
+            rel_b, sh_b = enriched[j]
+            sim = _jaccard(sh_a, sh_b)
+            if sim < CONTENT_DUPLICATE_THRESHOLD:
+                continue
+            slug_a = _slug_from_relpath(rel_a)
+            slug_b = _slug_from_relpath(rel_b)
+            out.append({
+                "slug_a": slug_a,
+                "slug_b": slug_b,
+                "similarity": round(sim, 3),
+                "suggested": f"omw merge {slug_a} {slug_b}",
+            })
     return out
 
 

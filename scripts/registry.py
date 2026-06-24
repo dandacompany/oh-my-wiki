@@ -1,6 +1,7 @@
 """sqlite-backed registry for oh-my-wiki vaults and notes."""
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,6 +26,8 @@ def _ensure_note_columns(conn: sqlite3.Connection) -> None:
             "ALTER TABLE notes ADD COLUMN visibility TEXT NOT NULL "
             "DEFAULT 'private' CHECK (visibility IN ('public', 'private'))"
         )
+    if "aliases" not in cols:
+        conn.execute("ALTER TABLE notes ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'")
 
 
 def init_db(db_path: Path) -> None:
@@ -168,17 +171,19 @@ def upsert_note(
     tags: list[str],
     parse_error: bool = False,
     visibility: str = "private",
+    aliases: list[str] | None = None,
 ) -> int:
     if visibility not in ("public", "private"):
         visibility = "private"
+    aliases_json = json.dumps([str(a) for a in (aliases or [])], ensure_ascii=False)
     conn = connect(db_path)
     try:
         with conn:
             conn.execute(
                 """
                 INSERT INTO notes(vault_id, relpath, layer, title, summary,
-                                  mtime, size_bytes, parse_error, visibility)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                  mtime, size_bytes, parse_error, visibility, aliases)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(vault_id, relpath) DO UPDATE SET
                     layer       = excluded.layer,
                     title       = excluded.title,
@@ -186,10 +191,11 @@ def upsert_note(
                     mtime       = excluded.mtime,
                     size_bytes  = excluded.size_bytes,
                     parse_error = excluded.parse_error,
-                    visibility  = excluded.visibility
+                    visibility  = excluded.visibility,
+                    aliases     = excluded.aliases
                 """,
                 (vault_id, relpath, layer, title, summary,
-                 mtime, size_bytes, 1 if parse_error else 0, visibility),
+                 mtime, size_bytes, 1 if parse_error else 0, visibility, aliases_json),
             )
             note_id = conn.execute(
                 "SELECT id FROM notes WHERE vault_id = ? AND relpath = ?",

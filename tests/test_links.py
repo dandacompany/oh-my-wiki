@@ -360,3 +360,40 @@ def test_reindex_picks_up_inline_relation(tmp_path, monkeypatch):
     edges = links.relations(db, vault_id=vid, relation="contradicts")
     pairs = {(e["src_relpath"], e["dst_relpath"]) for e in edges}
     assert ("wiki/concepts/new.md", "wiki/concepts/old.md") in pairs
+
+
+def test_resolve_prefers_alias_owner(tmp_path, monkeypatch):
+    from tests.conftest import make_vault_with_pages
+    from scripts import links
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        # winner declares alias 'old' and is linked to via [[old]]
+        "wiki/concepts/winner.md": (
+            "---\ntitle: Winner\ntype: concept\naliases: [old]\n---\n\n## Summary\n\nw\n"
+        ),
+        "wiki/concepts/ref.md": (
+            "---\ntitle: Ref\ntype: concept\n---\n\n## Summary\n\nsee [[old]]\n"
+        ),
+    })
+    links.resolve(db, vid)
+    bl = links.backlinks(db, vid, "wiki/concepts/winner.md")
+    assert any(r["relpath"] == "wiki/concepts/ref.md" for r in bl)
+
+
+def test_resolve_alias_wins_over_relpath(tmp_path, monkeypatch):
+    from tests.conftest import make_vault_with_pages
+    from scripts import links
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        # a tombstone keeps slug 'dup'; winner aliases 'dup' -> [[dup]] must hit winner
+        "wiki/concepts/dup.md": (
+            "---\ntitle: Dup\ntype: concept\nstatus: merged\nmerged_into: winner\n---\n\n> Merged into [[winner]].\n"
+        ),
+        "wiki/concepts/winner.md": (
+            "---\ntitle: Winner\ntype: concept\naliases: [dup]\n---\n\n## Summary\n\nw\n"
+        ),
+        "wiki/concepts/ref.md": (
+            "---\ntitle: Ref\ntype: concept\n---\n\n## Summary\n\nsee [[dup]]\n"
+        ),
+    })
+    links.resolve(db, vid)
+    bl = links.backlinks(db, vid, "wiki/concepts/winner.md")
+    assert any(r["relpath"] == "wiki/concepts/ref.md" for r in bl)

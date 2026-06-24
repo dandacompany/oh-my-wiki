@@ -123,6 +123,8 @@ def _scan(
     for path in vault_path.rglob("*.md"):
         if any(part in {".trash", ".obsidian", ".git"} for part in path.parts):
             continue
+        if path.name.endswith(".proposed.md"):
+            continue
         rel = str(path.relative_to(vault_path)).replace("\\", "/")
         mtime = path.stat().st_mtime
         if incremental and rel in known and known[rel] >= mtime:
@@ -142,6 +144,9 @@ def _scan(
         tags = meta.get("tags") or []
         if not isinstance(tags, list):
             tags = []
+        aliases = meta.get("aliases") or []
+        if not isinstance(aliases, list):
+            aliases = []
         note_id = registry.upsert_note(
             db_path,
             vault_id=vault_id,
@@ -154,6 +159,7 @@ def _scan(
             tags=[str(t) for t in tags],
             parse_error=parse_error,
             visibility=meta.get("visibility") or "private",
+            aliases=[str(a) for a in aliases],
         )
         links.replace_links(db_path, vault_id=vault_id, src_note_id=note_id, body=body, meta=meta)
         if fts_conn is not None:
