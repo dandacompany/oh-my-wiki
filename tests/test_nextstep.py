@@ -1,4 +1,7 @@
+import json
+
 from scripts import nextstep
+from scripts import omw_cli
 
 
 def _sig(**kw):
@@ -38,10 +41,6 @@ def test_research_marker_yields_collect():
     out = nextstep.suggest(_sig(markers=["research"]))
     assert any(s["phase"] == "collect" for s in out)
 
-
-import json
-
-from scripts import omw_cli
 
 
 def test_cli_next_json_ranked(tmp_path, monkeypatch, capsys):
