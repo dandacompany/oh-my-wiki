@@ -1,9 +1,34 @@
 """Wiki-mode ingest helpers: save raw sources, write wiki pages, update index/log."""
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 
+from pypdf import PdfReader
+
 from scripts import frontmatter, registry, slugify
+
+
+def _ocr_pdf(pdf_bytes: bytes) -> str:
+    """OCR a scanned PDF's embedded page images via the optional `ocr` extra.
+    Returns "" when pytesseract/Pillow are unavailable or nothing is extracted."""
+    try:
+        import pytesseract
+        from PIL import Image
+    except ImportError:
+        return ""
+    parts = []
+    try:
+        reader = PdfReader(BytesIO(pdf_bytes))
+        for page in reader.pages:
+            for img in getattr(page, "images", []) or []:
+                try:
+                    parts.append(pytesseract.image_to_string(Image.open(BytesIO(img.data))))
+                except Exception:
+                    continue
+    except Exception:
+        return ""
+    return "\n\n".join(p for p in parts if p).strip()
 
 
 def _resolve_path(root: Path, folder: str, base: str, ext: str) -> str:
@@ -44,9 +69,6 @@ def save_raw_pdf(
     date_str: str,
 ) -> tuple[str, str]:
     """Save the original PDF bytes AND extract text. Returns (relpath, extracted_text)."""
-    from pypdf import PdfReader
-    from io import BytesIO
-
     root = registry.get_vault_root(db_path, vault_id)
     base = f"{date_str}-{slugify.slugify(title)}"
     relpath = _resolve_path(root, "raw", base, "pdf")
@@ -59,6 +81,8 @@ def save_raw_pdf(
     for page in reader.pages:
         parts.append(page.extract_text() or "")
     extracted = "\n\n".join(parts).strip()
+    if not extracted:
+        extracted = _ocr_pdf(pdf_bytes)
     return relpath, extracted
 
 
