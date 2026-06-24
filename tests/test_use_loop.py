@@ -41,3 +41,21 @@ def test_inbox_retry_resets_failed(tmp_path, monkeypatch):
     assert n == 1
     assert inbox.list_items(db, vault_id=vid, status="queued")
     assert not inbox.list_items(db, vault_id=vid, status="failed")
+
+
+def test_preamble_surfaces_due_pages(tmp_path, monkeypatch):
+    from tests.conftest import make_vault_with_pages
+    from scripts import recall, review
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"wiki/old.md": "# Old\n\nx"})
+    monkeypatch.setattr(review, "due_pages",
+                        lambda *a, **k: [{"relpath": "wiki/old.md", "title": "Old"}])
+    out = recall.preamble()
+    assert "리뷰 도래" in out and "Old" in out
+
+
+def test_preamble_no_due_line_when_empty(tmp_path, monkeypatch):
+    from tests.conftest import make_vault_with_pages
+    from scripts import recall, review
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"wiki/a.md": "# A\n\nx"})
+    monkeypatch.setattr(review, "due_pages", lambda *a, **k: [])
+    assert "리뷰 도래" not in recall.preamble()
