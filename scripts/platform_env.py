@@ -109,3 +109,15 @@ def pip_install_argv(pkg: str) -> list[str]:
     if pep668_managed():
         return [_executable(), "-m", "pip", "install", "--break-system-packages", pkg]
     return [_executable(), "-m", "pip", "install", pkg]
+
+
+def upgrade_argv(pkg: str) -> list[str]:
+    """The correct UPGRADE command for `pkg` in omw's own environment."""
+    ctx = omw_install_context()
+    if ctx == "pipx":
+        return ["pipx", "upgrade", "oh-my-wiki"]
+    if ctx == "venv":
+        return [_executable(), "-m", "pip", "install", "-U", pkg]
+    if pep668_managed():
+        return [_executable(), "-m", "pip", "install", "-U", "--break-system-packages", pkg]
+    return [_executable(), "-m", "pip", "install", "-U", pkg]
