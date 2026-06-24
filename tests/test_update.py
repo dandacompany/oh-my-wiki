@@ -55,3 +55,11 @@ def test_run_assume_yes_upgrades(monkeypatch):
     monkeypatch.setattr(update, "_refresh_blocks", lambda *a, **k: None)
     rc = update.run(check_only=False, assume_yes=True, refresh=False)
     assert rc == 0 and seen["argv"][0] in ("pipx", update.platform_env._executable())
+
+
+def test_cli_update_check(monkeypatch, capsys):
+    from scripts import omw_cli, update
+    monkeypatch.setattr(update, "latest_version", lambda *a, **k: "2.15.0")
+    monkeypatch.setattr(update.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no upgrade on --check")))
+    rc = omw_cli.main(["update", "--check"])
+    assert rc == 0
