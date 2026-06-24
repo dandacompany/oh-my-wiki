@@ -243,26 +243,40 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
     all_names = [p["name"] for p in specs]
     descriptions = {p["name"]: p.get("description", "") for p in specs}
     interactive = (not noninteractive) and sys.stdin.isatty()
+    # Load persisted config to use as fallback (preserve on re-run).
+    cur_cfg = config.load_config().get("personas") or {}
+    cur_enabled = cur_cfg.get("enabled")   # list or None
+    cur_main = cur_cfg.get("main")         # str or None
+    # Validate cur_enabled: drop any persona names that no longer exist.
+    if cur_enabled is not None:
+        cur_enabled = [n for n in cur_enabled if n in all_names] or None
     if interactive and enabled is None:
         picked = _prompt("checkbox", "Enable personas", choices=all_names)
         enabled = picked or list(all_names)
     if interactive and main is None:
-        default_main = ("wiki-librarian" if "wiki-librarian" in (enabled or all_names)
-                        else ((enabled or all_names)[0] if (enabled or all_names) else None))
+        _eff_enabled = enabled or cur_enabled or all_names
+        default_main = (cur_main if cur_main and cur_main in _eff_enabled
+                        else ("wiki-librarian" if "wiki-librarian" in _eff_enabled
+                              else (_eff_enabled[0] if _eff_enabled else None)))
         main = _prompt("select", "Main persona", choices=enabled or all_names,
                        default=default_main) or None
     if interactive and hosts is None:
         hosts = _prompt("checkbox", "Export to hosts",
                         choices=list(persona_export.HOST_FILES)) or None
+    # Non-interactive fallback: preserve previously saved roster if no explicit arg.
     if enabled is None:
-        enabled = list(all_names)
+        enabled = list(cur_enabled) if cur_enabled else list(all_names)
     unknown = [n for n in enabled if n not in all_names]
     if unknown:
         print(f"error: unknown persona(s): {unknown}", file=sys.stderr)
         return 1
     if main is None:
-        main = "wiki-librarian" if "wiki-librarian" in enabled \
-            else (enabled[0] if enabled else None)
+        if cur_main and cur_main in enabled:
+            main = cur_main
+        elif "wiki-librarian" in enabled:
+            main = "wiki-librarian"
+        else:
+            main = enabled[0] if enabled else None
     if main is not None and main not in enabled:
         print(f"error: main persona {main!r} not in enabled set", file=sys.stderr)
         return 1
@@ -425,11 +439,16 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     guidance (advisory-natured — no hook-side LLM call)."""
     from pathlib import Path
     from scripts import config, persona_export, recall
+    cur = config.load_config().get("recall") or {}
+    cur_mode = cur.get("mode", "auto")
+    cur_strat = cur.get("strategy", "fts")
+    cur_sub = (cur.get("llm") or {}).get("submode", "route")
+    cur_emb = cur.get("embedding") or {}
     choices = ["auto", "advisory", "off"]
     interactive = (not noninteractive) and sys.stdin.isatty()
     if interactive and mode is None:
-        mode = _prompt("select", "Wiki recall mode (trigger)", choices=choices, default="auto") or "auto"
-    mode = mode or "auto"
+        mode = _prompt("select", "Wiki recall mode (trigger)", choices=choices, default=cur_mode) or cur_mode
+    mode = mode or cur_mode
     if mode not in choices:
         print(f"error: unknown recall mode {mode!r}; choose from {choices}", file=sys.stderr)
         return 1
@@ -440,8 +459,8 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     # Axis 2 — retrieval strategy (fts/embedding/hybrid deterministic; llm agent-delegated).
     if interactive and strategy is None:
         strategy = _prompt("select", "Retrieval strategy", choices=list(recall.STRATEGIES),
-                           default="fts") or "fts"
-    strategy = strategy or "fts"
+                           default=cur_strat) or cur_strat
+    strategy = strategy or cur_strat
     if strategy not in recall.STRATEGIES:
         print(f"error: unknown strategy {strategy!r}; choose from {list(recall.STRATEGIES)}", file=sys.stderr)
         return 1
@@ -449,8 +468,8 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     if strategy == "llm":
         if interactive and submode is None:
             submode = _prompt("select", "LLM submode", choices=list(recall.LLM_SUBMODES),
-                              default="route") or "route"
-        submode = submode or "route"
+                              default=cur_sub) or cur_sub
+        submode = submode or cur_sub
         if submode not in recall.LLM_SUBMODES:
             print(f"error: unknown llm submode {submode!r}; choose from {list(recall.LLM_SUBMODES)}",
                   file=sys.stderr)
@@ -461,17 +480,20 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     if strategy in {"embedding", "hybrid"}:
         if interactive and provider is None:
             provider = _prompt("select", "Embedding provider",
-                               choices=["none", "openai", "fake"], default="none") or "none"
+                               choices=["none", "openai", "fake"],
+                               default=cur_emb.get("provider", "none")) or "none"
             if provider not in ("none", ""):
                 model = model or (_prompt("text", "Embedding model",
-                                          default="text-embedding-3-small") or "text-embedding-3-small")
-                _dim_str = _prompt("text", "Embedding dim", default="1536") or "1536"
+                                          default=cur_emb.get("model", "text-embedding-3-small"))
+                                  or cur_emb.get("model", "text-embedding-3-small"))
+                _dim_str = _prompt("text", "Embedding dim",
+                                   default=str(cur_emb.get("dim", 1536))) or str(cur_emb.get("dim", 1536))
                 dim = int(_dim_str)
         configure_recall(
             strategy=strategy,
-            provider=provider or "none",
-            model=model or "text-embedding-3-small",
-            dim=int(dim) if dim else 1536,
+            provider=provider or cur_emb.get("provider", "none"),
+            model=model or cur_emb.get("model", "text-embedding-3-small"),
+            dim=int(dim) if dim else cur_emb.get("dim", 1536),
             mode=mode,
             submode=submode,
             noninteractive=True,

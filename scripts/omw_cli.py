@@ -664,6 +664,12 @@ def _cmd_doctor(args) -> int:
     return setup_wizard.doctor()
 
 
+def _cmd_update(args) -> int:
+    from scripts import update
+    return update.run(check_only=args.check, assume_yes=args.yes,
+                      refresh=not args.no_refresh)
+
+
 def _cmd_agentic(args) -> int:
     from scripts import ops_registry as reg
     from scripts import cards
@@ -961,6 +967,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser(
         "doctor", help="Validate omw config + install."
     ).set_defaults(func=_cmd_doctor)
+
+    pup = sub.add_parser("update", help="Self-upgrade omw + refresh managed blocks.")
+    pup.add_argument("--check", action="store_true")
+    pup.add_argument("--yes", action="store_true")
+    pup.add_argument("--no-refresh", dest="no_refresh", action="store_true")
+    pup.set_defaults(func=_cmd_update)
 
     ppr = sub.add_parser("persona-run", help="Dispatch a persona as an isolated one-shot subagent.")
     ppr.add_argument("role")

@@ -128,3 +128,7 @@ def test_ingest_doc_has_link_suggest_step():
 def test_ingest_doc_mentions_source_raw():
     from pathlib import Path
     assert "source_raw" in (Path(__file__).resolve().parent.parent / "commands" / "ingest.md").read_text(encoding="utf-8")
+
+
+def test_update_registered_deterministic():
+    assert reg.get("update") is not None and reg.get("update").kind == "deterministic"
