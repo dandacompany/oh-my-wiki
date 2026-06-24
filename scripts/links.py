@@ -12,7 +12,9 @@ from scripts import registry
 _WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
 _MDLINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 _EXTERNAL_PREFIXES = ("http://", "https://", "mailto:")
-_RELATIONS = ("uses", "contradicts", "supersedes")
+_RELATIONS = ("uses", "contradicts", "supersedes",
+              "derived-from", "extends", "illustrates", "applies-to",
+              "instances-of", "see-also", "synthesizes")
 
 META_RELPATHS = ("wiki/index.md", "wiki/log.md")
 
