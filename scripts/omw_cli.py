@@ -659,6 +659,52 @@ def _cmd_persona_run(args) -> int:
                            source=source, backend=args.backend)
 
 
+def _cmd_merge(args) -> int:
+    import json
+    from scripts import merge, registry, links, frontmatter
+    db = registry_path()
+    vid = registry.get_active(db)["id"]
+    if args.apply_path:
+        winner_prop = args.apply_path
+        if not winner_prop.endswith(".proposed.md"):
+            print("error: --apply expects a <winner>.proposed.md path", file=sys.stderr)
+            return 1
+        root = registry.get_vault_root(db, vid)
+        _wm, wbody = frontmatter.parse((root / winner_prop).read_text(encoding="utf-8"))
+        import re as _re
+        m = _re.search(r"## Merged from \[\[([^\]]+)\]\]", wbody)
+        if not m:
+            print("error: winner proposal has no '## Merged from' marker", file=sys.stderr)
+            return 1
+        src_slug = m.group(1)
+        # find the staged source proposal whose slug matches
+        src_prop = None
+        for p in root.rglob("*.proposed.md"):
+            if links._slugify(p.name[: -len(".proposed.md")]) == src_slug:
+                src_prop = str(p.relative_to(root))
+                break
+        if src_prop is None:
+            print(f"error: no staged source proposal for slug {src_slug!r}", file=sys.stderr)
+            return 1
+        out = merge.apply(db, vault_id=vid, winner_proposal=winner_prop,
+                          source_proposal=src_prop)
+        print(json.dumps(out, ensure_ascii=False))
+        return 0
+    if not args.source or not args.target:
+        print("error: provide <source> <target>, or --apply <proposal>", file=sys.stderr)
+        return 1
+    try:
+        out = merge.stage(db, vault_id=vid, source_relpath=args.source,
+                          target_relpath=args.target, force=args.force)
+    except merge.MergeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    print(json.dumps(out, ensure_ascii=False))
+    print(f"staged. Review {out['winner_proposal']}, then: "
+          f"omw merge --apply {out['winner_proposal']}")
+    return 0
+
+
 def _cmd_doctor(args) -> int:
     from scripts import setup_wizard
     return setup_wizard.doctor()
@@ -802,6 +848,13 @@ def build_parser() -> argparse.ArgumentParser:
     psup.add_argument("--by", required=True, help="slug of the superseding page")
     psup.add_argument("--vault", default=None, help="vault name (default: active)")
     psup.set_defaults(func=_cmd_supersede)
+
+    pmg = sub.add_parser("merge", help="Consolidate a source page into a target (staged proposal).")
+    pmg.add_argument("source", nargs="?", default=None)
+    pmg.add_argument("target", nargs="?", default=None)
+    pmg.add_argument("--force", action="store_true")
+    pmg.add_argument("--apply", dest="apply_path", default=None)
+    pmg.set_defaults(func=_cmd_merge)
 
     pvis = sub.add_parser("visibility", help="Get/set a page's serve visibility (public|private).")
     vissub = pvis.add_subparsers(dest="visibility_cmd", required=True)

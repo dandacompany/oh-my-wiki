@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts import frontmatter, links, registry
+from scripts import frontmatter, links, reindex, registry
 
 
 class MergeError(Exception):
@@ -107,4 +107,41 @@ def stage(db_path: Path, *, vault_id: int, source_relpath: str,
         "source_relpath": source_relpath,
         "alias_added": src_slug,
         "status": "staged",
+    }
+
+
+def apply(db_path: Path, *, vault_id: int, winner_proposal: str,
+          source_proposal: str) -> dict:
+    """Apply staged merge proposals atomically.
+
+    Validates both proposals exist before writing anything.  Writes the winner
+    and tombstone, removes the proposals, then runs a full reindex (which calls
+    links.resolve internally so [[source-slug]] references resolve to the winner
+    via its new aliases entry).
+    """
+    root = registry.get_vault_root(db_path, vault_id)
+    for prop in (winner_proposal, source_proposal):
+        if not prop.endswith(".proposed.md"):
+            raise MergeError(f"not a proposal path: {prop}")
+        if not (root / prop).exists():
+            raise MergeError(f"proposal not found: {prop}")
+    winner_prop_abs = root / winner_proposal
+    source_prop_abs = root / source_proposal
+    winner_target = winner_prop_abs.with_name(winner_prop_abs.name[: -len(".proposed.md")])
+    source_target = source_prop_abs.with_name(source_prop_abs.name[: -len(".proposed.md")])
+    # Atomic: validate both proposals first, then write both, then reindex once.
+    winner_target.write_text(winner_prop_abs.read_text(encoding="utf-8"), encoding="utf-8")
+    source_target.write_text(source_prop_abs.read_text(encoding="utf-8"), encoding="utf-8")
+    winner_prop_abs.unlink()
+    source_prop_abs.unlink()
+    # reindex.full calls links.resolve internally — no separate resolve call needed.
+    reindex.full(db_path, vault_id=vault_id)
+    tomb_meta, _ = frontmatter.parse(source_target.read_text(encoding="utf-8"))
+    win_meta, _ = frontmatter.parse(winner_target.read_text(encoding="utf-8"))
+    return {
+        "winner_relpath": str(winner_target.relative_to(root)),
+        "source_relpath": str(source_target.relative_to(root)),
+        "merged_into": tomb_meta.get("merged_into"),
+        "aliases": win_meta.get("aliases", []),
+        "status": "applied",
     }
