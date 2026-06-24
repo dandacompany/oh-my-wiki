@@ -85,6 +85,20 @@ def _http_get(url, *, headers=None):
         raise ImportError_(f"non-JSON response from {url}") from exc
 
 
+def _http_post(url, *, headers, json_body):
+    data = json.dumps(json_body).encode()
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        raise ImportError_(f"HTTP {exc.code} from {url}") from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise ImportError_(f"network error to {url}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ImportError_(f"non-JSON response from {url}") from exc
+
+
 def _rich(rt) -> str:
     return "".join(seg.get("plain_text", "") for seg in (rt or []))
 
@@ -174,6 +188,27 @@ def import_notion(db_path: Path, *, vault_id: int, token: str, root_id: str,
         for b in blocks:
             if b.get("type") == "child_page" and b.get("id"):
                 _import_page(b["id"], _depth + 1)
+            elif b.get("type") == "child_database" and b.get("id"):
+                _import_database(b["id"], _depth + 1)
+
+    def _import_database(db_id, _depth=0):
+        if _depth > 20:
+            return
+        cursor = None
+        while True:
+            body = {"page_size": 100}
+            if cursor:
+                body["start_cursor"] = cursor
+            data = _http_post(f"{_NOTION_BASE}/databases/{db_id}/query",
+                              headers=_notion_headers(token), json_body=body)
+            for row in data.get("results", []):
+                if row.get("id"):
+                    _import_page(row["id"], _depth + 1)   # rows ARE pages
+            if not data.get("has_more"):
+                break
+            cursor = data.get("next_cursor")
+            if not cursor:
+                break
 
     _import_page(root_id)
     reindex.incremental(db_path, vault_id=vault_id)
