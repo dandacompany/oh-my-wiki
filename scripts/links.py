@@ -4,6 +4,7 @@ backlinks / orphans / broken-links / graph. Semantic edge types are F#2.
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -125,20 +126,32 @@ def replace_links(db_path: Path, *, vault_id: int, src_note_id: int, body: str,
 
 
 def resolve(db_path: Path, vault_id: int) -> None:
-    """Set links.dst_note_id by basename-slug match; ambiguous/missing -> NULL."""
+    """Set links.dst_note_id. A unique alias-owner wins over a unique relpath-owner
+    (aliases are authoritative redirects); other collisions resolve to NULL."""
     conn = registry.connect(db_path)
     try:
         with conn:
-            slug_to_ids: dict[str, list[int]] = {}
+            relpath_to_ids: dict[str, list[int]] = {}
+            alias_to_ids: dict[str, list[int]] = {}
             for row in conn.execute(
-                "SELECT id, relpath FROM notes WHERE vault_id = ?", (vault_id,)
+                "SELECT id, relpath, aliases FROM notes WHERE vault_id = ?", (vault_id,)
             ):
-                slug_to_ids.setdefault(_slugify(row["relpath"]), []).append(row["id"])
+                relpath_to_ids.setdefault(_slugify(row["relpath"]), []).append(row["id"])
+                raw = row["aliases"] if "aliases" in row.keys() else None
+                for a in (json.loads(raw) if raw else []):
+                    alias_to_ids.setdefault(_slugify(str(a)), []).append(row["id"])
             for row in conn.execute(
                 "SELECT DISTINCT dst_slug FROM links WHERE vault_id = ?", (vault_id,)
             ):
-                ids = slug_to_ids.get(row["dst_slug"], [])
-                dst = ids[0] if len(ids) == 1 else None
+                slug = row["dst_slug"]
+                aids = alias_to_ids.get(slug, [])
+                rids = relpath_to_ids.get(slug, [])
+                if len(aids) == 1:
+                    dst = aids[0]
+                elif len(rids) == 1:
+                    dst = rids[0]
+                else:
+                    dst = None
                 conn.execute(
                     "UPDATE links SET dst_note_id = ? WHERE vault_id = ? AND dst_slug = ?",
                     (dst, vault_id, row["dst_slug"]),
