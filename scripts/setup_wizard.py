@@ -425,11 +425,16 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     guidance (advisory-natured — no hook-side LLM call)."""
     from pathlib import Path
     from scripts import config, persona_export, recall
+    cur = config.load_config().get("recall") or {}
+    cur_mode = cur.get("mode", "auto")
+    cur_strat = cur.get("strategy", "fts")
+    cur_sub = (cur.get("llm") or {}).get("submode", "route")
+    cur_emb = cur.get("embedding") or {}
     choices = ["auto", "advisory", "off"]
     interactive = (not noninteractive) and sys.stdin.isatty()
     if interactive and mode is None:
-        mode = _prompt("select", "Wiki recall mode (trigger)", choices=choices, default="auto") or "auto"
-    mode = mode or "auto"
+        mode = _prompt("select", "Wiki recall mode (trigger)", choices=choices, default=cur_mode) or cur_mode
+    mode = mode or cur_mode
     if mode not in choices:
         print(f"error: unknown recall mode {mode!r}; choose from {choices}", file=sys.stderr)
         return 1
@@ -440,8 +445,8 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     # Axis 2 — retrieval strategy (fts/embedding/hybrid deterministic; llm agent-delegated).
     if interactive and strategy is None:
         strategy = _prompt("select", "Retrieval strategy", choices=list(recall.STRATEGIES),
-                           default="fts") or "fts"
-    strategy = strategy or "fts"
+                           default=cur_strat) or cur_strat
+    strategy = strategy or cur_strat
     if strategy not in recall.STRATEGIES:
         print(f"error: unknown strategy {strategy!r}; choose from {list(recall.STRATEGIES)}", file=sys.stderr)
         return 1
@@ -449,8 +454,8 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     if strategy == "llm":
         if interactive and submode is None:
             submode = _prompt("select", "LLM submode", choices=list(recall.LLM_SUBMODES),
-                              default="route") or "route"
-        submode = submode or "route"
+                              default=cur_sub) or cur_sub
+        submode = submode or cur_sub
         if submode not in recall.LLM_SUBMODES:
             print(f"error: unknown llm submode {submode!r}; choose from {list(recall.LLM_SUBMODES)}",
                   file=sys.stderr)
@@ -461,17 +466,20 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     if strategy in {"embedding", "hybrid"}:
         if interactive and provider is None:
             provider = _prompt("select", "Embedding provider",
-                               choices=["none", "openai", "fake"], default="none") or "none"
+                               choices=["none", "openai", "fake"],
+                               default=cur_emb.get("provider", "none")) or "none"
             if provider not in ("none", ""):
                 model = model or (_prompt("text", "Embedding model",
-                                          default="text-embedding-3-small") or "text-embedding-3-small")
-                _dim_str = _prompt("text", "Embedding dim", default="1536") or "1536"
+                                          default=cur_emb.get("model", "text-embedding-3-small"))
+                                  or cur_emb.get("model", "text-embedding-3-small"))
+                _dim_str = _prompt("text", "Embedding dim",
+                                   default=str(cur_emb.get("dim", 1536))) or str(cur_emb.get("dim", 1536))
                 dim = int(_dim_str)
         configure_recall(
             strategy=strategy,
-            provider=provider or "none",
-            model=model or "text-embedding-3-small",
-            dim=int(dim) if dim else 1536,
+            provider=provider or cur_emb.get("provider", "none"),
+            model=model or cur_emb.get("model", "text-embedding-3-small"),
+            dim=int(dim) if dim else cur_emb.get("dim", 1536),
             mode=mode,
             submode=submode,
             noninteractive=True,
