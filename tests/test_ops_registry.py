@@ -136,3 +136,15 @@ def test_update_registered_deterministic():
 
 def test_merge_registered_deterministic():
     assert reg.get("merge") is not None and reg.get("merge").kind == "deterministic"
+
+
+def test_context_registered_deterministic():
+    assert reg.get("context") is not None and reg.get("context").kind == "deterministic"
+
+
+def test_list_registered_deterministic():
+    assert reg.get("list") is not None and reg.get("list").kind == "deterministic"
+
+
+def test_export_registered_deterministic():
+    assert reg.get("export") is not None and reg.get("export").kind == "deterministic"

@@ -419,6 +419,17 @@ def _cmd_search(args) -> int:
     return 0
 
 
+def _cmd_context(args) -> int:
+    from scripts import query_pipeline
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    out = query_pipeline.context(db, vault_id=vault["id"], q=args.query, limit=args.limit)
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _cmd_find(args) -> int:
     from scripts import search_index
     db = registry_path()
@@ -436,6 +447,45 @@ def _cmd_find(args) -> int:
         title = h.get("title") or h.get("relpath")
         score = h.get("score", 0)
         print(f"{score:>6.2f}  {h['relpath']}  —  {title}")
+    return 0
+
+
+def _cmd_list(args) -> int:
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    rows = registry.list_notes_faceted(
+        db, vault_id=vault["id"], tag=args.tag, type_=args.type,
+        status=args.status, layer=args.layer, visibility=args.visibility)
+    out = [{"relpath": r["relpath"], "title": r["title"], "type": r["type"],
+            "status": r["status"], "visibility": r["visibility"]} for r in rows]
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _cmd_export(args) -> int:
+    from scripts import exporter
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    # Refresh the index first so [[wikilinks]] are resolved before computing
+    # the dangling manifest.  Without this, dst_note_id=NULL for every link and
+    # every outbound link would be reported as dangling (even in-slice ones).
+    # Incremental is mtime-gated (cheap) and re-resolves links globally.
+    try:
+        reindex.incremental(db, vault_id=vault["id"])
+    except Exception:
+        pass  # best-effort; export still runs on whatever is already indexed
+    try:
+        res = exporter.export(db, vault_id=vault["id"], out_dir=args.out,
+                              zip_path=args.zip_path, tag=args.tag, type_=args.type,
+                              visibility=args.visibility)
+    except exporter.ExportError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    print(json.dumps(res, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -930,12 +980,36 @@ def build_parser() -> argparse.ArgumentParser:
                      help="disable provider fallback (single configured provider only)")
     psr.set_defaults(func=_cmd_search)
 
+    pctx = sub.add_parser("context", help="Cited-context retrieval (JSON) for grounded answers.")
+    pctx.add_argument("query")
+    pctx.add_argument("--limit", type=int, default=8)
+    pctx.add_argument("--vault", default=None)
+    pctx.set_defaults(func=_cmd_context)
+
     pfd = sub.add_parser("find", help="Deterministic full-text search over the vault index.")
     pfd.add_argument("query")
     pfd.add_argument("--limit", type=int, default=10)
     pfd.add_argument("--vault", default=None)
     pfd.add_argument("--json", dest="find_json", action="store_true")
     pfd.set_defaults(func=_cmd_find)
+
+    plist = sub.add_parser("list", help="Faceted note listing as JSON.")
+    plist.add_argument("--tag", default=None)
+    plist.add_argument("--type", default=None)
+    plist.add_argument("--status", default=None)
+    plist.add_argument("--layer", default=None)
+    plist.add_argument("--visibility", default=None)
+    plist.add_argument("--vault", default=None)
+    plist.set_defaults(func=_cmd_list)
+
+    pexp = sub.add_parser("export", help="Export a vault slice to a self-contained Markdown dir/zip.")
+    pexp.add_argument("--tag", default=None)
+    pexp.add_argument("--type", default=None)
+    pexp.add_argument("--visibility", default=None)
+    pexp.add_argument("--out", default=None)
+    pexp.add_argument("--zip", dest="zip_path", default=None)
+    pexp.add_argument("--vault", default=None)
+    pexp.set_defaults(func=_cmd_export)
 
     pnx = sub.add_parser("next", help="Recommend the next knowledge-lifecycle action(s).")
     pnx.add_argument("--vault", default=None)

@@ -147,6 +147,8 @@ def _scan(
         aliases = meta.get("aliases") or []
         if not isinstance(aliases, list):
             aliases = []
+        type_ = meta.get("type")
+        status = meta.get("status")
         note_id = registry.upsert_note(
             db_path,
             vault_id=vault_id,
@@ -160,6 +162,8 @@ def _scan(
             parse_error=parse_error,
             visibility=meta.get("visibility") or "private",
             aliases=[str(a) for a in aliases],
+            type_=type_,
+            status=status,
         )
         links.replace_links(db_path, vault_id=vault_id, src_note_id=note_id, body=body, meta=meta)
         if fts_conn is not None:

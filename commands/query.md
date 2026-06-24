@@ -1,7 +1,6 @@
 # `query` — ask the wiki
 
 **Mode:** memo or wiki (search works for both)
-**Underlying scripts:** `scripts.search_index.query` (Plan A) + `scripts.query.write_synthesis` (Plan C, wiki only)
 
 ## Preconditions
 
@@ -11,30 +10,28 @@ Active vault must exist.
 
 1. **Take a query string from the user.**
 
-2. **Run the search.**
+2. **Retrieve cited context.**
 
    ```bash
-   python3 -c "
-   import json
-   from scripts.paths import registry_path
-   from scripts import search_index as search, registry
-   db = registry_path()
-   vault = registry.get_active(db)
-   hits = search.query(db, vault_id=vault['id'], query='<query>', limit=20)
-   print(json.dumps(hits, ensure_ascii=False, indent=2))
-   "
+   omw context "<query>"
    ```
 
-   **Retrieve 20, then rerank.** Retrieval is deterministic — SQLite **FTS5** full-text
-   (BM25 over title+summary+tags+**body**) when available, with an automatic token-scorer
-   fallback; shape `[{relpath, title, summary, tags, score}]`. Then **LLM-rerank**: read the
-   candidates' titles/summaries (open a page if unsure), reorder by relevance to the query
-   intent, drop clearly-irrelevant hits, and keep the top ~5 for the next step. Retrieval is
-   deterministic; this rerank is your reasoning.
+   This returns a JSON bundle with keys:
+   - `query` — the original query string
+   - `strategy` — the retrieval strategy used (`fts`, `embedding`, `hybrid`, or `llm`)
+   - `hits` — list of `{slug, relpath, title, score, body, truncated}` objects
+   - `citations` — list of `{slug, title, relpath}` objects (deduplicated manifest)
 
-3. **Read each kept hit's full file** to draft an answer with inline citations like `[summaries/tdd-paper](wiki/summaries/tdd-paper.md)`. Use absolute paths from `vault.path` to read.
+   A `truncated: true` hit means the page body was capped at 4 000 characters; narrow the query to retrieve the full relevant passage.
 
-4. **Present the answer.** Show the answer + citation list.
+3. **Synthesize the answer.**
+
+   Using ONLY the `hits[].body` text returned, write a prose answer to the user's question.
+   - Cite ONLY slugs present in `citations` as `[[slug]]` inline.
+   - Do NOT invent citations or paraphrase from memory — every factual claim must be traceable to a hit body.
+   - If the bodies do not answer the question, say so explicitly rather than improvising.
+
+4. **Present the answer.** Show the synthesized prose + the citation list (formatted from `citations`).
 
 5. **Offer to file the answer back** (wiki-mode only). Ask: "File this as a new synthesis page? [Yes / No]". If Yes:
 
@@ -83,5 +80,5 @@ Active vault must exist.
 
 ## Error handling
 
-- Zero hits → suggest relaxing terms or running `lint` (index drift).
+- Zero hits → suggest relaxing terms or running `omw lint` (index drift).
 - Memo-mode vault → file-back is wiki-only; still show the answer + citations.

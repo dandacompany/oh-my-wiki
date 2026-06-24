@@ -28,6 +28,10 @@ def _ensure_note_columns(conn: sqlite3.Connection) -> None:
         )
     if "aliases" not in cols:
         conn.execute("ALTER TABLE notes ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'")
+    if "type" not in cols:
+        conn.execute("ALTER TABLE notes ADD COLUMN type TEXT")
+    if "status" not in cols:
+        conn.execute("ALTER TABLE notes ADD COLUMN status TEXT")
 
 
 def init_db(db_path: Path) -> None:
@@ -172,6 +176,8 @@ def upsert_note(
     parse_error: bool = False,
     visibility: str = "private",
     aliases: list[str] | None = None,
+    type_: str | None = None,
+    status: str | None = None,
 ) -> int:
     if visibility not in ("public", "private"):
         visibility = "private"
@@ -182,8 +188,9 @@ def upsert_note(
             conn.execute(
                 """
                 INSERT INTO notes(vault_id, relpath, layer, title, summary,
-                                  mtime, size_bytes, parse_error, visibility, aliases)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                  mtime, size_bytes, parse_error, visibility, aliases,
+                                  type, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(vault_id, relpath) DO UPDATE SET
                     layer       = excluded.layer,
                     title       = excluded.title,
@@ -192,10 +199,13 @@ def upsert_note(
                     size_bytes  = excluded.size_bytes,
                     parse_error = excluded.parse_error,
                     visibility  = excluded.visibility,
-                    aliases     = excluded.aliases
+                    aliases     = excluded.aliases,
+                    type        = excluded.type,
+                    status      = excluded.status
                 """,
                 (vault_id, relpath, layer, title, summary,
-                 mtime, size_bytes, 1 if parse_error else 0, visibility, aliases_json),
+                 mtime, size_bytes, 1 if parse_error else 0, visibility, aliases_json,
+                 type_, status),
             )
             note_id = conn.execute(
                 "SELECT id FROM notes WHERE vault_id = ? AND relpath = ?",
@@ -237,6 +247,40 @@ def list_notes(
             "SELECT * FROM notes WHERE vault_id = ? ORDER BY relpath",
             (vault_id,),
         ))
+    finally:
+        conn.close()
+
+
+def list_notes_faceted(
+    db_path: Path,
+    *,
+    vault_id: int,
+    tag: str | None = None,
+    type_: str | None = None,
+    status: str | None = None,
+    layer: str | None = None,
+    visibility: str | None = None,
+) -> list[sqlite3.Row]:
+    """Faceted note listing. Filters AND together; a None facet is ignored.
+    `tag` filters via the note_tags/tags join; the rest are notes columns."""
+    where = ["n.vault_id = ?"]
+    params: list = [vault_id]
+    join = ""
+    if tag is not None:
+        join = ("JOIN note_tags nt ON nt.note_id = n.id "
+                "JOIN tags t ON t.id = nt.tag_id")
+        where.append("t.name = ?")
+        params.append(tag)
+    for col, val in (("type", type_), ("status", status),
+                     ("layer", layer), ("visibility", visibility)):
+        if val is not None:
+            where.append(f"n.{col} = ?")
+            params.append(val)
+    sql = (f"SELECT DISTINCT n.* FROM notes n {join} "
+           f"WHERE {' AND '.join(where)} ORDER BY n.relpath")
+    conn = connect(db_path)
+    try:
+        return list(conn.execute(sql, params))
     finally:
         conn.close()
 
