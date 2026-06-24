@@ -84,3 +84,28 @@ def test_source_raw_validates_as_list():
         schemas=_schemas(),
     )
     assert any(i["issue"].startswith("wrong_type:source_raw") for i in bad)
+
+
+# ---------------------------------------------------------------------------
+# Task 3 (F2): advisory per-type valid_relations check
+# ---------------------------------------------------------------------------
+
+def test_valid_relations_flags_unexpected():
+    meta = {"type": "comparison", "title": "t", "date": "2026-01-01", "tags": [],
+            "compared_items": ["a", "b"], "relations": {"applies-to": ["x"]}}
+    issues = _schema.validate(meta, "", schemas=_schemas())
+    assert any(i["issue"].startswith("unexpected_relation:applies-to") for i in issues)
+
+
+def test_valid_relations_allows_listed():
+    meta = {"type": "comparison", "title": "t", "date": "2026-01-01", "tags": [],
+            "compared_items": ["a", "b"], "relations": {"uses": ["x"]}}
+    issues = _schema.validate(meta, "", schemas=_schemas())
+    assert not any(i["issue"].startswith("unexpected_relation") for i in issues)
+
+
+def test_type_without_valid_relations_never_flagged():
+    meta = {"type": "note", "title": "t", "date": "2026-01-01", "tags": [],
+            "relations": {"applies-to": ["x"]}}
+    issues = _schema.validate(meta, "", schemas=_schemas())
+    assert not any(i["issue"].startswith("unexpected_relation") for i in issues)
