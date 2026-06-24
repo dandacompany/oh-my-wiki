@@ -6,6 +6,7 @@ field_types:
   date: str
   review: dict
   aliases: list
+  source_raw: list
 required_sections: []
 allowed_values:
   confidence: [high, medium, low]

@@ -82,8 +82,14 @@ def write_wiki_page(
     date_str: str,
     summary: str | None = None,
     status: str = "processed",
+    extra_meta: dict | None = None,
 ) -> str:
-    """Write wiki/<layer>/<slug>.md with required frontmatter. Returns relpath."""
+    """Write wiki/<layer>/<slug>.md with required frontmatter. Returns relpath.
+
+    `extra_meta` merges additional frontmatter (e.g. `synthesizes`, `compared_items`,
+    `source_raw`, `relations`) so the page can satisfy its per-type schema contract.
+    For the syntheses layer a `## Sources` section is auto-appended when absent.
+    """
     if layer not in WIKI_LAYERS:
         raise ValueError(f"unknown wiki layer: {layer!r} (valid: {sorted(WIKI_LAYERS)})")
     root = registry.get_vault_root(db_path, vault_id)
@@ -99,6 +105,12 @@ def write_wiki_page(
     }
     if summary:
         meta["summary"] = summary
+    if extra_meta:
+        meta.update(extra_meta)
+    if layer == "syntheses" and not any(
+        line.strip() == "## Sources" for line in body.splitlines()
+    ):
+        body = body.rstrip() + "\n\n## Sources\n"
     abs_path = root / relpath
     abs_path.parent.mkdir(parents=True, exist_ok=True)
     abs_path.write_text(frontmatter.dump(meta, body), encoding="utf-8")

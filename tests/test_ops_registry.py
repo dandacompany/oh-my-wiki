@@ -123,3 +123,8 @@ def test_ingest_doc_has_link_suggest_step():
     from pathlib import Path
     p = Path(__file__).resolve().parent.parent / "commands" / "ingest.md"
     assert "omw links suggest" in p.read_text(encoding="utf-8")
+
+
+def test_ingest_doc_mentions_source_raw():
+    from pathlib import Path
+    assert "source_raw" in (Path(__file__).resolve().parent.parent / "commands" / "ingest.md").read_text(encoding="utf-8")

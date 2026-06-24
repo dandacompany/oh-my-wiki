@@ -1,1 +1,5 @@
 extends: base
+required_fields: [compared_items]
+field_types:
+  compared_items: list
+valid_relations: [uses, see-also, contradicts]

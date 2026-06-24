@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oh-my-wiki"
-version = "2.13.0"
+version = "2.14.0"
 description = "Karpathy-style LLM Wiki skill with multi-vault sqlite registry and Socratic wizard"
 readme = "README.md"
 license = "MIT"
