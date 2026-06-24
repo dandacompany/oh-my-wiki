@@ -66,6 +66,8 @@ def _scan_pages(root: Path) -> list[tuple[str, str, float]]:
     for p in sorted(wiki_dir.rglob("*.md")):
         if ".trash" in p.parts:
             continue
+        if p.name.endswith(".proposed.md"):
+            continue
         rel = str(p.relative_to(root)).replace("\\", "/")
         if rel in {"wiki/index.md", "wiki/log.md"}:
             continue

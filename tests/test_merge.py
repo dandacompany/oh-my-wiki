@@ -36,10 +36,10 @@ def _vault(tmp_path, monkeypatch):
     from tests.conftest import make_vault_with_pages
     return make_vault_with_pages(tmp_path, monkeypatch, pages={
         "wiki/concepts/a.md": (
-            "---\ntitle: A\ntype: concept\ntags: [x, y]\nuses: [foo]\n---\n\n## Summary\n\nalpha body\n"
+            "---\ntitle: A\ntype: concept\ntags: [x, y]\nrelations:\n  uses: [foo]\n---\n\n## Summary\n\nalpha body\n"
         ),
         "wiki/concepts/b.md": (
-            "---\ntitle: B\ntype: concept\ntags: [y, z]\nuses: [bar]\n---\n\n## Summary\n\nbeta body\n"
+            "---\ntitle: B\ntype: concept\ntags: [y, z]\nrelations:\n  uses: [bar]\n---\n\n## Summary\n\nbeta body\n"
         ),
         "wiki/entities/e.md": (
             "---\ntitle: E\ntype: entity\n---\n\n## Summary\n\nentity\n"
@@ -63,7 +63,7 @@ def test_stage_builds_winner_and_tombstone(tmp_path, monkeypatch):
     assert wp.exists() and sp.exists()
     wmeta, wbody = frontmatter.parse(wp.read_text())
     assert set(wmeta["tags"]) == {"x", "y", "z"}
-    assert set(wmeta["uses"]) == {"foo", "bar"}
+    assert set(wmeta["relations"]["uses"]) == {"foo", "bar"}
     assert "a" in wmeta["aliases"]
     assert "## Merged from [[a]]" in wbody and "alpha body" in wbody
     # tombstone
@@ -182,6 +182,64 @@ def test_cli_merge_stage(tmp_path, monkeypatch):
     rc = omw_cli.main(["merge", "wiki/concepts/a.md", "wiki/concepts/b.md"])
     assert rc == 0
     assert (root / "wiki/concepts/b.md.proposed.md").exists()
+
+
+def test_stage_proposals_invisible_to_reindex(tmp_path, monkeypatch):
+    """C1: staged .proposed.md sidecars must not appear as notes after reindex."""
+    from tests.conftest import make_vault_with_pages
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "wiki/concepts/a.md": (
+            "---\ntitle: A\ntype: concept\ntags: [x]\n---\n\n## Summary\n\nalpha body\n"
+        ),
+        "wiki/concepts/b.md": (
+            "---\ntitle: B\ntype: concept\ntags: [y]\n---\n\n## Summary\n\nbeta body\n"
+        ),
+    })
+    merge.stage(db, vault_id=vid, source_relpath="wiki/concepts/a.md",
+                target_relpath="wiki/concepts/b.md")
+    reindex.full(db, vault_id=vid)
+    conn = registry.connect(db)
+    try:
+        rows = conn.execute(
+            "SELECT relpath FROM notes WHERE vault_id = ?", (vid,)
+        ).fetchall()
+    finally:
+        conn.close()
+    relpaths = [r["relpath"] for r in rows]
+    assert not any(rp.endswith(".proposed.md") for rp in relpaths), (
+        f"Proposal sidecars leaked into notes table: {[rp for rp in relpaths if rp.endswith('.proposed.md')]}"
+    )
+
+
+def test_stage_proposals_invisible_to_lint(tmp_path, monkeypatch):
+    """C1: staged .proposed.md sidecars must not appear in wiki_lint results."""
+    from scripts import wiki_lint
+    from tests.conftest import make_vault_with_pages
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "wiki/concepts/a.md": (
+            "---\ntitle: A\ntype: concept\ntags: [x]\n---\n\n## Summary\n\nalpha body words here\n"
+        ),
+        "wiki/concepts/b.md": (
+            "---\ntitle: B\ntype: concept\ntags: [y]\n---\n\n## Summary\n\nbeta body words here\n"
+        ),
+    })
+    merge.stage(db, vault_id=vid, source_relpath="wiki/concepts/a.md",
+                target_relpath="wiki/concepts/b.md")
+    report = wiki_lint.check(db, vault_id=vid)
+    dup_slugs = [
+        slug
+        for pair in report.get("content_duplicate_candidates", [])
+        for slug in (pair.get("slug_a", ""), pair.get("slug_b", ""))
+    ]
+    assert not any(s.endswith(".proposed") for s in dup_slugs), (
+        f"Proposal sidecar leaked into lint content_duplicate_candidates: {dup_slugs}"
+    )
+    # Also assert no other lint key references a .proposed path
+    import json
+    report_str = json.dumps(report)
+    assert ".proposed.md" not in report_str, (
+        "A .proposed.md path appeared somewhere in the lint report"
+    )
 
 
 def test_cli_apply_multiple_proposals_errors(tmp_path, monkeypatch):

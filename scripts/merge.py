@@ -76,10 +76,13 @@ def stage(db_path: Path, *, vault_id: int, source_relpath: str,
     winner_meta["tags"] = _union(tgt_meta.get("tags"), src_meta.get("tags"))
     if not winner_meta["tags"]:
         winner_meta.pop("tags", None)
-    for key in links._RELATIONS:
-        merged = _union(tgt_meta.get(key), src_meta.get(key))
-        if merged:
-            winner_meta[key] = merged
+    tgt_rel = tgt_meta.get("relations") or {}
+    src_rel = src_meta.get("relations") or {}
+    if isinstance(tgt_rel, dict) and isinstance(src_rel, dict) and (tgt_rel or src_rel):
+        merged_rel = {}
+        for key in set(tgt_rel) | set(src_rel):
+            merged_rel[key] = _union(tgt_rel.get(key), src_rel.get(key))
+        winner_meta["relations"] = merged_rel
     if tgt_meta.get("source_raw") or src_meta.get("source_raw"):
         winner_meta["source_raw"] = _union(
             tgt_meta.get("source_raw"), src_meta.get("source_raw"))

@@ -123,6 +123,8 @@ def _scan(
     for path in vault_path.rglob("*.md"):
         if any(part in {".trash", ".obsidian", ".git"} for part in path.parts):
             continue
+        if path.name.endswith(".proposed.md"):
+            continue
         rel = str(path.relative_to(vault_path)).replace("\\", "/")
         mtime = path.stat().st_mtime
         if incremental and rel in known and known[rel] >= mtime:
