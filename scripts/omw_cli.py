@@ -464,6 +464,23 @@ def _cmd_list(args) -> int:
     return 0
 
 
+def _cmd_export(args) -> int:
+    from scripts import exporter
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    try:
+        res = exporter.export(db, vault_id=vault["id"], out_dir=args.out,
+                              zip_path=args.zip_path, tag=args.tag, type_=args.type,
+                              visibility=args.visibility)
+    except exporter.ExportError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    print(json.dumps(res, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _cmd_view(args) -> int:
     from scripts import view
     return view.run(args)
@@ -976,6 +993,15 @@ def build_parser() -> argparse.ArgumentParser:
     plist.add_argument("--visibility", default=None)
     plist.add_argument("--vault", default=None)
     plist.set_defaults(func=_cmd_list)
+
+    pexp = sub.add_parser("export", help="Export a vault slice to a self-contained Markdown dir/zip.")
+    pexp.add_argument("--tag", default=None)
+    pexp.add_argument("--type", default=None)
+    pexp.add_argument("--visibility", default=None)
+    pexp.add_argument("--out", default=None)
+    pexp.add_argument("--zip", dest="zip_path", default=None)
+    pexp.add_argument("--vault", default=None)
+    pexp.set_defaults(func=_cmd_export)
 
     pnx = sub.add_parser("next", help="Recommend the next knowledge-lifecycle action(s).")
     pnx.add_argument("--vault", default=None)

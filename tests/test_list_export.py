@@ -33,3 +33,51 @@ def test_list_faceted(tmp_path, monkeypatch):
     assert rels(registry.list_notes_faceted(db, vault_id=vid, tag="ml")) == {"wiki/concepts/a.md", "wiki/entities/b.md"}
     assert rels(registry.list_notes_faceted(db, vault_id=vid, tag="x")) == {"wiki/entities/b.md"}
     assert rels(registry.list_notes_faceted(db, vault_id=vid, tag="ml", type_="entity")) == {"wiki/entities/b.md"}
+
+
+def test_export_slice_and_manifest(tmp_path, monkeypatch):
+    from tests.conftest import make_vault_with_pages
+    from scripts import exporter, reindex, links
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "wiki/concepts/a.md": "---\ntitle: A\ntype: concept\ntags: [pub]\n---\n\n## Summary\n\nsee [[b]] and [[gone]]\n",
+        "wiki/concepts/b.md": "---\ntitle: B\ntype: concept\ntags: [pub]\n---\n\n## Summary\n\nb body\n",
+        "wiki/concepts/gone.md": "---\ntitle: Gone\ntype: concept\ntags: [other]\n---\n\n## Summary\n\ng\n",
+    })
+    reindex.full(db, vault_id=vid)
+    links.resolve(db, vid)
+    out = tmp_path / "slice"
+    res = exporter.export(db, vault_id=vid, out_dir=str(out), tag="pub")
+    assert set(res["exported"]) == {"wiki/concepts/a.md", "wiki/concepts/b.md"}
+    assert (out / "wiki/concepts/a.md").exists() and (out / "wiki/concepts/b.md").exists()
+    assert not (out / "wiki/concepts/gone.md").exists()
+    manifest = (out / "EXPORT_MANIFEST.md").read_text()
+    assert "gone" in manifest                              # dangling listed
+    assert "see [[b]] and [[gone]]" in (out / "wiki/concepts/a.md").read_text()  # body preserved verbatim
+    assert any(d["slug"] == "gone" for d in res["dangling"])
+
+
+def test_export_refuses_inside_vault(tmp_path, monkeypatch):
+    import pytest
+    from tests.conftest import make_vault_with_pages
+    from scripts import exporter, registry
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "wiki/concepts/a.md": "---\ntitle: A\ntype: concept\n---\n\n## Summary\n\na\n",
+    })
+    root = registry.get_vault_root(db, vid)
+    with pytest.raises(exporter.ExportError):
+        exporter.export(db, vault_id=vid, out_dir=str(root / "sub"))
+
+
+def test_export_zip(tmp_path, monkeypatch):
+    import zipfile
+    from tests.conftest import make_vault_with_pages
+    from scripts import exporter
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "wiki/concepts/a.md": "---\ntitle: A\ntype: concept\ntags: [pub]\n---\n\n## Summary\n\na\n",
+    })
+    zp = tmp_path / "slice.zip"
+    exporter.export(db, vault_id=vid, zip_path=str(zp), tag="pub")
+    assert zp.exists()
+    with zipfile.ZipFile(zp) as z:
+        names = z.namelist()
+    assert "wiki/concepts/a.md" in names and "EXPORT_MANIFEST.md" in names

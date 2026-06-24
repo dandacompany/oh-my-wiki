@@ -144,3 +144,7 @@ def test_context_registered_deterministic():
 
 def test_list_registered_deterministic():
     assert reg.get("list") is not None and reg.get("list").kind == "deterministic"
+
+
+def test_export_registered_deterministic():
+    assert reg.get("export") is not None and reg.get("export").kind == "deterministic"
