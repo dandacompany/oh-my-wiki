@@ -46,7 +46,10 @@ def test_run_check_only_no_subprocess(monkeypatch, capsys):
 
 
 def test_run_assume_yes_upgrades(monkeypatch):
-    monkeypatch.setattr(update, "latest_version", lambda *a, **k: "2.15.0")
+    # Pin current low + latest high so the "newer available" path fires regardless of
+    # the installed package version (else a release bump can make latest == cur).
+    monkeypatch.setattr(update.banner, "version", lambda: "0.0.0")
+    monkeypatch.setattr(update, "latest_version", lambda *a, **k: "9999.0.0")
     seen = {}
 
     class _CP:
