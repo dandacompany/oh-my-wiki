@@ -71,6 +71,19 @@ def remove(db_path: Path, *, vault_id: int, url: str) -> int:
         conn.close()
 
 
+def retry(db_path: Path, *, vault_id: int) -> int:
+    """Reset all failed items back to queued. Returns the number reset."""
+    conn = registry.connect(db_path)
+    try:
+        cur = conn.execute(
+            "UPDATE inbox_queue SET status='queued', error=NULL "
+            "WHERE vault_id = ? AND status = 'failed'", (vault_id,))
+        conn.commit()
+        return cur.rowcount
+    finally:
+        conn.close()
+
+
 def clear(db_path: Path, *, vault_id: int) -> int:
     """Delete all inbox rows for a vault. Returns rows deleted."""
     conn = registry.connect(db_path)

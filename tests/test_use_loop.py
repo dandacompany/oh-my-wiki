@@ -27,3 +27,17 @@ def test_serve_uses_search_strategy(monkeypatch, tmp_path):
     )
     assert "strategy" in called, "search_strategy was never called"
     assert called["visibility"] == "public"
+
+
+def test_inbox_retry_resets_failed(tmp_path, monkeypatch):
+    from tests.conftest import make_vault_with_pages
+    from scripts import inbox, registry
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"wiki/a.md": "# A\n\nx"})
+    inbox.add(db, vault_id=vid, url="https://example.com/x")
+    conn = registry.connect(db)
+    conn.execute("UPDATE inbox_queue SET status='failed', error='boom' WHERE vault_id=?", (vid,))
+    conn.commit(); conn.close()
+    n = inbox.retry(db, vault_id=vid)
+    assert n == 1
+    assert inbox.list_items(db, vault_id=vid, status="queued")
+    assert not inbox.list_items(db, vault_id=vid, status="failed")

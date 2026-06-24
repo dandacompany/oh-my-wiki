@@ -51,7 +51,7 @@ OPS: tuple[OpSpec, ...] = (
     _det("review", "Spaced-repetition review queue.", "omw review {due|done|audit|use} …"),
     _det("supersede", "Mark a page superseded.", "omw supersede <page> <by>"),
     _det("visibility", "Get/set a page's serve visibility.", "omw visibility {get|set} …"),
-    _det("inbox", "URL inbox queue.", "omw inbox {add|list|remove|run} …"),
+    _det("inbox", "URL inbox queue (add/list/remove/run/retry).", "omw inbox {add|list|remove|run|retry} …"),
     _det("fetch", "Fetch one URL into raw/ (no LLM).", "omw fetch <url> [--backend auto|urllib|chromium|cloud]",
          args=(ArgSpec("url", True, "page URL to fetch"),
                ArgSpec("--backend", False, "fetch backend", ("auto", "urllib", "chromium", "cloud")))),
