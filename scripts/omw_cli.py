@@ -10,7 +10,7 @@ import argparse
 import json
 import sys
 
-from scripts import adapters, lint, registry, reindex, wizard
+from scripts import adapters, lint, nextstep, registry, reindex, wizard
 from scripts.paths import ensure_home, registry_path, resolve_vault_root
 
 AGENTIC_OPS = [
@@ -674,6 +674,23 @@ def _cmd_agentic(args) -> int:
     return 0
 
 
+def _cmd_next(args) -> int:
+    from datetime import date
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    today = args.today or date.today().isoformat()
+    sig = nextstep.signals(db, vault["id"], today=today)
+    ranked = nextstep.suggest(sig)
+    if args.next_json:
+        print(json.dumps(ranked, ensure_ascii=False, indent=2))
+        return 0
+    for i, s in enumerate(ranked, 1):
+        print(f"{i}. {s['action']} — {s['reason']}\n   → {s['command']}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="omw",
@@ -839,6 +856,12 @@ def build_parser() -> argparse.ArgumentParser:
     pfd.add_argument("--vault", default=None)
     pfd.add_argument("--json", dest="find_json", action="store_true")
     pfd.set_defaults(func=_cmd_find)
+
+    pnx = sub.add_parser("next", help="Recommend the next knowledge-lifecycle action(s).")
+    pnx.add_argument("--vault", default=None)
+    pnx.add_argument("--json", dest="next_json", action="store_true")
+    pnx.add_argument("--today", default=None, help="YYYY-MM-DD (default: today)")
+    pnx.set_defaults(func=_cmd_next)
 
     pse = sub.add_parser("serve", help="Run the local query HTTP API (retrieve-only).")
     pse.add_argument("--host", default="127.0.0.1", help="bind host (default: localhost)")
