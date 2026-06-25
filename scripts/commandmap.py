@@ -8,7 +8,7 @@ from pathlib import Path
 
 from scripts import ops_registry as reg
 from scripts import recall
-from scripts.persona_export import HOST_FILES
+from scripts.persona_export import HOST_FILES  # noqa: F401  # re-exported for back-compat
 
 MARKER = "omw-commandmap"
 _START = f"<!-- {MARKER}:start -->"
@@ -39,9 +39,16 @@ def render_block() -> str:
     return "\n".join(lines)
 
 
-def export(base_dir: Path, hosts: list[str]) -> None:
+def export(base_dir: Path, hosts: list[str], *, profile: str | None = None,
+           workspace: str | None = None) -> None:
+    from scripts import hosts as hostsmod
     block = render_block()
+    seen: set = set()
     for host in hosts:
-        if host not in HOST_FILES:
-            raise ValueError(f"unknown host: {host!r} (known: {sorted(HOST_FILES)})")
-        recall.upsert_block(base_dir / HOST_FILES[host], block, MARKER)
+        path = hostsmod.resolve_instruction_path(host, base_dir,
+                                                 profile=profile, workspace=workspace)
+        if path in seen:
+            continue
+        seen.add(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        recall.upsert_block(path, block, MARKER)
