@@ -23,7 +23,10 @@ oh-my-wiki is **not tied to any specific AI host**. It runs identically in:
 
 - **Claude Code** — SKILL.md is auto-discovered; trigger phrases fire the skill.
 - **Codex CLI** — same SKILL.md, same trigger phrases.
+- **OpenCode** — reads the same `AGENTS.md` convention as Codex.
 - **Gemini CLI** — same SKILL.md, same trigger phrases.
+- **Hermes** — runs per-profile (`~/.hermes/profiles/<profile>/`).
+- **OpenClaw** — runs per-workspace.
 
 No host is privileged. Whichever agent you are using today will work.
 
@@ -659,10 +662,16 @@ Enable it (it's also a step in the full `omw setup`, or run it on its own):
 omw setup recall
 ```
 
-This sets a mode, writes a short guidance block into your host instruction files
-(CLAUDE.md / AGENTS.md / GEMINI.md), and wires each host's native hooks
-(`SessionStart` + `UserPromptSubmit`) for Claude Code, Codex, and Gemini CLI.
+This sets a mode, writes a short guidance block into your host instruction files,
+and wires each host's native hooks (`SessionStart` + `UserPromptSubmit`).
 omw is host-neutral here: one engine, translated into each host's hook format.
+
+Host choices group by **instruction file (convention)** — `claude` (CLAUDE.md) ·
+`codex·opencode` (AGENTS.md, written once) · `gemini` (GEMINI.md) · `hermes`
+(pick a profile → `~/.hermes/profiles/<profile>/SOUL.md`) · `openclaw` (pick a
+workspace → `<workspace>/AGENTS.md`). Set the profile/workspace non-interactively
+with `--profile` / `--workspace`. Native hooks are wired for Claude Code, Codex,
+and Gemini only; OpenCode, Hermes, and OpenClaw get the guidance block only.
 
 Two axes you can configure:
 

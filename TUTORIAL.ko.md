@@ -23,7 +23,10 @@ oh-my-wiki는 **특정 AI 호스트에 종속되지 않습니다**. 다음 환�
 
 - **Claude Code** — SKILL.md가 자동으로 감지되며, 트리거 문구로 스킬이 실행됩니다.
 - **Codex CLI** — 동일한 SKILL.md, 동일한 트리거 문구.
+- **OpenCode** — Codex와 같은 `AGENTS.md` 규약을 읽습니다.
 - **Gemini CLI** — 동일한 SKILL.md, 동일한 트리거 문구.
+- **Hermes** — 프로필별(`~/.hermes/profiles/<프로필>/`)로 격리되어 동작합니다.
+- **OpenClaw** — 워크스페이스별로 격리되어 동작합니다.
 
 어떤 호스트도 특별 대우를 받지 않습니다. 지금 사용 중인 에이전트라면 무엇이든 작동합니다.
 
@@ -640,10 +643,11 @@ build a glossary for my vault
 omw setup recall
 ```
 
-이 명령은 모드를 설정하고, 호스트 지침 파일(CLAUDE.md / AGENTS.md / GEMINI.md)에
-짧은 가이드 블록을 넣고, Claude Code·Codex·Gemini CLI 각각의 네이티브 훅
+이 명령은 모드를 설정하고, 호스트 지침 파일에 짧은 가이드 블록을 넣고, 네이티브 훅
 (`SessionStart` + `UserPromptSubmit`)을 배선합니다. 여기서 omw는 호스트 중립적입니다.
 하나의 엔진을 각 호스트의 훅 포맷으로 번역할 뿐입니다.
+
+호스트 선택지는 **지침 파일(규약) 단위**로 묶입니다 — `claude`(CLAUDE.md) · `codex·opencode`(AGENTS.md, 한 번만 기록) · `gemini`(GEMINI.md) · `hermes`(프로필 선택 → `~/.hermes/profiles/<프로필>/SOUL.md`) · `openclaw`(워크스페이스 선택 → `<워크스페이스>/AGENTS.md`). 프로필/워크스페이스는 `--profile` / `--workspace`로 비대화형 지정합니다. 네이티브 훅은 Claude Code·Codex·Gemini에만 배선되고, OpenCode·Hermes·OpenClaw는 지침 블록만 들어갑니다(블록 전용).
 
 설정 가능한 두 축:
 
