@@ -780,6 +780,12 @@ def _cmd_help(args) -> int:
     return 0
 
 
+def _cmd_version(args) -> int:
+    from scripts import banner
+    print(f"omw {banner.version()}")
+    return 0
+
+
 def _cmd_doctor(args) -> int:
     from scripts import setup_wizard
     return setup_wizard.doctor()
@@ -834,6 +840,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("help", help="Guided overview of all commands by lifecycle phase.").set_defaults(
         func=_cmd_help
+    )
+
+    sub.add_parser("version", help="Print the installed omw version.").set_defaults(
+        func=_cmd_version
     )
 
     sub.add_parser("status", help="Show registry state as JSON.").set_defaults(
@@ -1182,6 +1192,13 @@ def main(argv: list[str] | None = None) -> int:
             from scripts import banner, help_overview
             banner.render(animate=False)
             print(help_overview.render())  # guided lifecycle-grouped overview
+            sys.stdout.flush()
+            return 0
+        if argv[0] in ("-v", "--version", "version"):
+            # Early-exit (like help) — sidesteps the required-subparser argparse path
+            # and the banner, printing just the version for all three forms.
+            from scripts import banner
+            print(f"omw {banner.version()}")
             sys.stdout.flush()
             return 0
         args = parser.parse_args(argv)

@@ -112,6 +112,7 @@ OPS: tuple[OpSpec, ...] = (
                ArgSpec("--zip", False, "output zip file"),
                ArgSpec("--force", False, "allow exporting into a non-empty directory"))),
     _det("help", "Guided CLI overview grouped by lifecycle phase.", "omw help"),
+    _det("version", "Print the installed omw version.", "omw version"),
     _det("persona-run", "Dispatch a persona as an isolated one-shot subagent (any backend).",
          "omw persona-run <role> [--page P|--file F|--text T] [--backend B] [--apply PROP]",
          args=(ArgSpec("role", True, "persona name (fact-checker, consistency-checker, curator, terminology-manager, wiki-librarian)"),
@@ -165,7 +166,7 @@ _PHASE = {
     "view": "use", "list": "use", "export": "use",
     # meta — setup / introspection
     "status": "meta", "vault": "meta", "setup": "meta", "doctor": "meta",
-    "update": "meta", "schema": "meta", "help": "meta",
+    "update": "meta", "schema": "meta", "help": "meta", "version": "meta",
 }
 
 OPS = tuple(dataclasses.replace(op, phase=_PHASE.get(op.name, "meta")) for op in OPS)
