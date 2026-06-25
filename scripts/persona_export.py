@@ -60,15 +60,22 @@ def upsert_marker(md_path: Path, block: str) -> None:
 
 
 def export_personas(*, enabled: list[str], main: str, descriptions: dict[str, str],
-                    base_dir: Path, hosts: list[str]) -> list[Path]:
-    """Write the roster block into each host's instruction file under base_dir."""
+                    base_dir: Path, hosts: list[str], profile: str | None = None,
+                    workspace: str | None = None) -> list[Path]:
+    """Write the roster block into each selected host's instruction file (deduped
+    by resolved path — codex/opencode share AGENTS.md)."""
+    from scripts import hosts as hostsmod
     base_dir = Path(base_dir)
     block = render_block(enabled, main, descriptions)
     written: list[Path] = []
+    seen: set = set()
     for host in hosts:
-        if host not in HOST_FILES:
-            raise ValueError(f"unknown host: {host!r} (known: {sorted(HOST_FILES)})")
-        path = base_dir / HOST_FILES[host]
+        path = hostsmod.resolve_instruction_path(host, base_dir,
+                                                 profile=profile, workspace=workspace)
+        if path in seen:
+            continue
+        seen.add(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
         upsert_marker(path, block)
         written.append(path)
     return written

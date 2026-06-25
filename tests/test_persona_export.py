@@ -1,4 +1,4 @@
-from pathlib import Path
+from pathlib import Path  # noqa: F401  # used in test_persona_export_hermes_profile
 
 from scripts import persona_export as pe
 
@@ -56,3 +56,27 @@ def test_export_personas_rejects_unknown_host(tmp_path):
     with pytest.raises(ValueError):
         pe.export_personas(enabled=["researcher"], main="researcher",
                            descriptions={}, base_dir=tmp_path, hosts=["notion"])
+
+
+def test_codex_opencode_dedup_single_agents_block(tmp_path):
+    from scripts import persona_export
+    persona_export.export_personas(
+        enabled=["wiki-librarian"], main="wiki-librarian", descriptions={},
+        base_dir=tmp_path, hosts=["codex", "opencode"])
+    agents = (tmp_path / "AGENTS.md").read_text()
+    assert agents.count("<!-- omw-personas:start -->") == 1   # written once, not twice
+    assert not (tmp_path / "CLAUDE.md").exists()
+
+
+def test_persona_export_hermes_profile(tmp_path, monkeypatch):
+    from scripts import persona_export
+    home = tmp_path / "home"
+    (home / ".hermes" / "profiles" / "iris").mkdir(parents=True)
+    (home / ".hermes" / "profiles" / "iris" / "SOUL.md").write_text("# Identity\n\nexisting\n")
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    persona_export.export_personas(
+        enabled=["wiki-librarian"], main="wiki-librarian", descriptions={},
+        base_dir=tmp_path, hosts=["hermes"], profile="iris")
+    soul = (home / ".hermes" / "profiles" / "iris" / "SOUL.md").read_text()
+    assert "# Identity" in soul and "existing" in soul   # host content preserved
+    assert "<!-- omw-personas:start -->" in soul         # managed block added

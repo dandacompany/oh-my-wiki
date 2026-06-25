@@ -1,0 +1,103 @@
+"""Host descriptor SSOT: which instruction file each agent reads, and where.
+
+Two host kinds:
+  - "repo"    — instruction file is a working-dir-relative name (claude/codex/
+                gemini/opencode). codex and opencode share AGENTS.md.
+  - "scoped"  — instruction file lives under the agent's own profile/workspace
+                root (hermes → ~/.hermes/profiles/<p>/SOUL.md; openclaw →
+                <workspace>/AGENTS.md).
+Instruction-injection pickers group repo hosts by their shared file (a
+"convention"); skill install stays per-agent (see agent_skills)."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+# host -> descriptor. `conv` is the convention key used to merge shared-file hosts.
+HOSTS: dict[str, dict] = {
+    "claude":   {"kind": "repo",   "conv": "claude", "file": "CLAUDE.md"},
+    "codex":    {"kind": "repo",   "conv": "agents", "file": "AGENTS.md"},
+    "opencode": {"kind": "repo",   "conv": "agents", "file": "AGENTS.md"},
+    "gemini":   {"kind": "repo",   "conv": "gemini", "file": "GEMINI.md"},
+    "hermes":   {"kind": "scoped", "conv": "hermes", "file": "SOUL.md"},
+    "openclaw": {"kind": "scoped", "conv": "openclaw", "file": "AGENTS.md"},
+}
+
+# Convention label order for pickers.
+_CONV_ORDER = ["claude", "agents", "gemini", "hermes", "openclaw"]
+
+
+def is_scoped(host: str) -> bool:
+    return HOSTS.get(host, {}).get("kind") == "scoped"
+
+
+def instruction_choices() -> list[dict]:
+    """Convention-level choices for the instruction-injection pickers. Repo hosts
+    sharing a file are one entry; scoped hosts are their own entry."""
+    by_conv: dict[str, dict] = {}
+    for host, d in HOSTS.items():
+        c = by_conv.setdefault(d["conv"], {"key": d["conv"], "file": d["file"],
+                                           "members": [], "scoped": d["kind"] == "scoped"})
+        c["members"].append(host)
+    return [by_conv[k] for k in _CONV_ORDER if k in by_conv]
+
+
+# ── hermes profiles ──────────────────────────────────────────────────────────
+def _hermes_root() -> Path:
+    return Path.home() / ".hermes"
+
+
+def list_profiles() -> list[str]:
+    p = _hermes_root() / "profiles"
+    return sorted([d.name for d in p.iterdir() if d.is_dir()]) if p.is_dir() else []
+
+
+def active_profile() -> str | None:
+    f = _hermes_root() / "active_profile"
+    return f.read_text(encoding="utf-8").strip() if f.is_file() else None
+
+
+# ── openclaw workspaces ──────────────────────────────────────────────────────
+def _openclaw_config() -> dict:
+    f = Path.home() / ".openclaw" / "openclaw.json"
+    try:
+        return json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def list_workspaces() -> list[str]:
+    agents = (_openclaw_config().get("agents") or {})
+    out: list[str] = []
+    for spec in agents.values():
+        ws = (spec or {}).get("workspace")
+        if ws and ws not in out:
+            out.append(ws)
+    return out
+
+
+def default_workspace() -> str | None:
+    ws = list_workspaces()
+    return ws[0] if ws else None
+
+
+def resolve_instruction_path(host: str, base_dir, *, profile: str | None = None,
+                             workspace: str | None = None) -> Path:
+    """Absolute path of the instruction file the host reads.
+    repo hosts → base_dir/<file>; hermes → profile SOUL.md; openclaw → workspace AGENTS.md."""
+    d = HOSTS.get(host)
+    if d is None:
+        raise ValueError(f"unknown host: {host!r} (known: {sorted(HOSTS)})")
+    if d["kind"] == "repo":
+        return Path(base_dir) / d["file"]
+    if host == "hermes":
+        prof = profile or active_profile()
+        if not prof:
+            raise ValueError("hermes: no profile given and no active_profile")
+        return _hermes_root() / "profiles" / prof / d["file"]
+    if host == "openclaw":
+        ws = workspace or default_workspace()
+        if not ws:
+            raise ValueError("openclaw: no workspace given and none configured")
+        return Path(ws) / d["file"]
+    raise ValueError(f"unhandled scoped host: {host!r}")
