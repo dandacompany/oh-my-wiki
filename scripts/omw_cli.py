@@ -126,6 +126,17 @@ def _cmd_vault_current(args) -> int:
     return 0
 
 
+def _cmd_vault_rename(args) -> int:
+    db = registry_path()
+    try:
+        vault_ops.rename(db, args.old, args.new)
+    except registry.VaultError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"renamed: {args.old} -> {args.new}")
+    return 0
+
+
 def _cmd_lint(args) -> int:
     db = registry_path()
     row = _require_vault_row(db, args.vault)
@@ -902,6 +913,11 @@ def build_parser() -> argparse.ArgumentParser:
     pcur = vsub.add_parser("current", help="Print the active vault's name.")
     pcur.add_argument("--json", action="store_true", help="Print the full row as JSON.")
     pcur.set_defaults(func=_cmd_vault_current)
+
+    pr = vsub.add_parser("rename", help="Rename a vault's registry label (index preserved).")
+    pr.add_argument("old")
+    pr.add_argument("new")
+    pr.set_defaults(func=_cmd_vault_rename)
 
     pl = sub.add_parser("lint", help="Run deterministic lint over a vault.")
     pl.add_argument("--vault", default=None, help="vault name (default: active)")

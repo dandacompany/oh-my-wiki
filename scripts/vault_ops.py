@@ -37,3 +37,8 @@ def info(db_path: Path, name: str) -> dict:
 
 def current(db_path: Path) -> sqlite3.Row | None:
     return registry.get_active(db_path)
+
+
+def rename(db_path: Path, old: str, new: str) -> dict:
+    row = registry.rename_vault(db_path, old, new)
+    return {"renamed": old, "to": row["name"]}

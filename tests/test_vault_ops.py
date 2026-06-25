@@ -113,3 +113,32 @@ def test_cli_vault_info_outputs_json(tmp_path, monkeypatch, capsys):
     assert omw_cli.main(["vault", "info", "v1"]) == 0
     out = _json.loads(capsys.readouterr().out)
     assert out["name"] == "v1"
+
+
+# --- Task 3 tests ---
+
+
+def test_rename_changes_name_preserving_id(tmp_path):
+    db = _fresh_db(tmp_path)
+    v = registry.add_vault(db, name="old", path=tmp_path / "old",
+                           type_="markdown", mode="wiki")
+    vault_ops.rename(db, "old", "new")
+    assert registry.get_vault_by_name(db, "old") is None
+    row = registry.get_vault_by_name(db, "new")
+    assert row["id"] == v["id"]
+
+
+def test_rename_to_existing_name_rejected(tmp_path):
+    db = _fresh_db(tmp_path)
+    registry.add_vault(db, name="a", path=tmp_path / "a",
+                       type_="markdown", mode="wiki")
+    registry.add_vault(db, name="b", path=tmp_path / "b",
+                       type_="markdown", mode="wiki")
+    with pytest.raises(registry.VaultError):
+        vault_ops.rename(db, "a", "b")
+
+
+def test_rename_unknown_rejected(tmp_path):
+    db = _fresh_db(tmp_path)
+    with pytest.raises(registry.VaultError):
+        vault_ops.rename(db, "ghost", "x")
