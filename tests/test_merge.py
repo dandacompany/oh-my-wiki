@@ -268,3 +268,41 @@ def test_cli_apply_multiple_proposals_errors(tmp_path, monkeypatch):
     assert rc == 1
     # Winner proposal must still exist (apply was NOT executed)
     assert (root / winner_proposal).exists()
+
+
+def test_apply_partial_write_diagnosed(tmp_path, monkeypatch):
+    from scripts import merge, registry
+    db, vid = _vault(tmp_path, monkeypatch)   # _vault helper already in this file
+    res = merge.stage(db, vault_id=vid, source_relpath="wiki/concepts/a.md",
+                      target_relpath="wiki/concepts/b.md")
+    root = registry.get_vault_root(db, vid)
+    # make the SOURCE target write fail (winner write succeeds first)
+    import pathlib
+    orig = pathlib.Path.write_text
+    src_target = root / "wiki/concepts/a.md"
+
+    def boom(self, *a, **k):
+        if self == src_target:
+            raise OSError("disk full")
+        return orig(self, *a, **k)
+    monkeypatch.setattr(pathlib.Path, "write_text", boom)
+    import pytest
+    with pytest.raises(merge.MergeError, match="NOT tombstoned"):
+        merge.apply(db, vault_id=vid, winner_proposal=res["winner_proposal"],
+                    source_proposal=res["source_proposal"])
+
+
+def test_stage_refuses_alias_owner_conflict(tmp_path, monkeypatch):
+    from scripts import merge, reindex
+    from tests.conftest import make_vault_with_pages
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "wiki/concepts/a.md": "---\ntitle: A\ntype: concept\n---\n\n## Summary\n\na\n",
+        "wiki/concepts/b.md": "---\ntitle: B\ntype: concept\n---\n\n## Summary\n\nb\n",
+        # third page declares 'a' as an alias
+        "wiki/concepts/c.md": "---\ntitle: C\ntype: concept\naliases: [a]\n---\n\n## Summary\n\nc\n",
+    })
+    reindex.full(db, vault_id=vid)
+    import pytest
+    with pytest.raises(merge.MergeError):
+        merge.stage(db, vault_id=vid, source_relpath="wiki/concepts/a.md",
+                    target_relpath="wiki/concepts/b.md")

@@ -7,6 +7,7 @@ winner's `aliases:` (see links.resolve), not by rewriting referencing bodies.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from scripts import frontmatter, links, reindex, registry
@@ -59,7 +60,7 @@ def stage(db_path: Path, *, vault_id: int, source_relpath: str,
     conn = registry.connect(db_path)
     try:
         rows = conn.execute(
-            "SELECT relpath FROM notes WHERE vault_id = ?", (vault_id,)
+            "SELECT relpath, aliases FROM notes WHERE vault_id = ?", (vault_id,)
         ).fetchall()
     finally:
         conn.close()
@@ -70,6 +71,10 @@ def stage(db_path: Path, *, vault_id: int, source_relpath: str,
         if links._slugify(rp) == src_slug:
             raise MergeError(
                 f"slug {src_slug!r} also names a third page ({rp}); resolve manually")
+        raw = r["aliases"] if "aliases" in r.keys() else None
+        if raw and src_slug in [links._slugify(str(a)) for a in json.loads(raw)]:
+            raise MergeError(
+                f"slug {src_slug!r} is already an alias of a third page ({rp}); resolve manually")
 
     # Winner frontmatter = union semantics over target's meta.
     winner_meta = dict(tgt_meta)
@@ -134,7 +139,13 @@ def apply(db_path: Path, *, vault_id: int, winner_proposal: str,
     source_target = source_prop_abs.with_name(source_prop_abs.name[: -len(".proposed.md")])
     # Atomic: validate both proposals first, then write both, then reindex once.
     winner_target.write_text(winner_prop_abs.read_text(encoding="utf-8"), encoding="utf-8")
-    source_target.write_text(source_prop_abs.read_text(encoding="utf-8"), encoding="utf-8")
+    try:
+        source_target.write_text(source_prop_abs.read_text(encoding="utf-8"), encoding="utf-8")
+    except OSError as exc:
+        raise MergeError(
+            f"winner {winner_target.name!r} written but source "
+            f"{source_target.name!r} NOT tombstoned ({exc}); re-run `omw merge --apply`"
+        ) from exc
     winner_prop_abs.unlink()
     source_prop_abs.unlink()
     # reindex.full calls links.resolve internally — no separate resolve call needed.
