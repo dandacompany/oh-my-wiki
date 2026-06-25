@@ -4,6 +4,7 @@ registry.VaultError on invalid operations. The registry module owns vaults-table
 row mutations; this module owns filesystem + presentation."""
 from __future__ import annotations
 
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -42,3 +43,20 @@ def current(db_path: Path) -> sqlite3.Row | None:
 def rename(db_path: Path, old: str, new: str) -> dict:
     row = registry.rename_vault(db_path, old, new)
     return {"renamed": old, "to": row["name"]}
+
+
+def move(db_path: Path, name: str, new_path: str) -> dict:
+    row = _require(db_path, name)
+    src = Path(row["path"])
+    dst = Path(new_path).expanduser()
+    if dst.exists():
+        raise registry.VaultError(f"target path already exists: {dst}")
+    # Update the registry first so a fs failure can't orphan a moved folder
+    # under the old path; if the move fails we roll the path back.
+    registry.update_path(db_path, name, dst)
+    try:
+        shutil.move(str(src), str(dst))
+    except OSError as exc:
+        registry.update_path(db_path, name, src)
+        raise registry.VaultError(f"move failed: {exc}") from exc
+    return {"moved": name, "from": str(src), "to": str(dst.resolve())}

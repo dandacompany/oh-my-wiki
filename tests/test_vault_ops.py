@@ -142,3 +142,34 @@ def test_rename_unknown_rejected(tmp_path):
     db = _fresh_db(tmp_path)
     with pytest.raises(registry.VaultError):
         vault_ops.rename(db, "ghost", "x")
+
+
+# --- Task 4 tests ---
+
+
+def test_move_relocates_folder_and_updates_path(tmp_path):
+    db = _fresh_db(tmp_path)
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "marker.md").write_text("hi")
+    registry.add_vault(db, name="v1", path=src, type_="markdown", mode="wiki")
+    dst = tmp_path / "dst"
+    vault_ops.move(db, "v1", str(dst))
+    assert not src.exists()
+    assert (dst / "marker.md").read_text() == "hi"
+    row = registry.get_vault_by_name(db, "v1")
+    assert Path(row["path"]) == dst.resolve()
+
+
+def test_move_to_occupied_target_rejected(tmp_path):
+    db = _fresh_db(tmp_path)
+    src = tmp_path / "src"
+    src.mkdir()
+    registry.add_vault(db, name="v1", path=src, type_="markdown", mode="wiki")
+    dst = tmp_path / "dst"
+    dst.mkdir()  # already exists
+    with pytest.raises(registry.VaultError):
+        vault_ops.move(db, "v1", str(dst))
+    # row unchanged, source intact
+    assert src.exists()
+    assert Path(registry.get_vault_by_name(db, "v1")["path"]) == src.resolve()

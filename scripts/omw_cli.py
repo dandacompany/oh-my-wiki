@@ -137,6 +137,17 @@ def _cmd_vault_rename(args) -> int:
     return 0
 
 
+def _cmd_vault_move(args) -> int:
+    db = registry_path()
+    try:
+        out = vault_ops.move(db, args.name, args.new_path)
+    except registry.VaultError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"moved: {out['from']} -> {out['to']}")
+    return 0
+
+
 def _cmd_lint(args) -> int:
     db = registry_path()
     row = _require_vault_row(db, args.vault)
@@ -918,6 +929,11 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("old")
     pr.add_argument("new")
     pr.set_defaults(func=_cmd_vault_rename)
+
+    pmv = vsub.add_parser("move", help="Move a vault's folder on disk + update its path.")
+    pmv.add_argument("name")
+    pmv.add_argument("new_path", metavar="new-path")
+    pmv.set_defaults(func=_cmd_vault_move)
 
     pl = sub.add_parser("lint", help="Run deterministic lint over a vault.")
     pl.add_argument("--vault", default=None, help="vault name (default: active)")
