@@ -18,7 +18,15 @@ The canonical skill provides:
 
 - Multi-vault sqlite registry (`scripts/wizard.py`, `scripts/registry.py`)
 - memo-mode and wiki-mode dual ops
-- 11 user-facing ops (vault-setup / vault-use / vault-list / vault-forget / vault-import-memo / create / find / open / edit / move / delete / ingest / query / lint)
+- vault subcommands: list / create / use / forget / info / current / rename / move / set / archive / unarchive / delete
+  > `omw vault info <name>` (single-vault JSON card: path/type/mode/active/archived + note counts),
+  > `omw vault current [--json]` (print the active vault's name),
+  > `omw vault rename <old> <new>` (rename the registry label; index preserved),
+  > `omw vault move <name> <new-path>` (relocate the vault folder on disk + update its path),
+  > `omw vault set <name> [--mode M] [--config k=v]` (edit mode/config only; type/path/name are owned by move/rename),
+  > `omw vault archive <name>` / `omw vault unarchive <name>` (hide/restore a vault; `omw vault list --all` shows archived),
+  > `omw vault delete <name>` (soft-delete to trash by default; `--hard --yes` to purge irreversibly),
+- other ops: create / find / open / edit / move / delete / ingest / query / lint
 - v2 in progress (hot cache, autoresearch, writing-agent personas, Obsidian/Logseq viewers, URL fetch + inbox, per-prompt recall)
 
 ## Why this stub exists

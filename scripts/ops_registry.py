@@ -44,7 +44,8 @@ def _proc(name, summary, args=(), uses=()):
 OPS: tuple[OpSpec, ...] = (
     # --- deterministic CLI ops (run them; trust the result) ---
     _det("status", "Show registry state as JSON.", "omw status"),
-    _det("vault", "Deterministic vault management.", "omw vault {list|create|use|forget} …"),
+    _det("vault", "Deterministic vault management.",
+         "omw vault {list|create|use|forget|info|current|rename|move|set|archive|unarchive|delete} …"),
     _det("lint", "Run deterministic lint over a vault.", "omw lint [--vault V]"),
     _det("reindex", "Rebuild the search/graph index.", "omw reindex [--full] [--vault V]"),
     _det("connections", "Community/bridge/hub graph as JSON.", "omw connections [--no-reindex]"),

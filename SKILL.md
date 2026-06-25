@@ -50,7 +50,15 @@ Always invoke this before doing anything else:
 >
 > 1. **Deterministic ops** (status, vault management, lint, search, serve, schema, supersede, review, links, fields, view, visibility, inbox, fetch, reindex, connections): run the
 >    `omw` CLI — `omw status`, `omw vault list`, `omw vault create <name> --mode wiki`,
->    `omw vault use <name>`, `omw lint`, `omw schema list`, `omw supersede <relpath> --by <slug>`,
+>    `omw vault use <name>`,
+>    `omw vault info <name>` (single-vault JSON card: path/type/mode/active/archived + note counts),
+>    `omw vault current [--json]` (print the active vault's name),
+>    `omw vault rename <old> <new>` (rename the registry label; index preserved),
+>    `omw vault move <name> <new-path>` (relocate the vault folder on disk + update its path),
+>    `omw vault set <name> [--mode M] [--config k=v]` (edit mode/config only; type/path/name are owned by move/rename),
+>    `omw vault archive <name>` / `omw vault unarchive <name>` (hide/restore a vault; `omw vault list --all` shows archived),
+>    `omw vault delete <name>` (soft-delete to trash by default; `--hard --yes` to purge irreversibly),
+>    `omw lint`, `omw schema list`, `omw supersede <relpath> --by <slug>`,
 >    `omw review due`, `omw serve` (the retrieve-only messenger query API — see `references/messenger-api.md`),
 >    `omw view [page] [--search Q] [--viewer obsidian|logseq] [--vault <name>] [--print]` (open vault/page/search in Obsidian or Logseq via URI scheme; companion: `omw setup viewer`),
 >    `omw visibility get <relpath>` / `omw visibility set <relpath...> public|private` (per-page visibility management),
