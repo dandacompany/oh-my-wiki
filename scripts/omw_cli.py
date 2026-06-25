@@ -774,6 +774,12 @@ def _cmd_merge(args) -> int:
     return 0
 
 
+def _cmd_help(args) -> int:
+    from scripts import help_overview
+    print(help_overview.render())
+    return 0
+
+
 def _cmd_doctor(args) -> int:
     from scripts import setup_wizard
     return setup_wizard.doctor()
@@ -822,8 +828,13 @@ def build_parser() -> argparse.ArgumentParser:
             "oh-my-wiki user CLI — install/setup + deterministic vault ops. "
             "Natural-language work happens in a Claude session via the omw skill."
         ),
+        epilog="Run `omw help` for a guided overview of all commands by lifecycle phase.",
     )
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("help", help="Guided overview of all commands by lifecycle phase.").set_defaults(
+        func=_cmd_help
+    )
 
     sub.add_parser("status", help="Show registry state as JSON.").set_defaults(
         func=_cmd_status

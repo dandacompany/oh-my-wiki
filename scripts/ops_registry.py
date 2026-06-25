@@ -7,6 +7,7 @@ block, and the anti-drift test pins SKILL.md / hooks / gate prose to this list.
 """
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 
 
@@ -27,6 +28,7 @@ class OpSpec:
     cli_template: str | None = None      # deterministic ops
     procedure_file: str | None = None    # procedure ops -> "commands/<op>.md"
     uses: tuple[str, ...] = ()            # downstream ops a procedure calls
+    phase: str | None = None             # lifecycle phase (capture/structure/synthesize/retrieve/maintain/use/meta)
 
 
 def _det(name, summary, cli_template, args=()):
@@ -108,6 +110,7 @@ OPS: tuple[OpSpec, ...] = (
                ArgSpec("--visibility", False, "select pages by visibility"),
                ArgSpec("--out", False, "output directory"),
                ArgSpec("--zip", False, "output zip file"))),
+    _det("help", "Guided CLI overview grouped by lifecycle phase.", "omw help"),
     _det("persona-run", "Dispatch a persona as an isolated one-shot subagent (any backend).",
          "omw persona-run <role> [--page P|--file F|--text T] [--backend B] [--apply PROP]",
          args=(ArgSpec("role", True, "persona name (fact-checker, consistency-checker, curator, terminology-manager, wiki-librarian)"),
@@ -140,6 +143,31 @@ OPS: tuple[OpSpec, ...] = (
     _proc("persona-terminology", "Terminology-manager persona — dispatched via `omw persona-run <role>` (isolated subagent).",
           args=(ArgSpec("page", False, "page to scan (default: whole vault)"),)),
 )
+
+_PHASE = {
+    # capture — bring sources in
+    "inbox": "capture", "fetch": "capture", "import": "capture", "ingest": "capture",
+    # structure — organize into the graph
+    "reindex": "structure", "links": "structure", "fields": "structure",
+    "connections": "structure", "open": "structure", "edit": "structure",
+    "move": "structure", "delete": "structure",
+    # synthesize — combine into new knowledge
+    "query": "synthesize", "context": "synthesize", "autoresearch": "synthesize",
+    # retrieve — find what's stored
+    "search": "retrieve", "find": "retrieve", "serve": "retrieve",
+    # maintain — keep the wiki healthy
+    "lint": "maintain", "review": "maintain", "supersede": "maintain", "merge": "maintain",
+    "visibility": "maintain", "gate": "maintain", "maint": "maintain", "next": "maintain",
+    "recall": "maintain", "persona-run": "maintain", "persona-factcheck": "maintain",
+    "persona-consistency": "maintain", "persona-terminology": "maintain",
+    # use — pull knowledge back out
+    "view": "use", "list": "use", "export": "use",
+    # meta — setup / introspection
+    "status": "meta", "vault": "meta", "setup": "meta", "doctor": "meta",
+    "update": "meta", "schema": "meta", "help": "meta",
+}
+
+OPS = tuple(dataclasses.replace(op, phase=_PHASE.get(op.name, "meta")) for op in OPS)
 
 _BY_NAME = {op.name: op for op in OPS}
 
