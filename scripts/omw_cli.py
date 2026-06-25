@@ -1182,17 +1182,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         argv = list(sys.argv[1:] if argv is None else argv)
         parser = build_parser()
-        if not argv or argv[0] in ("-h", "--help"):
-            from scripts import banner
-            banner.render(animate=False)   # static, self-gated for TTY/NO_COLOR/CI
-            parser.print_help()
-            sys.stdout.flush()  # surface a broken pipe here (block-buffered stdout)
-            return 0
-        if argv[0] == "help":
+        if not argv or argv[0] in ("-h", "--help", "help"):
+            # Top-level help is the lifecycle-grouped overview (not argparse's flat
+            # subcommand dump) — categorized by phase, [CLI]/[skill] tagged. Per-command
+            # detail stays on `omw <command> -h` (argparse).
             from scripts import banner, help_overview
-            banner.render(animate=False)
-            print(help_overview.render())  # guided lifecycle-grouped overview
-            sys.stdout.flush()
+            banner.render(animate=False)   # static, self-gated for TTY/NO_COLOR/CI
+            print(help_overview.render())
+            sys.stdout.flush()  # surface a broken pipe here (block-buffered stdout)
             return 0
         if argv[0] in ("-v", "--version", "version"):
             # Early-exit (like help) — sidesteps the required-subparser argparse path

@@ -1,3 +1,4 @@
+import pytest
 from scripts import help_overview, ops_registry as reg
 
 
@@ -37,3 +38,18 @@ def test_omw_help_command_emits_grouped_overview(capsys):
     assert "[CLI]" in out and "[skill]" in out
     # NOT the flat argparse usage line
     assert "usage: omw [-h]" not in out
+
+
+@pytest.mark.parametrize("argv", [["-h"], ["--help"], []])
+def test_top_level_help_is_grouped_not_flat(argv, capsys):
+    # -h / --help / no-args all show the lifecycle-grouped overview, NOT argparse's
+    # flat one-line subcommand dump.
+    from scripts import omw_cli
+    rc = omw_cli.main(argv)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "commands by lifecycle phase" in out
+    assert "Capture — bring sources in" in out
+    # the old flat argparse subcommand dump must be gone
+    assert "usage: omw [-h]" not in out
+    assert "positional arguments:" not in out
