@@ -235,10 +235,12 @@ def setup_search(*, noninteractive: bool = False, provider: str | None = None,
 
 def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
                    hosts: list[str] | None = None, base_dir=None,
-                   noninteractive: bool = False) -> int:
+                   noninteractive: bool = False,
+                   profile: str | None = None, workspace: str | None = None) -> int:
     """Record the enabled persona roster + main, and export to host instruction files."""
     from pathlib import Path
     from scripts import config, personas, persona_export
+    from scripts import hosts as hostsmod
     specs = personas.list_personas()
     all_names = [p["name"] for p in specs]
     descriptions = {p["name"]: p.get("description", "") for p in specs}
@@ -261,8 +263,37 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
         main = _prompt("select", "Main persona", choices=enabled or all_names,
                        default=default_main) or None
     if interactive and hosts is None:
-        hosts = _prompt("checkbox", "Export to hosts",
-                        choices=list(persona_export.HOST_FILES)) or None
+        # Convention-level picker: codex+opencode share AGENTS.md → one entry.
+        choices_meta = hostsmod.instruction_choices()
+        choice_labels = [f"{', '.join(c['members'])} ({c['file']})" for c in choices_meta]
+        picked_labels = _prompt("checkbox", "Export to hosts", choices=choice_labels) or []
+        # Map labels back to flat host list by expanding members of each picked choice.
+        picked_hosts: list[str] = []
+        for label, meta in zip(choice_labels, choices_meta):
+            if label in picked_labels:
+                picked_hosts.extend(meta["members"])
+        hosts = picked_hosts or None
+        # Scoped host sub-prompts: ask for profile/workspace when not yet provided.
+        if hosts:
+            for host in hosts:
+                if not hostsmod.is_scoped(host):
+                    continue
+                if host == "hermes" and profile is None:
+                    profiles = hostsmod.list_profiles()
+                    if profiles:
+                        profile = _prompt("select", "Hermes profile",
+                                          choices=profiles,
+                                          default=hostsmod.active_profile()) or profiles[0]
+                    else:
+                        profile = hostsmod.active_profile()
+                elif host == "openclaw" and workspace is None:
+                    workspaces = hostsmod.list_workspaces()
+                    if workspaces:
+                        workspace = _prompt("select", "OpenClaw workspace",
+                                            choices=workspaces,
+                                            default=hostsmod.default_workspace()) or workspaces[0]
+                    else:
+                        workspace = hostsmod.default_workspace()
     # Non-interactive fallback: preserve previously saved roster if no explicit arg.
     if enabled is None:
         enabled = list(cur_enabled) if cur_enabled else list(all_names)
@@ -281,14 +312,17 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
         print(f"error: main persona {main!r} not in enabled set", file=sys.stderr)
         return 1
     if hosts is None:
-        hosts = list(persona_export.HOST_FILES)
+        # Non-interactive default: repo-trio hosts only (no scoped hosts auto-selected).
+        hosts = [h for h, d in hostsmod.HOSTS.items() if d["kind"] == "repo"]
     base = Path(base_dir) if base_dir else Path.cwd()
     config.set_config("personas.enabled", enabled)
     config.set_config("personas.main", main)
     written = persona_export.export_personas(
         enabled=enabled, main=main, descriptions=descriptions,
-        base_dir=base, hosts=hosts,
+        base_dir=base, hosts=hosts, profile=profile, workspace=workspace,
     )
+    from scripts import commandmap
+    commandmap.export(base, hosts, profile=profile, workspace=workspace)
     print(f"✓ personas: {len(enabled)} enabled, main={main}; "
           f"exported to {', '.join(p.name for p in written)}")
     return 0
@@ -429,7 +463,8 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                  submode: str | None = None, hosts: list[str] | None = None,
                  base_dir=None, noninteractive: bool = False,
                  provider: str | None = None, model: str | None = None,
-                 dim: int | None = None) -> int:
+                 dim: int | None = None,
+                 profile: str | None = None, workspace: str | None = None) -> int:
     """Configure auto wiki-recall (two axes):
       mode     — trigger: off | advisory | auto
       strategy — retrieval: fts | embedding | hybrid | llm (+ llm.submode)
@@ -438,7 +473,7 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     All strategies (fts/embedding/hybrid/llm) are implemented; `llm` is agent-delegated
     guidance (advisory-natured — no hook-side LLM call)."""
     from pathlib import Path
-    from scripts import config, persona_export, recall
+    from scripts import config, recall
     cur = config.load_config().get("recall") or {}
     cur_mode = cur.get("mode", "auto")
     cur_strat = cur.get("strategy", "fts")
@@ -503,33 +538,71 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     warn = recall.cost_warning(mode, strategy)
     if warn:
         print(f"  {warn}")
+    from scripts import hosts as hostsmod
     if interactive and hosts is None:
-        hosts = _prompt("checkbox", "Inject recall guidance into hosts",
-                        choices=list(persona_export.HOST_FILES)) or None
+        # Convention-level picker: codex+opencode share AGENTS.md → one entry.
+        choices_meta = hostsmod.instruction_choices()
+        choice_labels = [f"{', '.join(c['members'])} ({c['file']})" for c in choices_meta]
+        picked_labels = _prompt("checkbox", "Inject recall guidance into hosts",
+                                choices=choice_labels) or []
+        picked_hosts: list[str] = []
+        for label, meta in zip(choice_labels, choices_meta):
+            if label in picked_labels:
+                picked_hosts.extend(meta["members"])
+        hosts = picked_hosts or None
+        # Scoped host sub-prompts.
+        if hosts:
+            for host in hosts:
+                if not hostsmod.is_scoped(host):
+                    continue
+                if host == "hermes" and profile is None:
+                    profiles = hostsmod.list_profiles()
+                    if profiles:
+                        profile = _prompt("select", "Hermes profile",
+                                          choices=profiles,
+                                          default=hostsmod.active_profile()) or profiles[0]
+                    else:
+                        profile = hostsmod.active_profile()
+                elif host == "openclaw" and workspace is None:
+                    workspaces = hostsmod.list_workspaces()
+                    if workspaces:
+                        workspace = _prompt("select", "OpenClaw workspace",
+                                            choices=workspaces,
+                                            default=hostsmod.default_workspace()) or workspaces[0]
+                    else:
+                        workspace = hostsmod.default_workspace()
     if hosts is None:
-        hosts = list(persona_export.HOST_FILES)
+        # Non-interactive default: repo-trio hosts only.
+        hosts = [h for h, d in hostsmod.HOSTS.items() if d["kind"] == "repo"]
     base = Path(base_dir) if base_dir else Path.cwd()
     block = recall.render_recall_block(mode)
-    written = []
+    written: list[Path] = []
+    seen: set = set()
     for host in hosts:
-        if host not in persona_export.HOST_FILES:
-            print(f"  - {host}: unknown host, skipped")
+        try:
+            path = hostsmod.resolve_instruction_path(host, base,
+                                                     profile=profile, workspace=workspace)
+        except ValueError as exc:
+            print(f"  - {host}: skipped ({exc})")
             continue
-        path = base / persona_export.HOST_FILES[host]
-        recall.upsert_block(path, block)     # Tier 1: guidance in instruction file
-        recall.upsert_block(path, recall.render_always_on_block(),
-                            marker=recall.ALWAYS_ON_MARKER)  # wiki-first (soft enforcement)
-        written.append(path)
+        if path not in seen:
+            seen.add(path)
+            recall.upsert_block(path, block)     # Tier 1: guidance in instruction file
+            recall.upsert_block(path, recall.render_always_on_block(),
+                                marker=recall.ALWAYS_ON_MARKER)  # wiki-first (soft enforcement)
+            written.append(path)
     from scripts import commandmap
-    commandmap.export(base, hosts)
+    commandmap.export(base, hosts, profile=profile, workspace=workspace)
     print(f"✓ recall mode '{mode}'; guidance injected into "
           f"{', '.join(p.name for p in written) or '(none)'}.")
     # Tier 2: wire the host's native SessionStart + UserPromptSubmit hooks (global config).
+    hook_capable = recall.host_hook_configs()
     for host in hosts:
-        if host not in recall.host_hook_configs():
-            continue
-        changed, detail = recall.wire_host(host)
-        print(f"  {'✓' if changed else '–'} {host} hooks: {detail}")
+        if host in hook_capable:
+            changed, detail = recall.wire_host(host)
+            print(f"  {'✓' if changed else '–'} {host} hooks: {detail}")
+        else:
+            print(f"  – {host}: block-only (no native hook)")
     return 0
 
 
