@@ -485,7 +485,7 @@ def _cmd_export(args) -> int:
     try:
         res = exporter.export(db, vault_id=vault["id"], out_dir=args.out,
                               zip_path=args.zip_path, tag=args.tag, type_=args.type,
-                              visibility=args.visibility)
+                              visibility=args.visibility, force=args.force)
     except exporter.ExportError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -1028,6 +1028,7 @@ def build_parser() -> argparse.ArgumentParser:
     pexp.add_argument("--out", default=None)
     pexp.add_argument("--zip", dest="zip_path", default=None)
     pexp.add_argument("--vault", default=None)
+    pexp.add_argument("--force", action="store_true")
     pexp.set_defaults(func=_cmd_export)
 
     pnx = sub.add_parser("next", help="Recommend the next knowledge-lifecycle action(s).")

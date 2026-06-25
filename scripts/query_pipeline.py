@@ -28,7 +28,8 @@ def context(db_path: Path, *, vault_id: int, q: str, limit: int = 8,
         title = h.get("title") or slug
         body = ""
         abs_path = root / relpath
-        if abs_path.exists():
+        body_missing = not abs_path.exists()
+        if not body_missing:
             _meta, body = frontmatter.parse(abs_path.read_text(encoding="utf-8"))
         truncated = len(body) > body_cap
         if truncated:
@@ -36,6 +37,7 @@ def context(db_path: Path, *, vault_id: int, q: str, limit: int = 8,
         out_hits.append({
             "slug": slug, "relpath": relpath, "title": title,
             "score": h.get("score", 0), "body": body, "truncated": truncated,
+            "body_missing": body_missing,
         })
         citations.append({"slug": slug, "title": title, "relpath": relpath})
     return {"query": q, "strategy": strat, "hits": out_hits, "citations": citations}

@@ -48,13 +48,20 @@ def _write_manifest(base: Path, exported: list[str], dangling: list[dict]) -> No
 
 
 def export(db_path: Path, *, vault_id: int, out_dir: str | None = None,
-           zip_path: str | None = None, tag=None, type_=None, visibility=None) -> dict:
+           zip_path: str | None = None, tag=None, type_=None, visibility=None,
+           force: bool = False) -> dict:
     if not out_dir and not zip_path:
         raise ExportError("provide out_dir or zip_path")
     root = registry.get_vault_root(db_path, vault_id).resolve()
     for p in (out_dir, zip_path):
         if p and (Path(p).resolve() == root or root in Path(p).resolve().parents):
             raise ExportError(f"refusing to write inside the vault root: {p}")
+
+    if out_dir:
+        odir = Path(out_dir)
+        if odir.exists() and any(odir.iterdir()) and not force:
+            raise ExportError(
+                f"out dir {out_dir} is not empty; pass force=True (--force) to merge into it")
 
     exported = _selected(db_path, vault_id=vault_id, tag=tag, type_=type_,
                          visibility=visibility)

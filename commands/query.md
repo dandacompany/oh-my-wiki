@@ -19,10 +19,12 @@ Active vault must exist.
    This returns a JSON bundle with keys:
    - `query` — the original query string
    - `strategy` — the retrieval strategy used (`fts`, `embedding`, `hybrid`, or `llm`)
-   - `hits` — list of `{slug, relpath, title, score, body, truncated}` objects
+   - `hits` — list of `{slug, relpath, title, score, body, truncated, body_missing}` objects
    - `citations` — list of `{slug, title, relpath}` objects (deduplicated manifest)
 
    A `truncated: true` hit means the page body was capped at 4 000 characters; narrow the query to retrieve the full relevant passage.
+
+   Skip any hit with `body_missing: true` when citing (its page is indexed but missing on disk).
 
 3. **Synthesize the answer.**
 

@@ -115,3 +115,20 @@ def test_export_zip(tmp_path, monkeypatch):
     with zipfile.ZipFile(zp) as z:
         names = z.namelist()
     assert "wiki/concepts/a.md" in names and "EXPORT_MANIFEST.md" in names
+
+
+def test_export_refuses_nonempty_dir_without_force(tmp_path, monkeypatch):
+    import pytest
+    from tests.conftest import make_vault_with_pages
+    from scripts import exporter
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "wiki/concepts/a.md": "---\ntitle: A\ntype: concept\ntags: [pub]\n---\n\n## Summary\n\na\n",
+    })
+    out = tmp_path / "slice"
+    out.mkdir()
+    (out / "stale.txt").write_text("old")
+    with pytest.raises(exporter.ExportError):
+        exporter.export(db, vault_id=vid, out_dir=str(out), tag="pub")
+    # force=True succeeds
+    res = exporter.export(db, vault_id=vid, out_dir=str(out), tag="pub", force=True)
+    assert res["status"] if "status" in res else res["out"]
