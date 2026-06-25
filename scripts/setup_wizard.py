@@ -136,6 +136,23 @@ def _run_interactive(name: str, mode: str, type_: str, location: str,
     return 0
 
 
+def _checkbox_spec(choices):
+    """Normalize checkbox choices (plain str or {"name","checked"}) into
+    (names, checked_names, has_checked_flag)."""
+    names, checked = [], []
+    has_flag = False
+    for c in choices or []:
+        if isinstance(c, dict):
+            names.append(c["name"])
+            if "checked" in c:
+                has_flag = True
+            if c.get("checked"):
+                checked.append(c["name"])
+        else:
+            names.append(c)
+    return names, checked, has_flag
+
+
 def _prompt(kind: str, message: str, *, choices=None, default=None):
     """questionary prompt with an input() fallback (used when questionary is absent).
 
@@ -154,15 +171,24 @@ def _prompt(kind: str, message: str, *, choices=None, default=None):
         if kind == "confirm":
             return questionary.confirm(message, default=bool(default)).ask()
         if kind == "checkbox":
-            return questionary.checkbox(message, choices=choices).ask()
+            names, checked, has_flag = _checkbox_spec(choices)
+            if has_flag:
+                qchoices = [questionary.Choice(n, checked=(n in checked)) for n in names]
+            else:
+                qchoices = names
+            return questionary.checkbox(message, choices=qchoices).ask()
         raise ValueError(f"unknown prompt kind: {kind!r}")
     except ImportError:
         if kind == "confirm":
             ans = input(f"{message} [{'Y/n' if default else 'y/N'}]: ").strip().lower()
             return bool(default) if not ans else ans in ("y", "yes")
         if kind == "checkbox":
-            raw = input(f"{message} (comma-separated, blank = all): ").strip()
-            return [s.strip() for s in raw.split(",") if s.strip()] if raw else list(choices or [])
+            names, checked, has_flag = _checkbox_spec(choices)
+            hint = "blank = keep checked" if has_flag else "blank = all"
+            raw = input(f"{message} (comma-separated, {hint}): ").strip()
+            if raw:
+                return [s.strip() for s in raw.split(",") if s.strip()]
+            return list(checked) if has_flag else list(names)
         if kind == "password":
             import getpass
             try:
