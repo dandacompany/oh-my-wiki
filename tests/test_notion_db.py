@@ -38,3 +38,17 @@ def test_child_database_rows_imported(tmp_path, monkeypatch):
     assert any(p.endswith("/row-one.md") for p in imported)
     assert any(p.endswith("/row-two.md") for p in imported)
     assert (root / "raw/import/notion/row-one.md").exists()
+
+
+def test_notion_import_cycle_terminates(tmp_path, monkeypatch):
+    from tests.conftest import make_vault_with_pages
+    from scripts import import_source
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"wiki/index.md": "# I\n"})
+    pages = {"A": {"properties": {"Name": {"type": "title", "title": [{"plain_text": "A"}]}}}}
+    # A's children contain a child_page pointing back to A (cycle)
+    children = {"A": [{"type": "child_page", "id": "A"}]}
+    monkeypatch.setattr(import_source, "_http_get", lambda url, *, headers=None: pages["A"])
+    monkeypatch.setattr(import_source, "_notion_children", lambda t, b: children.get(b, []))
+    res = import_source.import_notion(db, vault_id=vid, token="t", root_id="A")
+    # A imported exactly once despite the self-cycle
+    assert sum(1 for p in res["imported"] if p.endswith("/a.md")) == 1

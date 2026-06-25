@@ -56,3 +56,32 @@ def test_text_pdf_skips_ocr(tmp_path, monkeypatch):
     _rel, text = ingest.save_raw_pdf(db, vault_id=vid, pdf_bytes=b"%PDF",
                                      title="T", date_str="2026-06-24")
     assert text == "real text" and called["ocr"] is False
+
+
+def test_ocr_image_cap(monkeypatch):
+    from scripts import ingest
+    calls = {"n": 0}
+
+    class _Img:
+        data = b"x"
+
+    class _Page:
+        images = [_Img() for _ in range(60)]
+
+    class _Reader:
+        def __init__(self, *a, **k): self.pages = [_Page()]
+    monkeypatch.setattr(ingest, "PdfReader", _Reader, raising=False)
+
+    import sys
+    import types
+    fake_pt = types.ModuleType("pytesseract")
+    fake_pt.image_to_string = lambda im: (calls.__setitem__("n", calls["n"] + 1) or "x")
+    fake_pil = types.ModuleType("PIL")
+    fake_image = types.ModuleType("PIL.Image")
+    fake_image.open = lambda b: object()
+    fake_pil.Image = fake_image
+    monkeypatch.setitem(sys.modules, "pytesseract", fake_pt)
+    monkeypatch.setitem(sys.modules, "PIL", fake_pil)
+    monkeypatch.setitem(sys.modules, "PIL.Image", fake_image)
+    ingest._ocr_pdf(b"%PDF")
+    assert calls["n"] == ingest._OCR_MAX_IMAGES

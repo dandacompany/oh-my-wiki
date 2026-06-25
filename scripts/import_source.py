@@ -169,10 +169,14 @@ def import_notion(db_path: Path, *, vault_id: int, token: str, root_id: str,
     root = registry.get_vault_root(db_path, vault_id)
     today = datetime.date.today().isoformat()
     imported = []
+    seen: set = set()
 
     def _import_page(page_id, _depth=0):
         if _depth > 20:
             return  # safety: deep/cyclic page tree
+        if page_id in seen:
+            return
+        seen.add(page_id)
         page = _http_get(f"{_NOTION_BASE}/pages/{page_id}", headers=_notion_headers(token))
         title = _notion_page_title(page)
         blocks = _notion_children(token, page_id)
@@ -194,6 +198,9 @@ def import_notion(db_path: Path, *, vault_id: int, token: str, root_id: str,
     def _import_database(db_id, _depth=0):
         if _depth > 20:
             return
+        if db_id in seen:
+            return
+        seen.add(db_id)
         cursor = None
         while True:
             body = {"page_size": 100}

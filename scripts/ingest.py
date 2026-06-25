@@ -8,6 +8,8 @@ from pypdf import PdfReader
 
 from scripts import frontmatter, registry, slugify
 
+_OCR_MAX_IMAGES = 50
+
 
 def _ocr_pdf(pdf_bytes: bytes) -> str:
     """OCR a scanned PDF's embedded page images via the optional `ocr` extra.
@@ -18,14 +20,20 @@ def _ocr_pdf(pdf_bytes: bytes) -> str:
     except ImportError:
         return ""
     parts = []
+    n = 0
     try:
         reader = PdfReader(BytesIO(pdf_bytes))
         for page in reader.pages:
             for img in getattr(page, "images", []) or []:
+                if n >= _OCR_MAX_IMAGES:
+                    break
+                n += 1
                 try:
                     parts.append(pytesseract.image_to_string(Image.open(BytesIO(img.data))))
                 except Exception:
                     continue
+            if n >= _OCR_MAX_IMAGES:
+                break
     except Exception:
         return ""
     return "\n\n".join(p for p in parts if p).strip()
