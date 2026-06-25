@@ -239,3 +239,22 @@ def test_lint_surfaces_schema_load_errors(tmp_path, monkeypatch):
     assert "schema_load_errors" in report
     paths = [e["path"] for e in report["schema_load_errors"]]
     assert any("broken.yml" in p for p in paths)
+
+
+# ---------------------------------------------------------------------------
+# Task 3 (proposed sidecar skip): lint must not surface .proposed.md files
+# ---------------------------------------------------------------------------
+
+def test_lint_skips_proposed_sidecars(tmp_path, monkeypatch):
+    from tests.conftest import make_vault_with_pages
+    from scripts import lint, merge
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "wiki/concepts/a.md": "---\ntitle: A\ntype: concept\n---\n\n## Summary\n\na\n",
+        "wiki/concepts/b.md": "---\ntitle: B\ntype: concept\n---\n\n## Summary\n\nb\n",
+    })
+    merge.stage(db, vault_id=vid, source_relpath="wiki/concepts/a.md",
+                target_relpath="wiki/concepts/b.md")
+    report = lint.check(db, vault_id=vid)
+    import json
+    blob = json.dumps(report)
+    assert ".proposed" not in blob
