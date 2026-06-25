@@ -53,7 +53,7 @@ def rename(db_path: Path, old: str, new: str) -> dict:
 def move(db_path: Path, name: str, new_path: str) -> dict:
     row = _require(db_path, name)
     src = Path(row["path"])
-    dst = Path(new_path).expanduser()
+    dst = Path(new_path).expanduser().resolve()
     if dst.exists():
         raise registry.VaultError(f"target path already exists: {dst}")
     # Update the registry first so a fs failure can't orphan a moved folder

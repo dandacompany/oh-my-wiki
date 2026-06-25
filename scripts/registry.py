@@ -253,6 +253,8 @@ def update_mode_config(db_path: Path, name: str, *,
             sets.append("mode = ?"); params.append(mode)
         if config_json is not None:
             sets.append("config_json = ?"); params.append(config_json)
+        if not sets:
+            raise VaultError("nothing to update")
         params.append(row["id"])
         with conn:
             conn.execute(f"UPDATE vaults SET {', '.join(sets)} WHERE id = ?", params)

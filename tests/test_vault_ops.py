@@ -62,9 +62,6 @@ def test_migration_adds_archived_at_to_v2_db(tmp_path):
     assert row["archived_at"] is None
 
 
-# --- Task 2 tests ---
-
-
 def test_info_returns_card_with_layer_counts(tmp_path):
     db = _fresh_db(tmp_path)
     vault = registry.add_vault(db, name="v1", path=tmp_path / "v1",
@@ -115,9 +112,6 @@ def test_cli_vault_info_outputs_json(tmp_path, monkeypatch, capsys):
     assert out["name"] == "v1"
 
 
-# --- Task 3 tests ---
-
-
 def test_rename_changes_name_preserving_id(tmp_path):
     db = _fresh_db(tmp_path)
     v = registry.add_vault(db, name="old", path=tmp_path / "old",
@@ -142,9 +136,6 @@ def test_rename_unknown_rejected(tmp_path):
     db = _fresh_db(tmp_path)
     with pytest.raises(registry.VaultError):
         vault_ops.rename(db, "ghost", "x")
-
-
-# --- Task 4 tests ---
 
 
 def test_move_relocates_folder_and_updates_path(tmp_path):
@@ -175,8 +166,6 @@ def test_move_to_occupied_target_rejected(tmp_path):
     assert Path(registry.get_vault_by_name(db, "v1")["path"]) == src.resolve()
 
 
-# --- Task 5 tests ---
-
 VALID_MODES = {"memo", "wiki", "personal", "book", "business",
                "github-codebase", "website"}
 
@@ -203,8 +192,7 @@ def test_set_merges_config_pairs(tmp_path):
     registry.add_vault(db, name="v1", path=tmp_path / "v1",
                        type_="markdown", mode="wiki")
     vault_ops.set_(db, "v1", config_pairs=["theme=dark", "limit=5"])
-    import json
-    cfg = json.loads(registry.get_vault_by_name(db, "v1")["config_json"])
+    cfg = _json.loads(registry.get_vault_by_name(db, "v1")["config_json"])
     assert cfg == {"theme": "dark", "limit": "5"}
 
 
@@ -214,9 +202,6 @@ def test_set_requires_at_least_one_field(tmp_path):
                        type_="markdown", mode="wiki")
     with pytest.raises(registry.VaultError):
         vault_ops.set_(db, "v1")
-
-
-# --- Task 6 tests ---
 
 
 def test_archive_hides_from_default_list_and_clears_active(tmp_path):
@@ -247,9 +232,6 @@ def test_archive_is_idempotent(tmp_path):
     vault_ops.archive(db, "v1")
     vault_ops.archive(db, "v1")  # no raise
     assert registry.get_vault_by_name(db, "v1")["archived_at"] is not None
-
-
-# --- Task 7 tests ---
 
 
 def test_delete_soft_moves_to_trash_and_forgets(tmp_path, monkeypatch):
@@ -296,3 +278,94 @@ def test_delete_hard_with_yes_removes_folder(tmp_path, monkeypatch):
     vault_ops.delete(db, "v1", hard=True, yes=True, now_ts="x")
     assert not src.exists()
     assert registry.get_vault_by_name(db, "v1") is None
+
+
+def test_update_mode_config_empty_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path))
+    from scripts.paths import registry_path
+    db = registry_path()
+    registry.init_db(db)
+    registry.add_vault(db, name="v1", path=tmp_path / "v1", type_="markdown", mode="wiki")
+    with pytest.raises(registry.VaultError):
+        registry.update_mode_config(db, "v1")
+
+
+def test_cli_vault_rename(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path))
+    from scripts.paths import registry_path
+    db = registry_path()
+    registry.init_db(db)
+    registry.add_vault(db, name="a", path=tmp_path / "a", type_="markdown", mode="wiki")
+    ret = omw_cli.main(["vault", "rename", "a", "b"])
+    assert ret == 0
+    assert registry.get_vault_by_name(db, "b") is not None
+    assert registry.get_vault_by_name(db, "a") is None
+
+
+def test_cli_vault_move(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path))
+    src = tmp_path / "src_vault"
+    src.mkdir()
+    (src / ".oh-my-wiki").mkdir()
+    from scripts.paths import registry_path
+    db = registry_path()
+    registry.init_db(db)
+    registry.add_vault(db, name="v1", path=src, type_="markdown", mode="wiki")
+    new_dst = tmp_path / "dst_vault"
+    ret = omw_cli.main(["vault", "move", "v1", str(new_dst)])
+    assert ret == 0
+    row = registry.get_vault_by_name(db, "v1")
+    assert row is not None
+    assert Path(row["path"]).resolve() == new_dst.resolve()
+    assert new_dst.exists()
+
+
+def test_cli_vault_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path))
+    from scripts.paths import registry_path
+    db = registry_path()
+    registry.init_db(db)
+    registry.add_vault(db, name="v1", path=tmp_path / "v1", type_="markdown", mode="wiki")
+    ret = omw_cli.main(["vault", "set", "v1", "--mode", "memo"])
+    assert ret == 0
+    row = registry.get_vault_by_name(db, "v1")
+    assert row["mode"] == "memo"
+
+
+def test_cli_vault_archive_and_list(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path))
+    from scripts.paths import registry_path
+    db = registry_path()
+    registry.init_db(db)
+    registry.add_vault(db, name="v1", path=tmp_path / "v1", type_="markdown", mode="wiki")
+    ret = omw_cli.main(["vault", "archive", "v1"])
+    assert ret == 0
+    capsys.readouterr()
+    omw_cli.main(["vault", "list"])
+    out = capsys.readouterr().out
+    data = _json.loads(out)
+    names = [v["name"] for v in data]
+    assert "v1" not in names
+    capsys.readouterr()
+    omw_cli.main(["vault", "list", "--all"])
+    out2 = capsys.readouterr().out
+    data2 = _json.loads(out2)
+    names2 = [v["name"] for v in data2]
+    assert "v1" in names2
+
+
+def test_cli_vault_delete_soft(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path))
+    src = tmp_path / "v1_folder"
+    src.mkdir()
+    from scripts.paths import registry_path
+    db = registry_path()
+    registry.init_db(db)
+    registry.add_vault(db, name="v1", path=src, type_="markdown", mode="wiki")
+    ret = omw_cli.main(["vault", "delete", "v1"])
+    assert ret == 0
+    assert registry.get_vault_by_name(db, "v1") is None
+    trash_dir = tmp_path / ".trash"
+    assert trash_dir.exists()
+    trashed = list(trash_dir.iterdir())
+    assert len(trashed) >= 1
