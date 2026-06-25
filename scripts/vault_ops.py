@@ -10,6 +10,7 @@ import sqlite3
 from pathlib import Path
 
 from scripts import registry
+from scripts.paths import omw_home
 
 _VALID_MODES = {"memo", "wiki", "personal", "book", "business",
                 "github-codebase", "website"}
@@ -98,3 +99,24 @@ def set_(db_path: Path, name: str, *, mode: str | None = None,
     updated = registry.update_mode_config(db_path, name, mode=mode,
                                           config_json=config_json)
     return {"set": name, "mode": updated["mode"]}
+
+
+def delete(db_path: Path, name: str, *, hard: bool, yes: bool, now_ts: str) -> dict:
+    row = _require(db_path, name)
+    if hard and not yes:
+        raise registry.VaultError(
+            "refusing hard delete without --yes (this is irreversible)")
+    src = Path(row["path"])
+    if hard:
+        if src.exists():
+            shutil.rmtree(src)
+        registry.forget_vault(db_path, name)
+        return {"deleted": name, "mode": "hard"}
+    # soft: move folder into the trash dir, then forget
+    trash_dir = omw_home() / ".trash"
+    trash_dir.mkdir(parents=True, exist_ok=True)
+    dest = trash_dir / f"{now_ts}-{name}"
+    if src.exists():
+        shutil.move(str(src), str(dest))
+    registry.forget_vault(db_path, name)
+    return {"deleted": name, "mode": "soft", "trash": str(dest)}

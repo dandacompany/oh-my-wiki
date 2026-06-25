@@ -247,3 +247,52 @@ def test_archive_is_idempotent(tmp_path):
     vault_ops.archive(db, "v1")
     vault_ops.archive(db, "v1")  # no raise
     assert registry.get_vault_by_name(db, "v1")["archived_at"] is not None
+
+
+# --- Task 7 tests ---
+
+
+def test_delete_soft_moves_to_trash_and_forgets(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / "home"))
+    from scripts.paths import registry_path, omw_home
+    db = registry_path()
+    registry.init_db(db)
+    src = tmp_path / "v1"
+    src.mkdir()
+    (src / "keep.md").write_text("data")
+    registry.add_vault(db, name="v1", path=src, type_="markdown", mode="wiki")
+    out = vault_ops.delete(db, "v1", hard=False, yes=False, now_ts="20260625-000000")
+    assert registry.get_vault_by_name(db, "v1") is None
+    assert not src.exists()
+    trash = omw_home() / ".trash" / "20260625-000000-v1"
+    assert (trash / "keep.md").read_text() == "data"
+    assert out["trash"].endswith("20260625-000000-v1")
+
+
+def test_delete_hard_without_yes_refused(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / "home"))
+    from scripts.paths import registry_path
+    db = registry_path()
+    registry.init_db(db)
+    src = tmp_path / "v1"
+    src.mkdir()
+    registry.add_vault(db, name="v1", path=src, type_="markdown", mode="wiki")
+    with pytest.raises(registry.VaultError):
+        vault_ops.delete(db, "v1", hard=True, yes=False, now_ts="x")
+    # nothing removed, still registered
+    assert src.exists()
+    assert registry.get_vault_by_name(db, "v1") is not None
+
+
+def test_delete_hard_with_yes_removes_folder(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / "home"))
+    from scripts.paths import registry_path
+    db = registry_path()
+    registry.init_db(db)
+    src = tmp_path / "v1"
+    src.mkdir()
+    (src / "x.md").write_text("data")
+    registry.add_vault(db, name="v1", path=src, type_="markdown", mode="wiki")
+    vault_ops.delete(db, "v1", hard=True, yes=True, now_ts="x")
+    assert not src.exists()
+    assert registry.get_vault_by_name(db, "v1") is None

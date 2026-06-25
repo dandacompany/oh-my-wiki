@@ -181,6 +181,23 @@ def _cmd_vault_set(args) -> int:
     return 0
 
 
+def _cmd_vault_delete(args) -> int:
+    from datetime import datetime, timezone
+    db = registry_path()
+    now_ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    try:
+        out = vault_ops.delete(db, args.name, hard=args.hard, yes=args.yes,
+                               now_ts=now_ts)
+    except registry.VaultError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    if out["mode"] == "soft":
+        print(f"deleted (soft): moved to {out['trash']}")
+    else:
+        print(f"deleted (hard): {args.name}")
+    return 0
+
+
 def _cmd_lint(args) -> int:
     db = registry_path()
     row = _require_vault_row(db, args.vault)
@@ -985,6 +1002,15 @@ def build_parser() -> argparse.ArgumentParser:
     pset.add_argument("--config", action="append", metavar="k=v",
                       help="Set a config key (repeatable).")
     pset.set_defaults(func=_cmd_vault_set)
+
+    pdel = vsub.add_parser("delete",
+                           help="Delete a vault: soft (to trash) by default; --hard --yes to purge.")
+    pdel.add_argument("name")
+    pdel.add_argument("--hard", action="store_true",
+                      help="Permanently remove the folder (requires --yes).")
+    pdel.add_argument("--yes", action="store_true",
+                      help="Confirm an irreversible --hard delete.")
+    pdel.set_defaults(func=_cmd_vault_delete)
 
     pl = sub.add_parser("lint", help="Run deterministic lint over a vault.")
     pl.add_argument("--vault", default=None, help="vault name (default: active)")
