@@ -519,6 +519,35 @@ def setup_viewer(*, viewer: str | None = None, vault: str | None = None,
     return 0
 
 
+def _install_hermes_profiles(interactive: bool) -> list[dict]:
+    """Install/refresh OMW into selected hermes profiles. Interactive shows a
+    profile checkbox (already-installed pre-checked); noninteractive refreshes the
+    already-installed profiles (main fallback when none)."""
+    from scripts import agent_skills
+    targets = agent_skills.hermes_profile_targets()
+    by_name = {t["name"]: t for t in targets}
+    installed = [t["name"] for t in targets if t["installed"]]
+
+    if interactive and len(targets) > 1:
+        default_checked = installed or [t["name"] for t in targets]
+        choices = [{"name": t["name"], "checked": t["name"] in default_checked} for t in targets]
+        picked = _prompt("checkbox", "Install OMW skill into which hermes profiles?",
+                         choices=choices)
+        chosen = picked if picked is not None else default_checked
+    else:
+        chosen = installed or ["main"]
+
+    results = []
+    for name in chosen:
+        t = by_name.get(name)
+        if t is None:
+            continue
+        r = agent_skills.install_into_dir(t["skills_dir"])
+        r = {"agent": "hermes", "name": name, **r}
+        results.append(r)
+    return results
+
+
 def setup_agents(*, agents: list[str] | None = None, noninteractive: bool = False) -> int:
     """Install the OMW skill into selected agents' skill systems."""
     from scripts import agent_skills
@@ -541,11 +570,16 @@ def setup_agents(*, agents: list[str] | None = None, noninteractive: bool = Fals
     if not targets:
         print("agents setup skipped — no selected agent is installed.")
         return 0
-    results = agent_skills.install_many(targets)
+    hermes_selected = "hermes" in targets
+    non_hermes = [a for a in targets if a != "hermes"]
+    results = agent_skills.install_many(non_hermes) if non_hermes else []
+    if hermes_selected:
+        results = results + _install_hermes_profiles(interactive)
     for r in results:
         mark = "✓" if r.get("ok") else "✗"
         detail = f" ({r['detail']})" if r.get("detail") else ""
-        print(f"  {mark} {r['agent']} [{r.get('method') or '—'}]{detail}")
+        label = r["agent"] + (f"/{r['name']}" if r.get("name") else "")
+        print(f"  {mark} {label} [{r.get('method') or '—'}]{detail}")
         if r.get("dest"):
             print(f"      → {r['dest']}")
     if any(r.get("method") == "skills-cli" and (r.get("dest") or "").find(".agents/skills") >= 0

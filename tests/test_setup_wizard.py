@@ -270,9 +270,16 @@ def test_setup_agents_noninteractive_installs_detected(monkeypatch, capsys):
     monkeypatch.setattr(ask, "install_many",
                         lambda agents, **k: seen.update({"agents": agents}) or
                         [{"agent": a, "ok": True, "method": "copy"} for a in agents])
+    # hermes is now routed through _install_hermes_profiles (per-profile), not install_many;
+    # mock hermes_profile_targets so the test stays hermetic.
+    monkeypatch.setattr(ask, "hermes_profile_targets",
+                        lambda hermes_home=None: [{"name": "main", "skills_dir": None, "installed": True}])
+    monkeypatch.setattr(ask, "install_into_dir",
+                        lambda skills_dir, **k: {"ok": True, "method": "copy", "dest": "/fake/path", "detail": None})
     rc = sw.setup_agents(agents=["codex", "hermes"], noninteractive=True)
     assert rc == 0
-    assert seen["agents"] == ["codex", "hermes"]
+    # hermes is now handled by _install_hermes_profiles; only non-hermes agents go to install_many
+    assert seen["agents"] == ["codex"]
     out = capsys.readouterr().out
     assert "codex" in out and "hermes" in out
 
