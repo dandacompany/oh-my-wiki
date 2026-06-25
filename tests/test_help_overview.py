@@ -13,8 +13,12 @@ def test_render_lists_every_op_under_a_phase():
     assert "[CLI]" in text and "[skill]" in text
 
 
-def test_every_op_has_a_phase():
+def test_every_op_has_an_explicit_phase():
+    # Assert explicit _PHASE membership, not just non-None: the `.get(name, "meta")`
+    # fallback would otherwise make `op.phase` always truthy, letting a new op silently
+    # land in "meta". This forces a deliberate phase choice for every registered op.
     for op in reg.OPS:
+        assert op.name in reg._PHASE, f"{op.name} missing from ops_registry._PHASE map"
         assert op.phase is not None, f"{op.name} has no phase"
 
 
