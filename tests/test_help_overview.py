@@ -20,3 +20,16 @@ def test_every_op_has_a_phase():
 
 def test_help_registered_deterministic():
     assert reg.get("help") is not None and reg.get("help").kind == "deterministic"
+
+
+def test_omw_help_command_emits_grouped_overview(capsys):
+    from scripts import omw_cli
+    rc = omw_cli.main(["help"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    # the grouped overview (not argparse usage) is shown
+    assert "commands by lifecycle phase" in out
+    assert "Capture — bring sources in" in out
+    assert "[CLI]" in out and "[skill]" in out
+    # NOT the flat argparse usage line
+    assert "usage: omw [-h]" not in out

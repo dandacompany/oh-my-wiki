@@ -1171,11 +1171,17 @@ def main(argv: list[str] | None = None) -> int:
     try:
         argv = list(sys.argv[1:] if argv is None else argv)
         parser = build_parser()
-        if not argv or argv[0] in ("-h", "--help", "help"):
+        if not argv or argv[0] in ("-h", "--help"):
             from scripts import banner
             banner.render(animate=False)   # static, self-gated for TTY/NO_COLOR/CI
             parser.print_help()
             sys.stdout.flush()  # surface a broken pipe here (block-buffered stdout)
+            return 0
+        if argv[0] == "help":
+            from scripts import banner, help_overview
+            banner.render(animate=False)
+            print(help_overview.render())  # guided lifecycle-grouped overview
+            sys.stdout.flush()
             return 0
         args = parser.parse_args(argv)
         rc = args.func(args)
