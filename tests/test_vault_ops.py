@@ -173,3 +173,44 @@ def test_move_to_occupied_target_rejected(tmp_path):
     # row unchanged, source intact
     assert src.exists()
     assert Path(registry.get_vault_by_name(db, "v1")["path"]) == src.resolve()
+
+
+# --- Task 5 tests ---
+
+VALID_MODES = {"memo", "wiki", "personal", "book", "business",
+               "github-codebase", "website"}
+
+
+def test_set_updates_mode(tmp_path):
+    db = _fresh_db(tmp_path)
+    registry.add_vault(db, name="v1", path=tmp_path / "v1",
+                       type_="markdown", mode="wiki")
+    vault_ops.set_(db, "v1", mode="memo")
+    assert registry.get_vault_by_name(db, "v1")["mode"] == "memo"
+
+
+def test_set_invalid_mode_rejected(tmp_path):
+    db = _fresh_db(tmp_path)
+    registry.add_vault(db, name="v1", path=tmp_path / "v1",
+                       type_="markdown", mode="wiki")
+    with pytest.raises(registry.VaultError):
+        vault_ops.set_(db, "v1", mode="nonsense")
+    assert registry.get_vault_by_name(db, "v1")["mode"] == "wiki"
+
+
+def test_set_merges_config_pairs(tmp_path):
+    db = _fresh_db(tmp_path)
+    registry.add_vault(db, name="v1", path=tmp_path / "v1",
+                       type_="markdown", mode="wiki")
+    vault_ops.set_(db, "v1", config_pairs=["theme=dark", "limit=5"])
+    import json
+    cfg = json.loads(registry.get_vault_by_name(db, "v1")["config_json"])
+    assert cfg == {"theme": "dark", "limit": "5"}
+
+
+def test_set_requires_at_least_one_field(tmp_path):
+    db = _fresh_db(tmp_path)
+    registry.add_vault(db, name="v1", path=tmp_path / "v1",
+                       type_="markdown", mode="wiki")
+    with pytest.raises(registry.VaultError):
+        vault_ops.set_(db, "v1")

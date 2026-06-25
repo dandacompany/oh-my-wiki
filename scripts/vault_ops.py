@@ -4,11 +4,15 @@ registry.VaultError on invalid operations. The registry module owns vaults-table
 row mutations; this module owns filesystem + presentation."""
 from __future__ import annotations
 
+import json
 import shutil
 import sqlite3
 from pathlib import Path
 
 from scripts import registry
+
+_VALID_MODES = {"memo", "wiki", "personal", "book", "business",
+                "github-codebase", "website"}
 
 
 def _require(db_path: Path, name: str) -> sqlite3.Row:
@@ -60,3 +64,25 @@ def move(db_path: Path, name: str, new_path: str) -> dict:
         registry.update_path(db_path, name, src)
         raise registry.VaultError(f"move failed: {exc}") from exc
     return {"moved": name, "from": str(src), "to": str(dst.resolve())}
+
+
+def set_(db_path: Path, name: str, *, mode: str | None = None,
+         config_pairs: list[str] | None = None) -> dict:
+    row = _require(db_path, name)
+    if mode is None and not config_pairs:
+        raise registry.VaultError("nothing to set: pass --mode and/or --config k=v")
+    if mode is not None and mode not in _VALID_MODES:
+        raise registry.VaultError(
+            f"invalid mode {mode!r}; choose one of {sorted(_VALID_MODES)}")
+    config_json = None
+    if config_pairs:
+        existing = json.loads(row["config_json"]) if row["config_json"] else {}
+        for pair in config_pairs:
+            if "=" not in pair:
+                raise registry.VaultError(f"bad --config {pair!r}; expected k=v")
+            k, v = pair.split("=", 1)
+            existing[k] = v
+        config_json = json.dumps(existing, ensure_ascii=False)
+    updated = registry.update_mode_config(db_path, name, mode=mode,
+                                          config_json=config_json)
+    return {"set": name, "mode": updated["mode"]}

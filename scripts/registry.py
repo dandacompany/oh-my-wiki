@@ -218,6 +218,27 @@ def update_path(db_path: Path, name: str, new_path: Path) -> sqlite3.Row:
         conn.close()
 
 
+def update_mode_config(db_path: Path, name: str, *,
+                       mode: str | None = None,
+                       config_json: str | None = None) -> sqlite3.Row:
+    conn = connect(db_path)
+    try:
+        row = conn.execute("SELECT id FROM vaults WHERE name = ?", (name,)).fetchone()
+        if not row:
+            raise VaultError(f"vault {name!r} not found")
+        sets, params = [], []
+        if mode is not None:
+            sets.append("mode = ?"); params.append(mode)
+        if config_json is not None:
+            sets.append("config_json = ?"); params.append(config_json)
+        params.append(row["id"])
+        with conn:
+            conn.execute(f"UPDATE vaults SET {', '.join(sets)} WHERE id = ?", params)
+        return conn.execute("SELECT * FROM vaults WHERE id = ?", (row["id"],)).fetchone()
+    finally:
+        conn.close()
+
+
 def upsert_note(
     db_path: Path,
     *,

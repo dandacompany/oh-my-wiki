@@ -148,6 +148,17 @@ def _cmd_vault_move(args) -> int:
     return 0
 
 
+def _cmd_vault_set(args) -> int:
+    db = registry_path()
+    try:
+        vault_ops.set_(db, args.name, mode=args.mode, config_pairs=args.config)
+    except registry.VaultError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"updated: {args.name}")
+    return 0
+
+
 def _cmd_lint(args) -> int:
     db = registry_path()
     row = _require_vault_row(db, args.vault)
@@ -934,6 +945,13 @@ def build_parser() -> argparse.ArgumentParser:
     pmv.add_argument("name")
     pmv.add_argument("new_path", metavar="new-path")
     pmv.set_defaults(func=_cmd_vault_move)
+
+    pset = vsub.add_parser("set", help="Edit a vault's mode and/or config (k=v).")
+    pset.add_argument("name")
+    pset.add_argument("--mode", help="New mode (memo|wiki|personal|book|business|github-codebase|website).")
+    pset.add_argument("--config", action="append", metavar="k=v",
+                      help="Set a config key (repeatable).")
+    pset.set_defaults(func=_cmd_vault_set)
 
     pl = sub.add_parser("lint", help="Run deterministic lint over a vault.")
     pl.add_argument("--vault", default=None, help="vault name (default: active)")
