@@ -185,6 +185,8 @@ def _prompt(kind: str, message: str, *, choices=None, default=None):
 
 #: provider -> ordered list of (field, env var) the wizard must write.
 #: Multi-secret providers (e.g. brightdata) are only enabled once ALL are present.
+#: Order matters: brightdata's "zone" resolution reads the already-resolved "api_key"
+#: from `supplied`, so "api_key" MUST precede "zone" here.
 _PROVIDER_SECRETS = {
     "brave":      [("api_key", "BRAVE_API_KEY")],
     "tavily":     [("api_key", "TAVILY_API_KEY")],
@@ -194,8 +196,62 @@ _PROVIDER_SECRETS = {
 }
 
 
+def _resolve_brightdata_zone(api_key: str, *, zone: str | None, interactive: bool,
+                             create_zone: bool) -> str | None:
+    """Find or create a usable Bright Data zone for the given key.
+
+    Override: an explicit `zone` is used verbatim (no API call). Otherwise list the
+    account's zones and prefer a SERP-capable one (so search works); fall back to an
+    unblocker zone (scrape works, SERP may not — warn); if none exist, create one only
+    when allowed (`--create-zone`, or an interactive confirm — creation may incur charges).
+    Returns the chosen/created zone name, or None to defer. Never raises.
+    """
+    if zone:
+        return zone
+    from scripts.search.providers import brightdata
+    try:
+        zones = brightdata.list_zones(api_key)
+    except Exception as exc:  # base.SearchError or any HTTP/network failure
+        print(f"  could not list Bright Data zones ({exc}); set one later with "
+              f"`omw setup search --provider brightdata --api-key <key> --zone <name>`.")
+        return None
+    serp = [z["name"] for z in zones
+            if isinstance(z, dict) and z.get("type") == "serp" and z.get("name")]
+    unblocker = [z["name"] for z in zones
+                 if isinstance(z, dict) and z.get("type") == "unblocker" and z.get("name")]
+    if serp:
+        if interactive and len(serp) > 1:
+            return _prompt("select", "Bright Data SERP zone", choices=serp) or serp[0]
+        print(f"  using Bright Data SERP zone '{serp[0]}'.")
+        return serp[0]
+    if unblocker:
+        # A non-SERP unblocker zone serves scrape but NOT `omw search`. Don't enable a
+        # config we predict won't work — defer and nudge toward creating a SERP zone.
+        print(f"  found only a non-SERP Bright Data zone ('{unblocker[0]}'); web search needs a "
+              f"SERP-enabled zone. Re-run with --create-zone (may incur charges) or pass "
+              f"--zone <serp-zone> to use an existing one.")
+        return None
+    # No usable zone — create only with explicit opt-in.
+    do_create = create_zone
+    if interactive and not do_create:
+        do_create = _prompt("confirm",
+                            f"No usable Bright Data zone found. Create "
+                            f"'{brightdata.DEFAULT_ZONE_NAME}' now? (may incur charges)")
+    if not do_create:
+        return None
+    try:
+        name = brightdata.create_zone(api_key)
+        print(f"  created Bright Data zone '{name}'.")
+        return name
+    except Exception as exc:
+        print(f"  could not create a Bright Data zone ({exc}); the API key may lack the "
+              f"Admin/Ops role. Create a zone in the dashboard and pass --zone <name>.")
+        return None
+
+
 def setup_search(*, noninteractive: bool = False, provider: str | None = None,
-                 api_key: str | None = None, zone: str | None = None) -> int:
+                 api_key: str | None = None, zone: str | None = None,
+                 create_zone: bool = False) -> int:
     from scripts import config
     interactive = (not noninteractive) and sys.stdin.isatty()
     if interactive:
@@ -216,10 +272,16 @@ def setup_search(*, noninteractive: bool = False, provider: str | None = None,
     all_present = True
     for field, env_var in _PROVIDER_SECRETS[provider]:
         val = supplied.get(field)
-        if interactive and not val:
+        # brightdata's zone is resolved via the Account Management API, not a plain prompt.
+        if provider == "brightdata" and field == "zone":
+            key = supplied.get("api_key")
+            val = _resolve_brightdata_zone(key, zone=val, interactive=interactive,
+                                           create_zone=create_zone) if key else None
+        elif interactive and not val:
             val = _prompt("password", f"{field} (blank to defer)") or None
         if val:
             config.set_secret(env_var, val)
+            supplied[field] = val  # later fields (zone) read the resolved api_key
         else:
             all_present = False
     config.set_config("search.provider", provider)

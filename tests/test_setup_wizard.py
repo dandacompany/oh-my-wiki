@@ -53,15 +53,32 @@ def test_setup_search_defer_records_disabled(monkeypatch):
     assert cfg["search"]["provider"] == "tavily" and cfg["search"]["enabled"] is False
 
 
-def test_setup_search_brightdata_needs_key_and_zone(monkeypatch):
+def test_setup_search_brightdata_manual_zone_overrides(monkeypatch):
+    """An explicit --zone is written verbatim and skips zone auto-detection."""
     from scripts import config, omw_cli
+    from scripts.search.providers import brightdata
     monkeypatch.delenv("BRIGHTDATA_API_KEY", raising=False)
     monkeypatch.delenv("BRIGHTDATA_ZONE", raising=False)
-    omw_cli.main(["setup", "search", "--noninteractive", "--provider", "brightdata", "--api-key", "K"])
-    assert config.load_config()["search"]["enabled"] is False   # zone 없음
-    omw_cli.main(["setup", "search", "--noninteractive", "--provider", "brightdata", "--api-key", "K", "--zone", "Z"])
+    # Detection must NOT be consulted when --zone is given.
+    monkeypatch.setattr(brightdata, "list_zones",
+                        lambda key: (_ for _ in ()).throw(AssertionError("should not list")))
+    omw_cli.main(["setup", "search", "--noninteractive", "--provider", "brightdata",
+                  "--api-key", "K", "--zone", "Z"])
     assert config.load_config()["search"]["enabled"] is True
-    assert config.read_secret("BRIGHTDATA_API_KEY") == "K" and config.read_secret("BRIGHTDATA_ZONE") == "Z"
+    assert config.read_secret("BRIGHTDATA_API_KEY") == "K"
+    assert config.read_secret("BRIGHTDATA_ZONE") == "Z"
+
+
+def test_setup_search_brightdata_autodetects_zone_from_key(monkeypatch):
+    """Key-only setup resolves a zone via the Account Management API (no --zone needed)."""
+    from scripts import config, omw_cli
+    from scripts.search.providers import brightdata
+    monkeypatch.delenv("BRIGHTDATA_ZONE", raising=False)
+    monkeypatch.setattr(brightdata, "list_zones",
+                        lambda key: [{"name": "auto_serp", "type": "serp"}])
+    omw_cli.main(["setup", "search", "--noninteractive", "--provider", "brightdata", "--api-key", "K"])
+    assert config.load_config()["search"]["enabled"] is True
+    assert config.read_secret("BRIGHTDATA_ZONE") == "auto_serp"
 
 
 def test_vault_setup_preserves_search_config(monkeypatch):

@@ -753,6 +753,7 @@ def _cmd_setup(args) -> int:
             provider=args.provider,
             api_key=args.api_key,
             zone=args.zone,
+            create_zone=args.create_zone,
         )
     if args.section == "import":
         return setup_wizard.setup_import(
@@ -1250,6 +1251,9 @@ def build_parser() -> argparse.ArgumentParser:
     pset.add_argument("--provider", default=None)
     pset.add_argument("--api-key", dest="api_key", default=None)
     pset.add_argument("--zone", default=None)
+    pset.add_argument("--create-zone", dest="create_zone", action="store_true",
+                      help="for `omw setup search --provider brightdata`: auto-create a "
+                           "Bright Data zone if the account has none (may incur charges)")
     pset.add_argument("--token", default=None)
     pset.add_argument("--generate-token", dest="generate_token", action="store_true")
     pset.add_argument("--enable", default=None, help="comma-separated persona names")
