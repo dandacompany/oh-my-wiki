@@ -44,12 +44,22 @@ def resolve_provider(name: str | None = None) -> Provider:
 
 
 def resolve_scrape_provider(name: str | None = None) -> Provider:
-    """Resolve a provider that supports scrape(url). Raises SearchError if the
-    configured provider lacks scrape() or no key is set."""
+    """Resolve a provider that supports scrape(url) — i.e. the cloud page-unlock /
+    browser provider, which is independent of the search provider.
+
+    Resolution order: explicit `name` arg → `fetch.provider` config → `search.provider`
+    fallback (today's behavior when no dedicated fetch provider is configured). Raises
+    SearchError if the resolved provider lacks scrape() or no key is set."""
+    if name is None:
+        cfg = config.load_config()
+        # fetch.provider, if set, picks the scrape provider; otherwise resolve_provider(None)
+        # falls back to search.provider just like before.
+        name = (cfg.get("fetch") or {}).get("provider")
     prov = resolve_provider(name)
     if not hasattr(prov, "scrape"):
         raise SearchError(
-            f"provider {type(prov).__name__} has no scrape(); use firecrawl or brightdata"
+            f"provider {type(prov).__name__} has no scrape(); use firecrawl or brightdata "
+            f"— set one with `omw setup fetch`"
         )
     return prov
 
