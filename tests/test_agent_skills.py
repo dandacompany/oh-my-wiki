@@ -110,3 +110,47 @@ def test_skill_dirs_for_new_agents():
     from pathlib import Path
     assert agent_skills._SKILLS_DIR["opencode"] == Path.home() / ".config" / "opencode" / "skills"
     assert agent_skills._SKILLS_DIR["openclaw"] == Path.home() / ".openclaw" / "skills"
+
+
+def _make_hermes(tmp_path, profiles=(), installed=()):
+    """Build a fake ~/.hermes tree. `installed` = profile names (or 'main')
+    that already have an oh-my-wiki skill dir."""
+    home = tmp_path / ".hermes"
+    (home / "skills").mkdir(parents=True)
+    for p in profiles:
+        (home / "profiles" / p / "skills").mkdir(parents=True)
+    for name in installed:
+        skills = (home / "skills") if name == "main" else (home / "profiles" / name / "skills")
+        (skills / "oh-my-wiki").mkdir(parents=True, exist_ok=True)
+    return home
+
+
+def test_hermes_targets_main_plus_profiles_sorted(tmp_path):
+    home = _make_hermes(tmp_path, profiles=["sophie", "iris", "mark"])
+    targets = ask.hermes_profile_targets(hermes_home=home)
+    assert [t["name"] for t in targets] == ["main", "iris", "mark", "sophie"]
+    assert targets[0]["skills_dir"] == home / "skills"
+    assert targets[1]["skills_dir"] == home / "profiles" / "iris" / "skills"
+
+
+def test_hermes_targets_installed_flag(tmp_path):
+    home = _make_hermes(tmp_path, profiles=["iris", "mark"], installed=["main", "mark"])
+    targets = {t["name"]: t["installed"] for t in ask.hermes_profile_targets(hermes_home=home)}
+    assert targets == {"main": True, "iris": False, "mark": True}
+
+
+def test_hermes_targets_degrades_to_main_when_absent(tmp_path):
+    # no ~/.hermes at all
+    targets = ask.hermes_profile_targets(hermes_home=tmp_path / ".hermes")
+    assert [t["name"] for t in targets] == ["main"]
+    assert targets[0]["installed"] is False
+
+
+def test_install_into_dir_copies_bundle(tmp_path):
+    dest = tmp_path / "skills"
+    dest.mkdir()
+    result = ask.install_into_dir(dest)
+    assert result["ok"] is True
+    assert result["method"] == "copy"
+    assert (dest / "oh-my-wiki" / "SKILL.md").exists()
+    assert result["dest"] == str(dest / "oh-my-wiki")

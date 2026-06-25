@@ -61,6 +61,37 @@ def _copy_bundle(dest_skills_dir, *, repo_root=REPO_ROOT) -> Path:
     return dest
 
 
+def hermes_profile_targets(hermes_home: Path | None = None) -> list[dict]:
+    """Enumerate hermes skill-install targets, one per profile.
+
+    main → <hermes_home>/skills, then one per child dir of <hermes_home>/profiles
+    (sorted). Each target: {"name", "skills_dir", "installed"} where installed means
+    an oh-my-wiki skill dir already exists there. Degrades to [main] when absent."""
+    home = Path(hermes_home) if hermes_home is not None else Path.home() / ".hermes"
+
+    def _target(name: str, skills_dir: Path) -> dict:
+        return {"name": name, "skills_dir": skills_dir,
+                "installed": (skills_dir / "oh-my-wiki").exists()}
+
+    targets = [_target("main", home / "skills")]
+    profiles_dir = home / "profiles"
+    if profiles_dir.is_dir():
+        for p in sorted(profiles_dir.iterdir(), key=lambda d: d.name):
+            if p.is_dir():
+                targets.append(_target(p.name, p / "skills"))
+    return targets
+
+
+def install_into_dir(skills_dir, *, repo_root=REPO_ROOT) -> dict:
+    """Copy the OMW bundle into <skills_dir>/oh-my-wiki/. Generic over the dir, so it
+    serves any per-profile target. Returns a result dict (never raises on copy error)."""
+    try:
+        dest = _copy_bundle(skills_dir, repo_root=repo_root)
+        return {"ok": True, "method": "copy", "dest": str(dest), "detail": None}
+    except OSError as exc:
+        return {"ok": False, "method": "copy", "dest": None, "detail": str(exc)}
+
+
 def _skills_cli_prefix():
     """argv prefix for the skills CLI, or None if neither `skills` nor `npx` is present."""
     if shutil.which("skills"):
