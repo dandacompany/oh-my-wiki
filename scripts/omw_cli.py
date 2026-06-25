@@ -10,7 +10,7 @@ import argparse
 import json
 import sys
 
-from scripts import adapters, lint, nextstep, registry, reindex, wizard
+from scripts import adapters, lint, nextstep, registry, reindex, vault_ops, wizard
 from scripts.paths import ensure_home, registry_path, resolve_vault_root
 
 AGENTIC_OPS = [
@@ -99,6 +99,30 @@ def _cmd_vault_forget(args) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     print(f"forgot vault: {args.name} (files untouched)")
+    return 0
+
+
+def _cmd_vault_info(args) -> int:
+    db = registry_path()
+    try:
+        card = vault_ops.info(db, args.name)
+    except registry.VaultError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(card, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _cmd_vault_current(args) -> int:
+    db = registry_path()
+    row = vault_ops.current(db)
+    if row is None:
+        print("error: no active vault", file=sys.stderr)
+        return 1
+    if getattr(args, "json", False):
+        print(json.dumps(dict(row), ensure_ascii=False, indent=2))
+    else:
+        print(row["name"])
     return 0
 
 
@@ -870,6 +894,14 @@ def build_parser() -> argparse.ArgumentParser:
     pf = vsub.add_parser("forget", help="Remove a vault's registry row (files kept).")
     pf.add_argument("name")
     pf.set_defaults(func=_cmd_vault_forget)
+
+    pi = vsub.add_parser("info", help="Show one vault's details as JSON.")
+    pi.add_argument("name")
+    pi.set_defaults(func=_cmd_vault_info)
+
+    pcur = vsub.add_parser("current", help="Print the active vault's name.")
+    pcur.add_argument("--json", action="store_true", help="Print the full row as JSON.")
+    pcur.set_defaults(func=_cmd_vault_current)
 
     pl = sub.add_parser("lint", help="Run deterministic lint over a vault.")
     pl.add_argument("--vault", default=None, help="vault name (default: active)")

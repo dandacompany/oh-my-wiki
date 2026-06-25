@@ -308,6 +308,18 @@ def list_notes_faceted(
         conn.close()
 
 
+def note_layer_counts(db_path: Path, vault_id: int) -> dict[str, int]:
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT layer, COUNT(*) AS n FROM notes WHERE vault_id = ? GROUP BY layer",
+            (vault_id,),
+        )
+        return {r["layer"]: r["n"] for r in rows}
+    finally:
+        conn.close()
+
+
 def delete_note(db_path: Path, *, vault_id: int, relpath: str) -> None:
     conn = connect(db_path)
     try:

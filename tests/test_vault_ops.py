@@ -1,7 +1,10 @@
+import json as _json
 import sqlite3
 from pathlib import Path
 
-from scripts import registry
+import pytest
+
+from scripts import omw_cli, registry, vault_ops
 
 
 def _fresh_db(tmp_path: Path) -> Path:
@@ -57,3 +60,56 @@ def test_migration_adds_archived_at_to_v2_db(tmp_path):
     assert row is not None
     assert "archived_at" in row.keys()
     assert row["archived_at"] is None
+
+
+# --- Task 2 tests ---
+
+
+def test_info_returns_card_with_layer_counts(tmp_path):
+    db = _fresh_db(tmp_path)
+    vault = registry.add_vault(db, name="v1", path=tmp_path / "v1",
+                               type_="markdown", mode="wiki")
+    registry.upsert_note(db, vault_id=vault["id"], relpath="raw/a.md",
+                         layer="raw", title="A", summary=None, mtime=1.0,
+                         size_bytes=10, tags=[])
+    registry.upsert_note(db, vault_id=vault["id"], relpath="wiki/b.md",
+                         layer="wiki", title="B", summary=None, mtime=1.0,
+                         size_bytes=10, tags=[])
+    card = vault_ops.info(db, "v1")
+    assert card["name"] == "v1"
+    assert card["type"] == "markdown"
+    assert card["mode"] == "wiki"
+    assert card["archived"] is False
+    assert card["note_counts"] == {"raw": 1, "wiki": 1}
+    assert card["total_notes"] == 2
+
+
+def test_info_unknown_vault_raises(tmp_path):
+    db = _fresh_db(tmp_path)
+    with pytest.raises(registry.VaultError):
+        vault_ops.info(db, "nope")
+
+
+def test_current_returns_active_row(tmp_path):
+    db = _fresh_db(tmp_path)
+    registry.add_vault(db, name="v1", path=tmp_path / "v1",
+                       type_="markdown", mode="wiki")
+    registry.set_active(db, "v1")
+    row = vault_ops.current(db)
+    assert row["name"] == "v1"
+
+
+def test_current_no_active_returns_none(tmp_path):
+    db = _fresh_db(tmp_path)
+    assert vault_ops.current(db) is None
+
+
+def test_cli_vault_info_outputs_json(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path))
+    from scripts.paths import registry_path
+    registry.init_db(registry_path())
+    registry.add_vault(registry_path(), name="v1", path=tmp_path / "v1",
+                       type_="markdown", mode="wiki")
+    assert omw_cli.main(["vault", "info", "v1"]) == 0
+    out = _json.loads(capsys.readouterr().out)
+    assert out["name"] == "v1"
