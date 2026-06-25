@@ -648,6 +648,8 @@ def _cmd_setup(args) -> int:
         return setup_wizard.setup_personas(
             enabled=enabled, main=args.main, hosts=hosts,
             base_dir=args.base_dir, noninteractive=args.noninteractive,
+            profile=getattr(args, "profile", None),
+            workspace=getattr(args, "workspace", None),
         )
     if args.section == "search":
         return setup_wizard.setup_search(
@@ -670,6 +672,8 @@ def _cmd_setup(args) -> int:
             mode=args.provider, strategy=args.strategy, submode=args.submode,
             hosts=hosts, base_dir=args.base_dir, noninteractive=args.noninteractive,
             provider=args.embed_provider, model=args.embed_model, dim=args.embed_dim,
+            profile=getattr(args, "profile", None),
+            workspace=getattr(args, "workspace", None),
         )
     if args.section == "gate":
         hosts = [s.strip() for s in args.host.split(",") if s.strip()] if args.host else None
@@ -1126,6 +1130,10 @@ def build_parser() -> argparse.ArgumentParser:
                       help="embedding model name for `omw setup recall`")
     pset.add_argument("--embed-dim", dest="embed_dim", type=int, default=None,
                       help="embedding dimension for `omw setup recall`")
+    pset.add_argument("--profile", default=None,
+                      help="hermes profile name for `omw setup personas/recall`")
+    pset.add_argument("--workspace", default=None,
+                      help="openclaw workspace path for `omw setup personas/recall`")
     pset.set_defaults(func=_cmd_setup)
 
     pimp = sub.add_parser("import", help="Import folder/Obsidian/Notion into a vault.")

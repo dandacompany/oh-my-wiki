@@ -94,3 +94,19 @@ def test_install_many_forwards_use_skills_cli(tmp_path, monkeypatch):
     monkeypatch.setattr(ask.subprocess, "run", boom)
     out = ask.install_many(["codex"], repo_root=repo, use_skills_cli=False)
     assert out[0]["ok"] and out[0]["method"] == "copy"
+
+
+def test_detect_includes_opencode_openclaw(monkeypatch):
+    from scripts import agent_skills
+    monkeypatch.setattr(agent_skills.shutil, "which",
+                        lambda b: f"/usr/bin/{b}")  # all bins present
+    detected = agent_skills.detect_agents()
+    assert "opencode" in detected and "openclaw" in detected
+    assert detected.index("opencode") >= 0 and detected.index("openclaw") >= 0
+
+
+def test_skill_dirs_for_new_agents():
+    from scripts import agent_skills
+    from pathlib import Path
+    assert agent_skills._SKILLS_DIR["opencode"] == Path.home() / ".config" / "opencode" / "skills"
+    assert agent_skills._SKILLS_DIR["openclaw"] == Path.home() / ".openclaw" / "skills"

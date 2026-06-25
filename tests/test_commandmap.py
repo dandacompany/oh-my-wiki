@@ -25,3 +25,10 @@ def test_export_is_idempotent(tmp_path):
 def test_block_marks_kind():
     block = commandmap.render_block()
     assert "procedure" in block and "run" in block   # both kinds annotated
+
+
+def test_export_codex_opencode_dedup(tmp_path):
+    commandmap.export(tmp_path, ["codex", "opencode"])
+    agents = (tmp_path / "AGENTS.md").read_text()
+    assert agents.count("<!-- omw-commandmap:start -->") == 1   # written once, not twice
+    assert not (tmp_path / "CLAUDE.md").exists()
