@@ -83,13 +83,13 @@ def test_cli_bare_shows_banner_and_help():
     r = _run([])
     assert r.returncode == 0
     assert "|___/" in r.stdout            # banner
-    assert "usage: omw" in r.stdout       # help
+    assert "commands by lifecycle phase" in r.stdout   # grouped help
 
 
 def test_cli_help_shows_banner():
     r = _run(["--help"])
     assert r.returncode == 0
-    assert "|___/" in r.stdout and "usage: omw" in r.stdout
+    assert "|___/" in r.stdout and "commands by lifecycle phase" in r.stdout
 
 
 def test_cli_help_piped_has_no_ansi():
@@ -126,7 +126,7 @@ def test_render_suppressed_by_omw_no_banner(monkeypatch):
 def test_cli_help_omw_no_banner_suppresses():
     r = _run(["--help"], OMW_NO_BANNER="1")
     assert "|___/" not in r.stdout    # banner suppressed
-    assert "usage: omw" in r.stdout   # help text still shown
+    assert "commands by lifecycle phase" in r.stdout   # grouped help still shown
 
 
 def test_render_survives_broken_pipe():

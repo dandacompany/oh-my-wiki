@@ -19,7 +19,12 @@ def render() -> str:
     by_phase: dict[str, list] = {}
     for op in ops_registry.OPS:
         by_phase.setdefault(op.phase or "meta", []).append(op)
-    lines = ["oh-my-wiki — commands by lifecycle phase", ""]
+    lines = [
+        "oh-my-wiki — commands by lifecycle phase",
+        "",
+        "Usage: omw <command> [options]   ·   omw <command> -h for command details",
+        "",
+    ]
     for key, header in _PHASE_ORDER:
         ops = sorted(by_phase.get(key, []), key=lambda o: o.name)
         if not ops:
@@ -27,7 +32,7 @@ def render() -> str:
         lines.append(header)
         for op in ops:
             tag = "[CLI]" if op.kind == "deterministic" else "[skill]"
-            lines.append(f"  {op.name:<18} {tag:<7} {op.summary}")
+            lines.append(f"  {op.name:<20} {tag:<7} {op.summary}")
         lines.append("")
     lines.append("Run `omw <command> -h` for command details; deterministic [CLI] ops "
                  "run directly, [skill] ops are executed by the omw agent skill.")
