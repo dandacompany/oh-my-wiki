@@ -315,14 +315,22 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
         # Non-interactive default: repo-trio hosts only (no scoped hosts auto-selected).
         hosts = [h for h, d in hostsmod.HOSTS.items() if d["kind"] == "repo"]
     base = Path(base_dir) if base_dir else Path.cwd()
+    # Filter to only hosts that can be resolved — mirror setup_recall's per-host skip pattern.
+    resolvable: list[str] = []
+    for host in hosts:
+        try:
+            hostsmod.resolve_instruction_path(host, base, profile=profile, workspace=workspace)
+            resolvable.append(host)
+        except ValueError as exc:
+            print(f"  - {host}: skipped ({exc})")
     config.set_config("personas.enabled", enabled)
     config.set_config("personas.main", main)
     written = persona_export.export_personas(
         enabled=enabled, main=main, descriptions=descriptions,
-        base_dir=base, hosts=hosts, profile=profile, workspace=workspace,
+        base_dir=base, hosts=resolvable, profile=profile, workspace=workspace,
     )
     from scripts import commandmap
-    commandmap.export(base, hosts, profile=profile, workspace=workspace)
+    commandmap.export(base, resolvable, profile=profile, workspace=workspace)
     print(f"✓ personas: {len(enabled)} enabled, main={main}; "
           f"exported to {', '.join(p.name for p in written)}")
     return 0

@@ -14,6 +14,23 @@ def test_setup_personas_hermes_profile_noninteractive(tmp_path, monkeypatch):
     assert (home / ".hermes" / "profiles" / "iris" / "SOUL.md").exists()
 
 
+def test_setup_personas_unresolvable_scoped_skips_cleanly(tmp_path, monkeypatch):
+    """Non-interactive hermes host with no profile should skip cleanly (return 0, no SOUL.md)."""
+    home = tmp_path / "home"
+    home.mkdir(parents=True)
+    # No ~/.hermes/active_profile and no profiles directory → hermes cannot resolve.
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    rc = setup_wizard.setup_personas(
+        enabled=["wiki-librarian"], main="wiki-librarian",
+        hosts=["hermes"], noninteractive=True,
+        base_dir=str(tmp_path), profile=None,
+    )
+    assert rc == 0
+    # No SOUL.md should have been written anywhere under tmp home.
+    soul_files = list(home.rglob("SOUL.md"))
+    assert soul_files == [], f"unexpected SOUL.md files: {soul_files}"
+
+
 def test_setup_recall_merged_agents_written_once(tmp_path, monkeypatch):
     rc = setup_wizard.setup_recall(noninteractive=True, base_dir=str(tmp_path),
                                    hosts=["codex", "opencode"], mode="auto", strategy="fts")
