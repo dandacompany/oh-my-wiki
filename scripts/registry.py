@@ -6,7 +6,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SCHEMA_SQL_PATH = Path(__file__).parent / "db" / "schema.sql"
 
 
@@ -15,6 +15,14 @@ def connect(db_path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def _ensure_vault_columns(conn: sqlite3.Connection) -> None:
+    """Idempotently add vaults columns introduced after a DB was first created.
+    Guard on pragma table_info (SQLite lacks ADD COLUMN IF NOT EXISTS)."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(vaults)")}
+    if "archived_at" not in cols:
+        conn.execute("ALTER TABLE vaults ADD COLUMN archived_at TEXT")
 
 
 def _ensure_note_columns(conn: sqlite3.Connection) -> None:
@@ -43,6 +51,7 @@ def init_db(db_path: Path) -> None:
     try:
         conn.executescript(sql)
         _ensure_note_columns(conn)
+        _ensure_vault_columns(conn)
         existing = conn.execute(
             "SELECT 1 FROM schema_migrations WHERE version = ?",
             (SCHEMA_VERSION,),
@@ -101,10 +110,24 @@ def add_vault(
         conn.close()
 
 
-def list_vaults(db_path: Path) -> list[sqlite3.Row]:
+def list_vaults(db_path: Path, include_archived: bool = False) -> list[sqlite3.Row]:
     conn = connect(db_path)
     try:
-        return list(conn.execute("SELECT * FROM vaults ORDER BY last_used DESC"))
+        sql = "SELECT * FROM vaults"
+        if not include_archived:
+            sql += " WHERE archived_at IS NULL"
+        sql += " ORDER BY last_used DESC"
+        return list(conn.execute(sql))
+    finally:
+        conn.close()
+
+
+def get_vault_by_name(db_path: Path, name: str) -> sqlite3.Row | None:
+    conn = connect(db_path)
+    try:
+        return conn.execute(
+            "SELECT * FROM vaults WHERE name = ?", (name,)
+        ).fetchone()
     finally:
         conn.close()
 

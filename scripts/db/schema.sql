@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS vaults (
   is_active   INTEGER NOT NULL DEFAULT 0 CHECK (is_active IN (0, 1)),
   created_at  TEXT NOT NULL,
   last_used   TEXT NOT NULL,
-  config_json TEXT
+  config_json TEXT,
+  archived_at TEXT
 );
 
 -- Partial unique index: at most one row with is_active=1.
