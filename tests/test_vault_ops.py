@@ -214,3 +214,36 @@ def test_set_requires_at_least_one_field(tmp_path):
                        type_="markdown", mode="wiki")
     with pytest.raises(registry.VaultError):
         vault_ops.set_(db, "v1")
+
+
+# --- Task 6 tests ---
+
+
+def test_archive_hides_from_default_list_and_clears_active(tmp_path):
+    db = _fresh_db(tmp_path)
+    registry.add_vault(db, name="v1", path=tmp_path / "v1",
+                       type_="markdown", mode="wiki")
+    registry.set_active(db, "v1")
+    vault_ops.archive(db, "v1")
+    assert registry.get_active(db) is None
+    assert {v["name"] for v in registry.list_vaults(db)} == set()
+    assert {v["name"] for v in registry.list_vaults(db, include_archived=True)} == {"v1"}
+
+
+def test_unarchive_restores_visibility(tmp_path):
+    db = _fresh_db(tmp_path)
+    registry.add_vault(db, name="v1", path=tmp_path / "v1",
+                       type_="markdown", mode="wiki")
+    vault_ops.archive(db, "v1")
+    vault_ops.unarchive(db, "v1")
+    assert {v["name"] for v in registry.list_vaults(db)} == {"v1"}
+    assert registry.get_vault_by_name(db, "v1")["archived_at"] is None
+
+
+def test_archive_is_idempotent(tmp_path):
+    db = _fresh_db(tmp_path)
+    registry.add_vault(db, name="v1", path=tmp_path / "v1",
+                       type_="markdown", mode="wiki")
+    vault_ops.archive(db, "v1")
+    vault_ops.archive(db, "v1")  # no raise
+    assert registry.get_vault_by_name(db, "v1")["archived_at"] is not None

@@ -45,9 +45,31 @@ def _cmd_vault_list(args) -> int:
             "type": v["type"],
             "is_active": bool(v["is_active"]),
         }
-        for v in registry.list_vaults(db)
+        for v in registry.list_vaults(db, include_archived=getattr(args, "all", False))
     ]
     print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _cmd_vault_archive(args) -> int:
+    db = registry_path()
+    try:
+        vault_ops.archive(db, args.name)
+    except registry.VaultError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"archived: {args.name}")
+    return 0
+
+
+def _cmd_vault_unarchive(args) -> int:
+    db = registry_path()
+    try:
+        vault_ops.unarchive(db, args.name)
+    except registry.VaultError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"unarchived: {args.name}")
     return 0
 
 
@@ -909,7 +931,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     pv = sub.add_parser("vault", help="Deterministic vault management.")
     vsub = pv.add_subparsers(dest="vault_cmd", required=True)
-    vsub.add_parser("list", help="List vaults as JSON.").set_defaults(func=_cmd_vault_list)
+    plist_v = vsub.add_parser("list", help="List vaults as JSON.")
+    plist_v.add_argument("--all", action="store_true",
+                         help="Include archived vaults.")
+    plist_v.set_defaults(func=_cmd_vault_list)
+
+    par = vsub.add_parser("archive", help="Archive a vault (hidden from list; index kept).")
+    par.add_argument("name")
+    par.set_defaults(func=_cmd_vault_archive)
+
+    pun = vsub.add_parser("unarchive", help="Restore an archived vault.")
+    pun.add_argument("name")
+    pun.set_defaults(func=_cmd_vault_unarchive)
 
     pc = vsub.add_parser("create", help="Create + register a vault.")
     pc.add_argument("name")

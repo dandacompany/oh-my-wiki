@@ -174,6 +174,28 @@ def set_active(db_path: Path, name: str) -> sqlite3.Row:
         conn.close()
 
 
+def set_archived(db_path: Path, name: str, archived: bool) -> sqlite3.Row:
+    conn = connect(db_path)
+    try:
+        row = conn.execute("SELECT id FROM vaults WHERE name = ?", (name,)).fetchone()
+        if not row:
+            raise VaultError(f"vault {name!r} not found")
+        ts = _now() if archived else None
+        with conn:
+            if archived:
+                conn.execute(
+                    "UPDATE vaults SET archived_at = ?, is_active = 0 WHERE id = ?",
+                    (ts, row["id"]),
+                )
+            else:
+                conn.execute(
+                    "UPDATE vaults SET archived_at = NULL WHERE id = ?", (row["id"],)
+                )
+        return conn.execute("SELECT * FROM vaults WHERE id = ?", (row["id"],)).fetchone()
+    finally:
+        conn.close()
+
+
 def forget_vault(db_path: Path, name: str) -> None:
     conn = connect(db_path)
     try:

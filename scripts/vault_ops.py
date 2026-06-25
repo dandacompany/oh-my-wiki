@@ -66,6 +66,18 @@ def move(db_path: Path, name: str, new_path: str) -> dict:
     return {"moved": name, "from": str(src), "to": str(dst.resolve())}
 
 
+def archive(db_path: Path, name: str) -> dict:
+    _require(db_path, name)
+    registry.set_archived(db_path, name, True)
+    return {"archived": name}
+
+
+def unarchive(db_path: Path, name: str) -> dict:
+    _require(db_path, name)
+    registry.set_archived(db_path, name, False)
+    return {"unarchived": name}
+
+
 def set_(db_path: Path, name: str, *, mode: str | None = None,
          config_pairs: list[str] | None = None) -> dict:
     row = _require(db_path, name)
