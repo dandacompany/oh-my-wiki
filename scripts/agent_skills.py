@@ -1,9 +1,9 @@
-"""Install the OMW skill bundle into agent skill systems (claude/codex/hermes/gemini).
+"""Install the OMW skill bundle into agent skill systems (claude/codex/gemini/opencode/hermes/openclaw).
 
 Hybrid: claude/codex/gemini delegate to the `skills` CLI (skills.sh) — global `skills`
 if on PATH, else `npx -y skills`; on any failure, fall back to a direct copy of the
-local bundle into the agent's skills dir. hermes always direct-copies because its
-installer accepts only a single SKILL.md URL (incomplete for OMW's multi-file skill).
+local bundle into the agent's skills dir. hermes/opencode/openclaw always direct-copy
+because their installers do not support the skills.sh protocol.
 Pure stdlib.
 """
 from __future__ import annotations
@@ -18,15 +18,18 @@ from scripts import paths
 REPO_ROOT = paths.bundled_root()
 SKILL_ID = "dandacompany/oh-my-wiki@oh-my-wiki"
 
-_AGENT_BINS = {"claude": "claude", "codex": "codex", "hermes": "hermes", "gemini": "gemini"}
+_AGENT_BINS = {"claude": "claude", "codex": "codex", "hermes": "hermes",
+               "gemini": "gemini", "opencode": "opencode", "openclaw": "openclaw"}
 _SKILLS_AGENT = {"claude": "claude-code", "codex": "codex", "gemini": "gemini"}
 _SKILLS_DIR = {
     "claude": Path.home() / ".claude" / "skills",
     "codex": Path.home() / ".codex" / "skills",
     "hermes": Path.home() / ".hermes" / "skills",
     "gemini": Path.home() / ".gemini" / "skills",
+    "opencode": Path.home() / ".config" / "opencode" / "skills",
+    "openclaw": Path.home() / ".openclaw" / "skills",
 }
-_ORDER = ("claude", "codex", "hermes", "gemini")
+_ORDER = ("claude", "codex", "opencode", "gemini", "hermes", "openclaw")
 
 
 def detect_agents() -> list[str]:
@@ -99,8 +102,8 @@ def install(agent, *, repo_root=REPO_ROOT, use_skills_cli=True) -> dict:
     """Install OMW into one agent's skill system. Returns a result dict."""
     if agent not in _AGENT_BINS:
         return {"agent": agent, "ok": False, "method": None, "dest": None, "detail": "unknown agent"}
-    if agent == "hermes":
-        dest = _copy_bundle(_SKILLS_DIR["hermes"], repo_root=repo_root)
+    if agent not in _SKILLS_AGENT:
+        dest = _copy_bundle(_SKILLS_DIR[agent], repo_root=repo_root)
         return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest)}
     if use_skills_cli:
         ok, dest = _install_via_skills_cli(agent)
