@@ -26,3 +26,17 @@ def test_context_caps_body(tmp_path, monkeypatch):
     out = query_pipeline.context(db, vault_id=vid, q="word", limit=8, body_cap=4000)
     hit = next(h for h in out["hits"] if h["slug"] == "big")
     assert len(hit["body"]) <= 4000 and hit["truncated"] is True
+
+
+def test_context_flags_body_missing(tmp_path, monkeypatch):
+    from tests.conftest import make_vault_with_pages
+    from scripts import query_pipeline, registry
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={
+        "wiki/concepts/ghost.md": "---\ntitle: Ghost\ntype: concept\n---\n\n## Summary\n\nghost words here now ok\n",
+    })
+    root = registry.get_vault_root(db, vid)
+    (root / "wiki/concepts/ghost.md").unlink()    # index drift: file gone
+    out = query_pipeline.context(db, vault_id=vid, q="ghost", limit=8)
+    hits = [h for h in out["hits"] if h["slug"] == "ghost"]
+    if hits:                                       # if still indexed → must be flagged
+        assert hits[0]["body_missing"] is True and hits[0]["body"] == ""

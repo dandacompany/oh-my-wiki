@@ -32,7 +32,7 @@ def _entities(db_path: Path, *, vault_id: int) -> list[dict]:
     root = registry.get_vault_root(db_path, vault_id)
     ents: list[dict] = []
     for md in sorted(root.rglob("*.md")):
-        if ".trash" in md.parts:
+        if ".trash" in md.parts or md.name.endswith(".proposed.md"):
             continue
         rel = str(md.relative_to(root)).replace("\\", "/")
         if rel in _EXEMPT or rel.startswith("raw/"):
@@ -55,7 +55,7 @@ def suggest_links(db_path: Path, *, vault_id: int, relpath=None) -> list[dict]:
         e["pat"] = _name_pattern(e["names"])
     out: list[dict] = []
     for md in sorted(root.rglob("*.md")):
-        if ".trash" in md.parts:
+        if ".trash" in md.parts or md.name.endswith(".proposed.md"):
             continue
         rel = str(md.relative_to(root)).replace("\\", "/")
         if rel in _EXEMPT or rel.startswith("raw/"):

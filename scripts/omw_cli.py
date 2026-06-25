@@ -485,7 +485,7 @@ def _cmd_export(args) -> int:
     try:
         res = exporter.export(db, vault_id=vault["id"], out_dir=args.out,
                               zip_path=args.zip_path, tag=args.tag, type_=args.type,
-                              visibility=args.visibility)
+                              visibility=args.visibility, force=args.force)
     except exporter.ExportError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -774,6 +774,12 @@ def _cmd_merge(args) -> int:
     return 0
 
 
+def _cmd_help(args) -> int:
+    from scripts import help_overview
+    print(help_overview.render())
+    return 0
+
+
 def _cmd_doctor(args) -> int:
     from scripts import setup_wizard
     return setup_wizard.doctor()
@@ -822,8 +828,13 @@ def build_parser() -> argparse.ArgumentParser:
             "oh-my-wiki user CLI — install/setup + deterministic vault ops. "
             "Natural-language work happens in a Claude session via the omw skill."
         ),
+        epilog="Run `omw help` for a guided overview of all commands by lifecycle phase.",
     )
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("help", help="Guided overview of all commands by lifecycle phase.").set_defaults(
+        func=_cmd_help
+    )
 
     sub.add_parser("status", help="Show registry state as JSON.").set_defaults(
         func=_cmd_status
@@ -1017,6 +1028,7 @@ def build_parser() -> argparse.ArgumentParser:
     pexp.add_argument("--out", default=None)
     pexp.add_argument("--zip", dest="zip_path", default=None)
     pexp.add_argument("--vault", default=None)
+    pexp.add_argument("--force", action="store_true")
     pexp.set_defaults(func=_cmd_export)
 
     pnx = sub.add_parser("next", help="Recommend the next knowledge-lifecycle action(s).")
@@ -1160,11 +1172,17 @@ def main(argv: list[str] | None = None) -> int:
     try:
         argv = list(sys.argv[1:] if argv is None else argv)
         parser = build_parser()
-        if not argv or argv[0] in ("-h", "--help", "help"):
+        if not argv or argv[0] in ("-h", "--help"):
             from scripts import banner
             banner.render(animate=False)   # static, self-gated for TTY/NO_COLOR/CI
             parser.print_help()
             sys.stdout.flush()  # surface a broken pipe here (block-buffered stdout)
+            return 0
+        if argv[0] == "help":
+            from scripts import banner, help_overview
+            banner.render(animate=False)
+            print(help_overview.render())  # guided lifecycle-grouped overview
+            sys.stdout.flush()
             return 0
         args = parser.parse_args(argv)
         rc = args.func(args)

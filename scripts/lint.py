@@ -44,7 +44,7 @@ def check(db_path: Path, *, vault_id: int) -> dict:
     # 2) disk files (.md, excluding .trash and raw/) — schema-driven frontmatter checks
     schemas, schema_load_errors = schema.load_schemas_with_errors(vault_path=root)
     for md in sorted(root.rglob("*.md")):
-        if ".trash" in md.parts:
+        if ".trash" in md.parts or md.name.endswith(".proposed.md"):
             continue
         relpath = str(md.relative_to(root)).replace("\\", "/")
         if relpath in _META_RELPATHS or relpath.startswith("raw/"):
