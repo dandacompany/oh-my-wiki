@@ -40,6 +40,23 @@ def test_plan_clean_base_is_empty(tmp_path, monkeypatch):
     assert p["skills"] == []
 
 
+def test_plan_hooks_survive_nondict_entry(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw"))
+    from scripts import recall
+    cfg = tmp_path / "settings.json"
+    cfg.write_text(json.dumps({"hooks": {
+        "X": [{"hooks": [42, "weird", None]}],
+        "UserPromptSubmit": [{"hooks": [{"type": "command", "command": '"omw" recall prompt'}]}],
+    }}), encoding="utf-8")
+    monkeypatch.setattr(recall, "host_hook_configs", lambda: {"claude": cfg})
+    base = tmp_path / "proj"
+    base.mkdir()
+    p = uninstall.plan(base, hosts=["claude"])   # must not raise
+    hooks = [h for h in p["hooks"] if h["path"] == str(cfg)]
+    assert hooks and hooks[0]["count"] == 1      # omw hook detected despite the junk entry
+
+
 def test_plan_never_raises_on_garbage(tmp_path, monkeypatch):
     monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw"))
     base = tmp_path / "x"

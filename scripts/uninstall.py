@@ -122,7 +122,7 @@ def _detect_hooks() -> list:
         for groups in data["hooks"].values():
             for group in groups or []:
                 inner = (group or {}).get("hooks", []) if isinstance(group, dict) else []
-                if any(_is_omw_recall_cmd((h or {}).get("command", "")) for h in inner):
+                if any(_is_omw_recall_cmd((h if isinstance(h, dict) else {}).get("command", "")) for h in inner):
                     count += 1
         if count:
             out.append({"host": host, "path": str(path), "count": count})
@@ -184,5 +184,5 @@ def plan(base_dir, *, hosts=None, profile=None, workspace=None) -> dict:
         "skills": _safe(_detect_skills, []),
         "home": _safe(_detect_home, {"path": "", "exists": False, "config": False,
                                      "env": False, "registry": False, "vaults": []}),
-        "pip_hint": _pip_hint(),
+        "pip_hint": _safe(_pip_hint, "pip uninstall oh-my-wiki"),
     }
