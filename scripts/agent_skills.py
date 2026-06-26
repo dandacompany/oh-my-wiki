@@ -27,7 +27,9 @@ _SKILLS_DIR = {
     "hermes": Path.home() / ".hermes" / "skills",
     "gemini": Path.home() / ".gemini" / "skills",
     "opencode": Path.home() / ".config" / "opencode" / "skills",
-    "openclaw": Path.home() / ".openclaw" / "skills",
+    # openclaw discovers skills from the shared personal catalog (~/.agents/skills);
+    # ~/.openclaw/skills resolves outside its configured root and is skipped.
+    "openclaw": Path.home() / ".agents" / "skills",
 }
 _ORDER = ("claude", "codex", "opencode", "gemini", "hermes", "openclaw")
 
