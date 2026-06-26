@@ -84,7 +84,9 @@ def hermes_profile_targets(hermes_home: Path | None = None) -> list[dict]:
 
 def install_into_dir(skills_dir, *, repo_root=REPO_ROOT) -> dict:
     """Copy the OMW bundle into <skills_dir>/oh-my-wiki/. Generic over the dir, so it
-    serves any per-profile target. Returns a result dict (never raises on copy error)."""
+    serves any per-profile target. Returns a result dict (never raises on copy error).
+    On OSError, returns {"ok": False, "method": "copy", "dest": None, "detail": <message>}
+    rather than raising."""
     try:
         dest = _copy_bundle(skills_dir, repo_root=repo_root)
         return {"ok": True, "method": "copy", "dest": str(dest), "detail": None}

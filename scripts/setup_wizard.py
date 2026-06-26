@@ -533,6 +533,9 @@ def _install_hermes_profiles(interactive: bool) -> list[dict]:
         choices = [{"name": t["name"], "checked": t["name"] in default_checked} for t in targets]
         picked = _prompt("checkbox", "Install OMW skill into which hermes profiles?",
                          choices=choices)
+        if picked is not None and picked == []:
+            print("  - hermes: no profiles selected, skipping")
+            return []
         chosen = picked if picked is not None else default_checked
     else:
         chosen = installed or ["main"]

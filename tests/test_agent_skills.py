@@ -154,3 +154,9 @@ def test_install_into_dir_copies_bundle(tmp_path):
     assert result["method"] == "copy"
     assert (dest / "oh-my-wiki" / "SKILL.md").exists()
     assert result["dest"] == str(dest / "oh-my-wiki")
+
+
+def test_install_into_dir_oserror_returns_error_dict(tmp_path, monkeypatch):
+    monkeypatch.setattr(ask, "_copy_bundle", lambda *a, **k: (_ for _ in ()).throw(OSError("boom")))
+    result = ask.install_into_dir(tmp_path / "skills")
+    assert result == {"ok": False, "method": "copy", "dest": None, "detail": "boom"}

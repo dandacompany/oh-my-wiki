@@ -1,6 +1,6 @@
 import builtins
 
-from scripts import setup_wizard
+from scripts import agent_skills, setup_wizard
 
 
 def test_checkbox_spec_plain_strings():
@@ -42,11 +42,6 @@ def test_prompt_checkbox_fallback_typed_subset(monkeypatch):
                                choices=[{"name": "main", "checked": True},
                                         {"name": "iris", "checked": False}])
     assert out == ["iris"]
-
-
-from pathlib import Path
-
-from scripts import agent_skills
 
 
 def _fake_targets(tmp_path, installed):
