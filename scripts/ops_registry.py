@@ -83,6 +83,14 @@ OPS: tuple[OpSpec, ...] = (
          args=(ArgSpec("--check", False, "report current→latest only; do not upgrade"),
                ArgSpec("--yes", False, "skip confirmation (non-interactive)"),
                ArgSpec("--no-refresh", False, "do not regenerate managed blocks after upgrade"))),
+    _det("uninstall",
+         "Remove omw's host integration (blocks/hooks/skill); --purge config, --vaults content.",
+         "omw uninstall [--host H] [--purge] [--vaults] [--dry-run] [--yes]",
+         args=(ArgSpec("--host", False, "limit to host(s) (default: auto-detect)"),
+               ArgSpec("--purge", False, "also remove ~/.omw config + secrets + registry (keeps vaults)"),
+               ArgSpec("--vaults", False, "also DELETE vault content (requires --yes when non-interactive)"),
+               ArgSpec("--dry-run", False, "preview what would be removed; write nothing"),
+               ArgSpec("--yes", False, "skip confirmations (non-interactive)"))),
     _det("next", "Recommend the next knowledge-lifecycle action(s) from vault state.",
          "omw next [--vault V] [--json]",
          args=(ArgSpec("--vault", False, "vault name (default: active)"),
@@ -172,7 +180,7 @@ _PHASE = {
     "view": "use", "list": "use", "export": "use",
     # meta — setup / introspection
     "status": "meta", "vault": "meta", "setup": "meta", "doctor": "meta",
-    "update": "meta", "schema": "meta", "help": "meta", "version": "meta",
+    "update": "meta", "uninstall": "meta", "schema": "meta", "help": "meta", "version": "meta",
     "report": "meta",
 }
 
