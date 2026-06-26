@@ -39,6 +39,28 @@ def test_fastembed_embed_lazy_imports_and_maps(monkeypatch):
     assert calls["model_name"] == "m"
 
 
+from scripts import embed_install
+
+
+def test_ensure_fastembed_noop_when_present(monkeypatch):
+    monkeypatch.setattr(embed_install, "fastembed_available", lambda: True)
+    called = {"pip": False}
+    monkeypatch.setattr(embed_install.subprocess, "run",
+                        lambda *a, **k: called.__setitem__("pip", True))
+    assert embed_install.ensure_fastembed(assume_yes=True) is True
+    assert called["pip"] is False
+
+
+def test_ensure_fastembed_installs_when_absent(monkeypatch):
+    states = iter([False, True])  # absent, then present after install
+    monkeypatch.setattr(embed_install, "fastembed_available", lambda: next(states))
+    ran = {}
+    monkeypatch.setattr(embed_install.subprocess, "run",
+                        lambda argv, **k: ran.setdefault("argv", argv))
+    assert embed_install.ensure_fastembed(assume_yes=True) is True
+    assert "fastembed" in " ".join(ran["argv"])
+
+
 from scripts import vector_index
 
 
