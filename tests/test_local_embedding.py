@@ -37,3 +37,24 @@ def test_fastembed_embed_lazy_imports_and_maps(monkeypatch):
     out = e.embed(["a", "b"])
     assert out == [[0.1, 0.2, 0.3], [0.1, 0.2, 0.3]]
     assert calls["model_name"] == "m"
+
+
+from scripts import vector_index
+
+
+def test_vector_index_reset_allows_new_dim(tmp_path, monkeypatch):
+    if not vector_index.available():
+        pytest.skip("sqlite-vec not installed")
+    from scripts import registry
+    db = tmp_path / "registry.db"
+    registry.init_db(db)
+    v = registry.add_vault(db, name="v1", path=tmp_path / "v1",
+                           type_="markdown", mode="wiki")
+    e8 = embed.FakeEmbedder(dim=8)
+    assert vector_index.upsert(db, vault_id=v["id"], embedder=e8,
+                               rows=[("wiki/a.md", "hello")]) == 1
+    # switching to a different dim requires a reset first
+    vector_index.reset(db)
+    e16 = embed.FakeEmbedder(dim=16)
+    assert vector_index.upsert(db, vault_id=v["id"], embedder=e16,
+                               rows=[("wiki/a.md", "hello")]) == 1

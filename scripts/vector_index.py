@@ -33,6 +33,19 @@ def _ensure_table(conn, dim: int) -> None:
     )
 
 
+def reset(db_path) -> None:
+    """Drop the vector table so the next upsert recreates it (used when the
+    embedding model/dim changes). No-op when sqlite-vec is unavailable."""
+    if not available():
+        return
+    conn = _connect(db_path)
+    try:
+        conn.execute("DROP TABLE IF EXISTS vec_notes")
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def upsert(db_path, *, vault_id: int, embedder, rows) -> int:
     """Embed and store (relpath, text) rows for a vault. Returns count stored."""
     if not available() or embedder is None or not rows:
