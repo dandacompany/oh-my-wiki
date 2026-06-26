@@ -1,12 +1,19 @@
 """Pluggable text-embedding providers for the `embedding`/`hybrid` recall strategies.
 
-Config (recall.embedding.*): provider (none|openai|fake), model, dim.
+Config (recall.embedding.*): provider (none|openai|fake|fastembed), model, dim.
 Secrets via config.read_secret (OPENAI_API_KEY). Returns None when unconfigured so
 callers degrade to fts — embedding is opt-in (references/auto-recall-hook-design.md §10)."""
 from __future__ import annotations
 
 import hashlib
 import struct
+
+DEFAULT_LOCAL_MODEL = "intfloat/multilingual-e5-small"
+KNOWN_MODEL_DIMS = {
+    "intfloat/multilingual-e5-small": 384,
+    "intfloat/multilingual-e5-base": 768,
+    "BAAI/bge-small-en-v1.5": 384,
+}
 
 
 class Embedder:
@@ -50,6 +57,21 @@ class OpenAIEmbedder(Embedder):
         return [d.embedding for d in resp.data]
 
 
+class FastEmbedEmbedder(Embedder):
+    """Local ONNX embedder via fastembed (no torch). Lazy-imports fastembed and
+    caches the model on first embed(). Model files download+cache on first use."""
+
+    def __init__(self, model: str, dim: int):
+        self.model, self.dim = model, int(dim)
+        self._te = None
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        if self._te is None:
+            from fastembed import TextEmbedding  # optional dep; lazy
+            self._te = TextEmbedding(model_name=self.model)
+        return [list(map(float, v)) for v in self._te.embed(list(texts))]
+
+
 def get_embedder(cfg: dict) -> Embedder | None:
     """Build an embedder from recall.embedding config, or None if not configured."""
     cfg = cfg or {}
@@ -65,4 +87,8 @@ def get_embedder(cfg: dict) -> Embedder | None:
             return None
         return OpenAIEmbedder(model=cfg.get("model", "text-embedding-3-small"),
                               dim=int(cfg.get("dim", 1536)), api_key=key)
+    if provider == "fastembed":
+        model = cfg.get("model") or DEFAULT_LOCAL_MODEL
+        dim = int(cfg.get("dim") or KNOWN_MODEL_DIMS.get(model, 384))
+        return FastEmbedEmbedder(model=model, dim=dim)
     return None
