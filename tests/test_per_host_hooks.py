@@ -88,6 +88,19 @@ def test_wire_migrates_stale_wrong_event_hooks(tmp_path):
     assert "BeforeAgent" in data["hooks"]
 
 
+def test_strip_preserves_user_hook_in_a_mixed_group(tmp_path):
+    # a single group containing BOTH an omw hook and a user hook must keep the user hook.
+    cfg = tmp_path / "settings.json"
+    cfg.write_text(json.dumps({"hooks": {"SessionStart": [
+        {"hooks": [{"type": "command", "command": '"omw" recall preamble'},
+                   {"type": "command", "command": "user-thing.sh"}]}]}}))
+    recall.wire_host("claude", config_path=cfg)
+    data = json.loads(cfg.read_text())
+    cmds = [h["command"] for g in data["hooks"]["SessionStart"] for h in g["hooks"]]
+    assert "user-thing.sh" in cmds                      # user hook survived
+    assert sum("recall preamble" in c for c in cmds) == 1  # exactly one omw hook (no dup)
+
+
 # ── gate (turn-end) stays Claude-only — no other host surfaces turn-end output ──
 
 def test_gate_wires_claude_stop(tmp_path):

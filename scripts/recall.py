@@ -455,20 +455,29 @@ def _is_omw_recall_cmd(cmd: str) -> bool:
 
 
 def _strip_omw_recall(hooks: dict) -> bool:
-    """Remove every omw-recall hook group from ALL events (migration: drops stale commands
-    and hooks left under wrong/renamed event keys). Prunes empties. Returns True if changed."""
+    """Remove omw-recall hooks from ALL events (migration: drops stale commands and hooks
+    left under wrong/renamed event keys). Prunes at the individual-hook level — a group that
+    mixes an omw hook with a user hook keeps the user hook — then drops emptied groups/events.
+    Returns True if anything was removed."""
     changed = False
     for event in list(hooks):
         groups = hooks.get(event) or []
-        kept = [g for g in groups
-                if not any(_is_omw_recall_cmd((h or {}).get("command", ""))
-                           for h in (g or {}).get("hooks", []))]
-        if len(kept) != len(groups):
-            changed = True
-            if kept:
-                hooks[event] = kept
+        new_groups = []
+        for g in groups:
+            inner = (g or {}).get("hooks", [])
+            kept_inner = [h for h in inner
+                          if not _is_omw_recall_cmd((h or {}).get("command", ""))]
+            if len(kept_inner) != len(inner):
+                changed = True
+                if kept_inner:
+                    new_groups.append({**g, "hooks": kept_inner})  # keep user hooks in the group
+                # else: group held only omw hooks → drop it
             else:
-                del hooks[event]
+                new_groups.append(g)
+        if new_groups:
+            hooks[event] = new_groups
+        elif groups:  # we removed the last group(s) — drop the now-empty event
+            del hooks[event]
     return changed
 
 
