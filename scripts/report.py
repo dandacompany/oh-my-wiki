@@ -223,10 +223,14 @@ def build(db_path, vault_id=None, *, today, no_reindex=False) -> dict:
     out["vaults"]["total"] = len(vaults)
     vlist = []
     for v in vaults:
-        cnt = _safe(lambda v=v: sum(registry.note_layer_counts(db_path, v["id"]).values()), 0)
-        vlist.append({"name": v["name"], "mode": v["mode"], "type": v["type"],
-                      "total_notes": cnt, "is_active": bool(v["is_active"]),
-                      "archived": v["archived_at"] is not None})
+        entry = _safe(lambda v=v: {
+            "name": v["name"], "mode": v["mode"], "type": v["type"],
+            "total_notes": _safe(lambda v=v: sum(registry.note_layer_counts(db_path, v["id"]).values()), 0),
+            "is_active": bool(v["is_active"]),
+            "archived": v["archived_at"] is not None,
+        }, None)
+        if entry is not None:
+            vlist.append(entry)
     out["vaults"]["list"] = vlist
 
     target_id = vault_id if vault_id is not None else (active["id"] if active else None)

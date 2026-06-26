@@ -61,3 +61,21 @@ def test_build_no_active_vault(tmp_path, monkeypatch):
     assert data["vaults"]["total"] == 0
     assert data["active_vault"] is None
     assert data["next"] == []
+
+
+def test_grade_threshold_boundary_is_fair():
+    at = report._GRADE_THRESHOLD
+    assert report._grade(at, 0, 0, 0, 0, 0)["grade"] == "FAIR"
+    assert report._grade(at + 1, 0, 0, 0, 0, 0)["grade"] == "NEEDS WORK"
+
+
+def test_build_no_reindex_skips_reindex(tmp_path, monkeypatch):
+    from tests.conftest import make_vault_with_pages
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"raw/a.md": "# A\n\nx"})
+    calls = []
+    import scripts.reindex as _ri
+    monkeypatch.setattr(_ri, "incremental", lambda *a, **k: calls.append(1))
+    report.build(db, vid, today="2026-06-26", no_reindex=True)
+    assert calls == []
+    report.build(db, vid, today="2026-06-26", no_reindex=False)
+    assert calls == [1]
