@@ -181,13 +181,20 @@ def _active_section(db_path, vault_id, *, today) -> dict:
 def _vault_health(db_path, vault_id, *, today) -> dict:
     from scripts import maint, wiki_lint
     m = _safe(lambda: maint.status(db_path, vault_id=vault_id, today=today),
-              {"stale": 0, "expired": 0, "lint_issues": 0})
+              {"stale": 0, "expired": 0})
     lint = _safe(lambda: wiki_lint.check(db_path, vault_id=vault_id), {})
     dangling = len(lint.get("dangling_links") or [])
     orphans = len(lint.get("orphan_pages") or [])
-    # maint.lint_issues already includes dangling+orphans; subtract to avoid
-    # double-counting, so the grade's issue sum == stale+expired+total-lint.
-    other_lint = max(0, m.get("lint_issues", 0) - dangling - orphans)
+    # Compute non-structural lint directly from the wiki_lint report. (Do NOT
+    # derive it by subtracting from maint's total: maint's lint_issues counts
+    # orphans under a differently-named key than wiki_lint, so subtraction
+    # over-counts and the max(0, …) clamp would silently drop real
+    # contradiction/stale/missing issues whenever orphans dominate.) The
+    # grade's issue sum is now exact:
+    #   stale + expired + dangling + orphans + other_lint.
+    other_lint = sum(len(lint.get(k) or []) for k in
+                     ("missing_concepts", "contradiction_candidates",
+                      "stale_claim_candidates"))
     return _grade(m.get("stale", 0), m.get("expired", 0), dangling, orphans,
                   other_lint, _safe(lambda: _parse_errors(db_path, vault_id), 0))
 
