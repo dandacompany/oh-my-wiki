@@ -130,8 +130,8 @@ def _run_interactive(name: str, mode: str, type_: str, location: str,
     else:
         print(
             f"setup complete — vault '{name}' ({mode}/{type_}) at {vault_path}. "
-            f"Configure search/persona/recall sections anytime with 'omw setup search' / "
-            f"'omw setup personas' / 'omw setup recall'."
+            f"Configure search/fetch/persona/recall sections anytime with 'omw setup search' / "
+            f"'omw setup fetch' / 'omw setup personas' / 'omw setup recall'."
         )
     return 0
 
@@ -275,24 +275,35 @@ def _resolve_brightdata_zone(api_key: str, *, zone: str | None, interactive: boo
         return None
 
 
-def setup_search(*, noninteractive: bool = False, provider: str | None = None,
-                 api_key: str | None = None, zone: str | None = None,
-                 create_zone: bool = False) -> int:
+#: providers that implement scrape() — the only valid `omw setup fetch` choices.
+_SCRAPE_PROVIDERS = ("brightdata", "firecrawl")
+
+
+def _setup_provider_section(*, section: str, label: str, allowed: list[str],
+                            noninteractive: bool, provider: str | None,
+                            api_key: str | None, zone: str | None,
+                            create_zone: bool) -> int:
+    """Shared provider+secret(+brightdata zone) writer for `setup search`/`setup fetch`.
+
+    `section` selects the config prefix (`<section>.provider`/`.enabled`); `allowed`
+    restricts the provider menu. Writes per-provider secret env vars (shared across
+    sections) and records the chosen provider under `<section>`.
+    """
     from scripts import config
     interactive = (not noninteractive) and sys.stdin.isatty()
     if interactive:
         try:
             import questionary  # type: ignore
             provider = questionary.select(
-                "Search provider", choices=list(_PROVIDER_SECRETS) + ["skip"]).ask() or "skip"
+                f"{label} provider", choices=list(allowed) + ["skip"]).ask() or "skip"
         except Exception:
-            provider = input(f"Search provider {list(_PROVIDER_SECRETS)} [skip]: ").strip() or "skip"
+            provider = input(f"{label} provider {list(allowed)} [skip]: ").strip() or "skip"
     if not provider or provider == "skip":
-        print("search setup skipped — re-run `omw setup search` anytime.")
+        print(f"{section} setup skipped — re-run `omw setup {section}` anytime.")
         return 0
-    if provider not in _PROVIDER_SECRETS:
-        print(f"error: unknown provider {provider!r}; choose from {list(_PROVIDER_SECRETS)}",
-              file=sys.stderr)
+    if provider not in allowed:
+        print(f"error: {provider!r} is not a valid {label.lower()} provider; "
+              f"choose from {list(allowed)}", file=sys.stderr)
         return 1
     supplied = {"api_key": api_key, "zone": zone}
     all_present = True
@@ -310,15 +321,41 @@ def setup_search(*, noninteractive: bool = False, provider: str | None = None,
             supplied[field] = val  # later fields (zone) read the resolved api_key
         else:
             all_present = False
-    config.set_config("search.provider", provider)
-    config.set_config("search.enabled", all_present)
+    # search + fetch both on brightdata share the single BRIGHTDATA_ZONE secret — a
+    # per-role zone isn't possible, so warn rather than silently coupling them.
+    if (section == "fetch" and provider == "brightdata"
+            and (config.load_config().get("search") or {}).get("provider") == "brightdata"):
+        print("  note: search and fetch both use brightdata — they share the same "
+              "BRIGHTDATA_ZONE secret (a different zone per role isn't supported).")
+    config.set_config(f"{section}.provider", provider)
+    config.set_config(f"{section}.enabled", all_present)
     if all_present:
-        print(f"✓ search provider '{provider}' configured.")
+        print(f"✓ {label.lower()} provider '{provider}' configured.")
     else:
         print(f"recorded provider '{provider}' — add missing key(s) with "
-              f"`omw setup search --provider {provider} --api-key <key>` "
+              f"`omw setup {section} --provider {provider} --api-key <key>` "
               f"(brightdata also needs --zone).")
     return 0
+
+
+def setup_search(*, noninteractive: bool = False, provider: str | None = None,
+                 api_key: str | None = None, zone: str | None = None,
+                 create_zone: bool = False) -> int:
+    return _setup_provider_section(
+        section="search", label="Search", allowed=list(_PROVIDER_SECRETS),
+        noninteractive=noninteractive, provider=provider, api_key=api_key,
+        zone=zone, create_zone=create_zone)
+
+
+def setup_fetch(*, noninteractive: bool = False, provider: str | None = None,
+                api_key: str | None = None, zone: str | None = None,
+                create_zone: bool = False) -> int:
+    """Configure the cloud page-unlock / browser (scrape) provider independently of
+    search. Only scrape-capable providers are offered."""
+    return _setup_provider_section(
+        section="fetch", label="Fetch", allowed=list(_SCRAPE_PROVIDERS),
+        noninteractive=noninteractive, provider=provider, api_key=api_key,
+        zone=zone, create_zone=create_zone)
 
 
 def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
