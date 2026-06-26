@@ -247,3 +247,94 @@ def build(db_path, vault_id=None, *, today, no_reindex=False) -> dict:
     out["health"]["vault"] = _safe(lambda: _vault_health(db_path, target_id, today=today), None)
     out["next"] = _safe(lambda: _next_top(db_path, target_id, today=today), [])
     return out
+
+
+def _dot(pairs) -> str:
+    """'a 1 · b 2', skipping None/empty values."""
+    return " · ".join(f"{k} {v}" for k, v in pairs if v not in (None, ""))
+
+
+def render(data: dict) -> str:
+    L: list[str] = []
+    v = data["vaults"]
+    header = f"omw report · {v['active'] or '(no active)'} · {data['generated_at']}"
+    L.append(f"{header}    omw {data['omw_version']}")
+    L.append("")
+
+    # VAULTS
+    L.append(f"VAULTS  ({v['total']} registered, active: {v['active'] or 'none'})")
+    for vi in v["list"]:
+        mark = "*" if vi["is_active"] else " "
+        notes = "(archived)" if vi["archived"] else f"{vi['total_notes']} notes"
+        L.append(f"  {mark} {vi['name']:<16} {vi['mode']}/{vi['type']:<10} {notes}")
+    L.append("")
+
+    # ACTIVE VAULT
+    L.append("ACTIVE VAULT")
+    av = data.get("active_vault")
+    if av is None:
+        L.append("  no active vault — run `omw vault use <name>`")
+    else:
+        L[-1] = f"ACTIVE VAULT  {av['name']}   {av['path']}   {av['mode']}/{av['type']}"
+        layers = av["layers"]
+        L.append("  Layers     " + (_dot([(k, layers[k]) for k in ('raw', 'wiki', 'memo', 'meta') if layers.get(k)]) or "(empty)"))
+        w = av["wiki"]
+        if any(w.values()):
+            L.append("  Wiki       " + _dot([("entities", w["entities"]), ("concepts", w["concepts"]),
+                                             ("syntheses", w["syntheses"]), ("other", w["other"])]))
+        types = av["facets"]["types"]
+        if types:
+            top_t = sorted(types.items(), key=lambda kv: (-kv[1], kv[0]))[:6]
+            L.append("  Types      " + _dot(top_t))
+        statuses = av["facets"]["statuses"]
+        if statuses:
+            L.append("  Status     " + _dot(sorted(statuses.items(), key=lambda kv: (-kv[1], kv[0]))))
+        vis = av["facets"]["visibility"]
+        if vis["public"] or vis["private"]:
+            L.append("  Visibility " + _dot([("public", vis["public"]), ("private", vis["private"])]))
+        g = av["graph"]
+        L.append(f"  Graph      {g['nodes']} nodes · {g['edges']} edges · {g['dangling']} dangling · modularity {g['modularity']}")
+        if g["communities"] or g["bridges"] or g["hubs"]:
+            L.append(f"             {g['communities']} communities · {g['bridges']} bridges · {g['hubs']} hubs")
+        t = av["tags"]
+        if t["distinct"]:
+            top = " ".join(f"{n}({c})" for n, c in t["top"])
+            L.append(f"  Tags       {t['distinct']} distinct · top: {top}")
+        idx = av["index"]
+        idx_line = "present" if idx["present"] else "MISSING"
+        if idx["drift"]:
+            idx_line += f" · {idx['drift']} pages drifted"
+        L.append(f"  Index      {idx_line}")
+        ib = av["inbox"]
+        if any(ib.values()):
+            L.append("  Inbox      " + _dot([(k, ib[k]) for k in ib if ib[k]]))
+        rv = av["review"]
+        if rv["due"] or rv["stale"] or rv["expired"]:
+            L.append("  Review     " + _dot([("due", rv["due"]), ("stale", rv["stale"]), ("expired", rv["expired"])]))
+        if av["parse_errors"]:
+            L.append(f"  ParseErr   {av['parse_errors']}")
+    L.append("")
+
+    # HEALTH
+    L.append("HEALTH")
+    inst = data["health"].get("install")
+    if inst is not None:
+        bits = " · ".join(f"{i['name']} {'ok' if i['ok'] else 'missing'}" for i in inst["items"])
+        L.append(f"  Install    {'ok' if inst['ok'] else 'WARN'}   ({bits})")
+    vh = data["health"].get("vault")
+    if vh is not None:
+        warn = "⚠ " if vh["grade"] != "GOOD" else ""
+        detail = _dot([("stale", vh["stale"]), ("expired", vh["expired"]),
+                       ("dangling", vh["dangling"]), ("orphans", vh["orphans"]),
+                       ("lint", vh["lint_issues"])]) or "clean"
+        L.append(f"  Vault      {warn}{vh['grade']}   (score {vh['score']} · {detail})")
+    L.append("")
+
+    # NEXT
+    L.append("NEXT")
+    if data["next"]:
+        for i, s in enumerate(data["next"], 1):
+            L.append(f"  {i}. {s['action']} — {s['reason']}   → {s['command']}")
+    else:
+        L.append("  (nothing pending)")
+    return "\n".join(L)
