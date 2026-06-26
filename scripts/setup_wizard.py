@@ -893,7 +893,6 @@ def setup_playwright(*, noninteractive: bool = False) -> int:
 def doctor_checks() -> dict:
     """Structured install/config health. No printing — the SSOT consumed by both
     doctor() (renderer) and report.build() (install-health summary)."""
-    import shutil
     from pathlib import Path as _P
     import scripts.fetch_chromium as _fc
     from scripts import platform_env as _pe
