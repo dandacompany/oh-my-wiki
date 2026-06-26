@@ -107,3 +107,12 @@ def test_setup_fetch_warns_when_search_also_brightdata(monkeypatch, capsys):
                   "--provider", "brightdata", "--api-key", "K"])
     out = capsys.readouterr().out.lower()
     assert "brightdata_zone" in out or "shares" in out or "same zone" in out
+
+
+def test_setup_fetch_frames_provider_as_optional_escalation(monkeypatch, capsys):
+    """`setup fetch` must make clear the provider is optional — built-in/native fetch
+    runs first; the provider only backs hard-blocked pages."""
+    from scripts import setup_wizard
+    setup_wizard.setup_fetch(noninteractive=True)  # no provider → skipped, but framed
+    out = capsys.readouterr().out.lower()
+    assert "built-in" in out or "native" in out or "optional" in out

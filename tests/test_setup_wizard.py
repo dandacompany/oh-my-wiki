@@ -209,6 +209,7 @@ def test_run_all_invokes_sections_in_order(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(setup_wizard, "run", lambda **k: calls.append("vault") or 0)
     monkeypatch.setattr(setup_wizard, "setup_search", lambda **k: calls.append("search") or 0)
+    monkeypatch.setattr(setup_wizard, "setup_fetch", lambda **k: calls.append("fetch") or 0)
     monkeypatch.setattr(setup_wizard, "setup_serve", lambda **k: calls.append("serve") or 0)
     monkeypatch.setattr(setup_wizard, "setup_personas", lambda **k: calls.append("personas") or 0)
     monkeypatch.setattr(setup_wizard, "setup_import", lambda **k: calls.append("import") or 0)
@@ -217,7 +218,9 @@ def test_run_all_invokes_sections_in_order(monkeypatch, tmp_path):
     monkeypatch.setattr(setup_wizard, "setup_recall", lambda **k: calls.append("recall") or 0)
     rc = setup_wizard.run_all(noninteractive=False, base_dir=tmp_path)
     assert rc == 0
-    assert calls == ["vault", "search", "serve", "personas", "import", "viewer", "agents", "recall"]
+    # fetch comes right after search (it backs search's cloud-escalation tier)
+    assert calls == ["vault", "search", "fetch", "serve", "personas",
+                     "import", "viewer", "agents", "recall"]
 
 
 def test_run_all_returns_first_nonzero_but_continues(monkeypatch, tmp_path):

@@ -351,7 +351,11 @@ def setup_fetch(*, noninteractive: bool = False, provider: str | None = None,
                 api_key: str | None = None, zone: str | None = None,
                 create_zone: bool = False) -> int:
     """Configure the cloud page-unlock / browser (scrape) provider independently of
-    search. Only scrape-capable providers are offered."""
+    search. Optional: the host agent's built-in/native fetch and the local
+    urllib→chromium tiers run first; this provider only backs hard-blocked or
+    JS-heavy pages (the cloud escalation tier). Only scrape-capable providers offered."""
+    print("Fetch provider is optional — built-in/native fetch runs first; a provider "
+          "only backs hard-blocked pages. Leave blank/skip to use built-in fetch only.")
     return _setup_provider_section(
         section="fetch", label="Fetch", allowed=list(_SCRAPE_PROVIDERS),
         noninteractive=noninteractive, provider=provider, api_key=api_key,
@@ -835,6 +839,7 @@ def run_all(*, noninteractive: bool = False, base_dir=None) -> int:
     steps = [
         ("vault", lambda: run(noninteractive=noninteractive, in_wizard=True)),
         ("search", lambda: setup_search(noninteractive=noninteractive)),
+        ("fetch", lambda: setup_fetch(noninteractive=noninteractive)),
         ("serve", lambda: setup_serve(noninteractive=noninteractive)),
         ("personas", lambda: setup_personas(noninteractive=noninteractive, base_dir=base_dir)),
         ("import", lambda: setup_import(noninteractive=noninteractive)),
