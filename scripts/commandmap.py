@@ -16,12 +16,15 @@ _END = f"<!-- {MARKER}:end -->"
 
 
 def _row(op) -> str:
-    trig = ", ".join(op.triggers)
+    def esc(s):
+        return (s or "").replace("|", "\\|")
+    trig = esc(", ".join(op.triggers))
+    summary = esc(op.summary)
     if op.kind == "deterministic":
-        return f"| `{op.name}` | run | `{op.cli_template}` | {op.summary} | {trig} |"
+        return f"| `{op.name}` | run | `{esc(op.cli_template)}` | {summary} | {trig} |"
     parts = [a.name if a.name.startswith("--") else f"<{a.name}>" for a in op.args]
-    invocation = " ".join(["omw", op.name, *parts]).rstrip()
-    return f"| `{op.name}` | procedure | `{invocation}` → {op.procedure_file} | {op.summary} | {trig} |"
+    invocation = esc(" ".join(["omw", op.name, *parts]).rstrip())
+    return f"| `{op.name}` | procedure | `{invocation}` → {op.procedure_file} | {summary} | {trig} |"
 
 
 def render_block() -> str:
