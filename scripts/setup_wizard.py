@@ -392,10 +392,17 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
         choices_meta = hostsmod.instruction_choices()
         choice_labels = [f"{', '.join(c['members'])} ({c['file']})" for c in choices_meta]
         picked_labels = _prompt("checkbox", "Export to hosts", choices=choice_labels) or []
-        # Map labels back to flat host list by expanding members of each picked choice.
+        # Map answers back to a flat host list. Accept either the full choice label
+        # (questionary returns these) or a bare member host / convention file name
+        # (the plain-text fallback lets users type "claude" instead of the full
+        # "claude (CLAUDE.md)" label) — otherwise a typed short name matches nothing
+        # and hosts falls through to the all-repo default, exporting unwanted files.
+        picked_set = {s.strip() for s in picked_labels}
         picked_hosts: list[str] = []
         for label, meta in zip(choice_labels, choices_meta):
-            if label in picked_labels:
+            if (label in picked_set
+                    or meta["file"] in picked_set
+                    or any(m in picked_set for m in meta["members"])):
                 picked_hosts.extend(meta["members"])
         hosts = picked_hosts or None
         # Scoped host sub-prompts: ask for profile/workspace when not yet provided.
