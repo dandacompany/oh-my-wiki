@@ -923,8 +923,17 @@ def _cmd_report(args) -> int:
     from datetime import date
     from scripts import report
     db = registry_path()
-    vault = _require_vault_row(db, args.vault) if args.vault else registry.get_active(db)
-    vault_id = vault["id"] if vault else None
+    if not db.exists():
+        print("error: no registry; run `omw status` to set up", file=sys.stderr)
+        return 1
+    if args.vault:
+        vault = _require_vault_row(db, args.vault)
+        if vault is None:
+            return 1
+        vault_id = vault["id"]
+    else:
+        active = registry.get_active(db)
+        vault_id = active["id"] if active else None
     today = getattr(args, "today", None) or date.today().isoformat()
     data = report.build(db, vault_id, today=today, no_reindex=args.no_reindex)
     if args.report_json:
