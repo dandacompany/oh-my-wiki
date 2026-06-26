@@ -906,6 +906,60 @@ def _cmd_update(args) -> int:
                       refresh=not args.no_refresh)
 
 
+def _cmd_uninstall(args) -> int:
+    from scripts import uninstall
+    base = args.base_dir or None
+    hosts = [h.strip() for h in args.host.split(",") if h.strip()] if args.host else None
+    p = uninstall.plan(base, hosts=hosts)
+    interactive = (not args.yes) and sys.stdin.isatty()
+
+    def _print_plan(title):
+        print(title)
+        for h in p["hosts"]:
+            print(f"  block   {h['host']:<9} {h['path']}  [{', '.join(h['markers'])}]")
+        for hk in p["hooks"]:
+            print(f"  hooks   {hk['host']:<9} {hk['path']}  ({hk['count']})")
+        for sk in p["skills"]:
+            print(f"  skill   {sk['agent']:<9} {sk['path']}")
+        if not (p["hosts"] or p["hooks"] or p["skills"]):
+            print("  (no omw host integration detected)")
+
+    if args.dry_run:
+        _print_plan("omw uninstall — dry run (nothing will be removed):")
+        if args.purge:
+            print(f"  purge   {p['home']['path']}  (config/.env/registry — vaults kept)")
+        if args.vaults:
+            for v in p["home"]["vaults"]:
+                print(f"  VAULT   {v['name']}  {v['path']}  (DELETE content)")
+        print(f"\nFinish with: {p['pip_hint']}")
+        return 0
+
+    purge, vaults = args.purge, args.vaults
+    if interactive:
+        _print_plan("omw uninstall — the following omw integration was detected:")
+        if input("\nRemove omw's host blocks, hooks, and skill bundle? [y/N] ").strip().lower() not in ("y", "yes"):
+            print("aborted — nothing removed.")
+            return 0
+        if not purge and input("Also purge ~/.omw config + secrets + registry? [y/N] ").strip().lower() in ("y", "yes"):
+            purge = True
+        if not vaults and input("Also DELETE vault content? type 'delete' to confirm: ").strip() == "delete":
+            vaults = True
+    else:
+        # non-interactive safe fallback: Tier 1 (+ explicit flags). --vaults needs --yes.
+        if vaults and not args.yes:
+            print("error: --vaults deletes user content; pass --yes to confirm (non-interactive)",
+                  file=sys.stderr)
+            return 1
+
+    res = uninstall.apply(p, purge=purge, vaults=vaults)
+    print(f"✓ removed: {len(res['blocks_removed'])} block-set(s), "
+          f"{len(res['hooks_removed'])} hook config(s), {len(res['skills_removed'])} skill bundle(s)"
+          + (" · purged ~/.omw config/registry" if res["purged"] else "")
+          + (f" · deleted {len(res['vaults_deleted'])} vault(s)" if res["vaults_deleted"] else ""))
+    print(f"To remove the package itself: {res['pip_hint']}")
+    return 0
+
+
 def _cmd_agentic(args) -> int:
     from scripts import ops_registry as reg
     from scripts import cards
@@ -1339,6 +1393,17 @@ def build_parser() -> argparse.ArgumentParser:
     pup.add_argument("--yes", action="store_true")
     pup.add_argument("--no-refresh", dest="no_refresh", action="store_true")
     pup.set_defaults(func=_cmd_update)
+
+    pun = sub.add_parser("uninstall", help="Remove omw's host integration (blocks/hooks/skill).")
+    pun.add_argument("--host", default=None, help="limit to host(s), comma-separated (default: auto-detect)")
+    pun.add_argument("--purge", action="store_true",
+                     help="also remove ~/.omw config + secrets + registry (keeps vaults)")
+    pun.add_argument("--vaults", action="store_true",
+                     help="also DELETE vault content (requires --yes when non-interactive)")
+    pun.add_argument("--dry-run", action="store_true", help="preview only; write nothing")
+    pun.add_argument("--yes", action="store_true", help="skip confirmations (non-interactive)")
+    pun.add_argument("--base-dir", default=None, help=argparse.SUPPRESS)
+    pun.set_defaults(func=_cmd_uninstall)
 
     ppr = sub.add_parser("persona-run", help="Dispatch a persona as an isolated one-shot subagent.")
     ppr.add_argument("role")
