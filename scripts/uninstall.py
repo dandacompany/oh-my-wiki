@@ -7,10 +7,6 @@ stdlib only; `plan()` never raises.
 """
 from __future__ import annotations
 
-import json
-import shutil
-from pathlib import Path
-
 from scripts import persona_export, recall, commandmap
 
 #: The four managed marker names, sourced from their owning modules (SSOT).
