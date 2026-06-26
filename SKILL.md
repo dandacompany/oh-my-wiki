@@ -178,6 +178,17 @@ When the user has enabled the gate (`omw setup gate --enable`), help it work:
 
 After completing a unit of work, run `omw next` and propose the top next action (collect / structure / synthesize / maintain / review / recall); the user picks now / background / later.
 
+## history — remember requests, learn preferences
+
+omw keeps a per-vault **request history** (distinct from `wiki/log.md`). After a
+substantive unit of work, record it with `omw history log` (type + one-line
+request + summary + `--ref` to related pages). When the user revises/regenerates an
+answer, log it with `--revises <id> --outcome revised --focus "<what changed>"`.
+
+Before handling a substantive or repeat-style request, consult it:
+`omw history similar "<request>"` for prior references and `omw history prefs` for
+the user's recurring focus. See `commands/history.md` for the full procedure.
+
 ## Trigger-phrase routing hint
 
 If the user input matches an op keyword, prefer that op over the wizard:
