@@ -42,3 +42,18 @@ def test_cli_similar_and_prefs(tmp_path, monkeypatch, capsys):
     rc = omw_cli.main(["history", "prefs"])
     p = json.loads(capsys.readouterr().out)
     assert rc == 0 and "focus_terms" in p
+
+
+def test_cli_history_recreates_missing_table(tmp_path, monkeypatch, capsys):
+    db, vid = _seed(tmp_path, monkeypatch)
+    from scripts import registry
+    conn = registry.connect(db)
+    try:
+        conn.execute("DROP TABLE interactions")
+        conn.commit()
+    finally:
+        conn.close()
+    # a pre-history DB: omw history must re-create the table and succeed
+    rc = omw_cli.main(["history", "log", "--type", "query", "--request", "after upgrade"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["type"] == "query"

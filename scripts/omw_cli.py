@@ -412,6 +412,7 @@ def _cmd_inbox(args) -> int:
 def _cmd_history(args) -> int:
     from scripts import history
     db = registry_path()
+    registry.init_db(db)   # idempotent: ensures the interactions table exists on a pre-existing DB
     vault = _require_vault_row(db, args.vault)
     if vault is None:
         return 1
