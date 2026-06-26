@@ -1,6 +1,3 @@
-import json
-from pathlib import Path
-
 from scripts import omw_cli
 from scripts import ops_registry as reg
 
