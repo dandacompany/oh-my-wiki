@@ -8,6 +8,7 @@ stdlib only; `plan()` never raises.
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 from scripts import persona_export, recall, commandmap
@@ -186,3 +187,78 @@ def plan(base_dir, *, hosts=None, profile=None, workspace=None) -> dict:
                                      "env": False, "registry": False, "vaults": []}),
         "pip_hint": _safe(_pip_hint, "pip uninstall oh-my-wiki"),
     }
+
+
+def apply(plan_dict, *, purge=False, vaults=False, dry_run=False) -> dict:
+    """Execute the removal plan, tier-gated. dry_run reports without mutating."""
+    summary = {
+        "dry_run": dry_run,
+        "blocks_removed": [], "hooks_removed": [], "skills_removed": [],
+        "purged": None, "vaults_deleted": None,
+        "pip_hint": plan_dict.get("pip_hint", _pip_hint()),
+    }
+
+    # Tier 1a: strip marker blocks from host instruction files.
+    for host in plan_dict.get("hosts", []):
+        path = Path(host["path"])
+        present = host.get("markers", [])
+        if not dry_run:
+            text = _safe(lambda: path.read_text(encoding="utf-8"), None)
+            if text is not None:
+                changed = False
+                for m in present:
+                    text, did = strip_marker_block(text, m)
+                    changed = changed or did
+                if changed:
+                    _safe(lambda: path.write_text(text, encoding="utf-8"), None)
+        summary["blocks_removed"].append({"host": host["host"], "path": host["path"],
+                                          "markers": present})
+
+    # Tier 1b: remove omw hooks.
+    for hk in plan_dict.get("hooks", []):
+        if not dry_run:
+            _strip_omw_hooks(hk["path"])
+        summary["hooks_removed"].append({"host": hk["host"], "path": hk["path"],
+                                         "count": hk.get("count", 0)})
+
+    # Tier 1c: remove skill bundles (only the oh-my-wiki dir).
+    for sk in plan_dict.get("skills", []):
+        bundle = Path(sk["path"])
+        if not dry_run and bundle.name == "oh-my-wiki" and bundle.exists():
+            _safe(lambda: shutil.rmtree(bundle), None)
+        summary["skills_removed"].append({"agent": sk["agent"], "path": sk["path"]})
+
+    home = plan_dict.get("home") or {}
+
+    # Tier 2: --purge config + secrets + registry (NOT vaults).
+    if purge:
+        hp = Path(home.get("path", "")) if home.get("path") else None
+        purged = {"config": False, "env": False, "registry": False}
+        if hp:
+            for key, names in (("config", ("config.yaml", "config.yml", "config.json")),
+                               ("env", (".env",)),
+                               ("registry", ("registry.db",))):
+                for n in names:
+                    f = hp / n
+                    if f.exists():
+                        purged[key] = True
+                        if not dry_run:
+                            _safe(lambda f=f: f.unlink(), None)
+        summary["purged"] = purged
+
+    # Tier 3: --vaults delete vault content (registry paths + ~/.omw/vaults).
+    if vaults:
+        deleted = []
+        for v in home.get("vaults", []):
+            vp = Path(v["path"])
+            if vp.exists():
+                if not dry_run:
+                    _safe(lambda vp=vp: shutil.rmtree(vp), None)
+                deleted.append({"name": v["name"], "path": v["path"]})
+        vaults_dir = Path(home.get("path", "")) / "vaults" if home.get("path") else None
+        if vaults_dir and vaults_dir.exists():
+            if not dry_run:
+                _safe(lambda: shutil.rmtree(vaults_dir), None)
+        summary["vaults_deleted"] = deleted
+
+    return summary
