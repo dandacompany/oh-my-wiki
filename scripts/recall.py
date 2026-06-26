@@ -380,14 +380,25 @@ def _read_pretool_stdin() -> dict:
 
 #: Each supported host reads command hooks from this JSON file, all sharing the
 #: Claude-style schema: {"hooks": {<Event>: [{"hooks": [{"type","command",...}]}]}}.
-def host_hook_configs() -> dict:
+def _hook_home():
+    """Home root for host hook configs. Honors OMW_HOOK_HOME so tests (and sandboxes)
+    never write to the real ~/.claude, ~/.codex, ~/.openclaw, etc."""
+    import os
     from pathlib import Path
-    home = Path.home()
-    return {
-        "claude": home / ".claude" / "settings.json",
-        "codex": home / ".codex" / "hooks.json",
-        "gemini": home / ".gemini" / "settings.json",
-    }
+    return Path(os.environ.get("OMW_HOOK_HOME") or Path.home())
+
+
+def host_hook_configs() -> dict:
+    """JSON-mechanism hosts → their hook config path. Derived from the hosts.HOOK SSOT
+    (claude/codex/gemini). hermes (yaml) and opencode/openclaw (ts-plugin) are wired by
+    their own writers, not this map."""
+    from scripts import hosts
+    home = _hook_home()
+    out = {}
+    for host, d in hosts.HOOK.items():
+        if d.get("mech") == "json" and d.get("path"):
+            out[host] = home / d["path"].replace("~/", "")
+    return out
 
 
 def _omw_bin() -> str:
@@ -395,14 +406,46 @@ def _omw_bin() -> str:
     return shutil.which("omw") or "omw"
 
 
-def _recall_hook_specs() -> dict:
-    """event -> (command, statusMessage). Marked by the 'omw recall' substring for idempotency."""
+def _format_output(out: str, fmt: str, event: str) -> str:
+    """Wrap a recall body in the stdout shape the host's hook system expects.
+    Empty body → empty string (a no-op injection), never a malformed envelope."""
+    import json
+    if not out:
+        return ""
+    if fmt == "gemini-json":
+        return json.dumps({"hookSpecificOutput": {"hookEventName": event,
+                                                  "additionalContext": out}}, ensure_ascii=False)
+    if fmt == "claude-json":
+        return json.dumps({"hookSpecificOutput": {"hookEventName": event,
+                                                  "additionalContext": out}}, ensure_ascii=False)
+    if fmt == "hermes-json":
+        return json.dumps({"context": out}, ensure_ascii=False)
+    return out  # plain
+
+
+#: abstract event -> (recall verb, statusMessage). 'omw recall' substring marks idempotency.
+_RECALL_VERBS = {
+    "session": ("preamble", "omw wiki preamble"),
+    "prompt": ("prompt", "omw wiki recall"),
+    "pretool": ("pretool", "omw wiki-first nudge"),
+}
+
+
+def _recall_hook_specs(host: str = "claude") -> dict:
+    """Concrete event name -> (command, statusMessage) for a host, derived from the
+    hosts.HOOK descriptor. The command bakes in the host's `--format` and `--event` so
+    `omw recall` emits the host's required stdout shape under the host's event name."""
+    from scripts import hosts
     omw = _omw_bin()
-    return {
-        "SessionStart": (f'"{omw}" recall preamble', "omw wiki preamble"),
-        "UserPromptSubmit": (f'"{omw}" recall prompt', "omw wiki recall"),
-        "PreToolUse": (f'"{omw}" recall pretool', "omw wiki-first nudge"),
-    }
+    fmt = hosts.hook_fmt(host)
+    specs = {}
+    for abstract, (verb, status) in _RECALL_VERBS.items():
+        event = hosts.hook_event(host, abstract)
+        if not event:
+            continue
+        cmd = f'"{omw}" recall {verb} --format {fmt} --event {event}'
+        specs[event] = (cmd, status)
+    return specs
 
 
 def _event_has_recall(entries: list) -> bool:
@@ -432,7 +475,7 @@ def wire_host(host: str, *, config_path=None) -> tuple[bool, str]:
         return False, f"unexpected config shape in {path}"
     hooks = data.setdefault("hooks", {})
     added = []
-    for event, (command, status) in _recall_hook_specs().items():
+    for event, (command, status) in _recall_hook_specs(host).items():
         entries = hooks.setdefault(event, [])
         if _event_has_recall(entries):
             continue
@@ -453,11 +496,174 @@ def wire_host(host: str, *, config_path=None) -> tuple[bool, str]:
     return True, f"wired {'+'.join(added)} → {path}"
 
 
+def _hermes_config_path(profile: str | None):
+    """Profile config.yaml the hermes CLI/gateway reads. Verified on disk: the real file
+    is `config.yaml` (docs alternate with `cli-config.yaml`, which does not exist)."""
+    root = _hook_home() / ".hermes"
+    if profile:
+        return root / "profiles" / profile / "config.yaml"
+    return root / "config.yaml"
+
+
+def wire_hermes(*, profile=None, config_path=None, allowlist_path=None) -> tuple[bool, str]:
+    """Wire the recall injection hook into a hermes profile's config.yaml.
+
+    Hermes' only context-injecting hook is `pre_llm_call` (verified: on_session_start /
+    post_llm_call are observe-only). So omw injects per-prompt recall there, emitting the
+    hermes `{"context": ...}` stdout shape. Pre-seeds the first-use consent allowlist so the
+    hook registers in non-TTY (gateway/cron) contexts. Idempotent; preserves existing YAML."""
+    import json
+    from pathlib import Path
+    import yaml
+    path = Path(config_path) if config_path else _hermes_config_path(profile)
+    omw = _omw_bin()
+    command = f'"{omw}" recall prompt --format hermes-json'
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (OSError, yaml.YAMLError) as e:
+        return False, f"unreadable {path}: {e}"
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        return False, f"unexpected config shape in {path}"
+    hooks = data.setdefault("hooks", {})
+    entries = hooks.setdefault("pre_llm_call", [])
+    if any("recall prompt" in (e or {}).get("command", "") for e in entries):
+        return False, f"already wired ({path})"
+    entries.append({"command": command, "timeout": 10})
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            bak = path.with_suffix(path.suffix + ".omw-bak")
+            if not bak.exists():
+                bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+        path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+                        encoding="utf-8")
+    except OSError as e:
+        return False, f"write failed {path}: {e}"
+    # Pre-seed the consent allowlist (keyed on the exact command string).
+    allow = Path(allowlist_path) if allowlist_path else (_hook_home() / ".hermes"
+                                                         / "shell-hooks-allowlist.json")
+    try:
+        adata = json.loads(allow.read_text(encoding="utf-8")) if allow.exists() else {}
+        approvals = adata.setdefault("approvals", []) if isinstance(adata, dict) else []
+        if not any(a.get("command") == command and a.get("event") == "pre_llm_call"
+                   for a in approvals):
+            approvals.append({"event": "pre_llm_call", "command": command})
+            adata["approvals"] = approvals
+            allow.parent.mkdir(parents=True, exist_ok=True)
+            allow.write_text(json.dumps(adata, indent=2, ensure_ascii=False) + "\n",
+                             encoding="utf-8")
+    except (OSError, ValueError):
+        pass  # allowlist pre-seed is best-effort; hermes will prompt on first use
+    return True, f"wired pre_llm_call → {path}"
+
+
+# TS plugin templates. opencode and openclaw use a JS/TS plugin event API (not shell
+# hooks), so omw ships a thin plugin that shells out to `omw recall` and injects the result
+# through each runtime's available surface.
+_OPENCODE_PLUGIN_TS = '''\
+// omw-recall — auto-loaded opencode plugin. Injects omw wiki context into the system
+// prompt via the experimental transform (opencode has no AI-visible message injection
+// today — see github.com/anomalyco/opencode/issues/17412), so this is best-effort.
+import type { Plugin } from "@opencode-ai/plugin"
+
+export const OmwRecall: Plugin = async ({ $ }) => {
+  return {
+    "experimental.chat.system.transform": async (_input: any, output: any) => {
+      try {
+        const res = await $`omw recall preamble --format plain`.quiet().nothrow()
+        const text = (res.stdout?.toString() ?? "").trim()
+        if (text) output.system.push("<omw-wiki>\\n" + text + "\\n</omw-wiki>")
+      } catch (_e) { /* recall is best-effort; never block the session */ }
+    },
+  }
+}
+'''
+
+_OPENCLAW_PLUGIN_TS = '''\
+// omw-recall — OpenClaw plugin. Injects omw wiki context at before_prompt_build via the
+// typed prependContext return (the supported injection surface).
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
+const run = promisify(execFile)
+
+export default {
+  id: "omw-recall",
+  register(api: any) {
+    api.on("before_prompt_build", async (_event: any) => {
+      try {
+        const { stdout } = await run("omw", ["recall", "prompt", "--format", "plain"])
+        const text = (stdout || "").trim()
+        if (text) return { prependContext: text }
+      } catch (_e) { /* best-effort; never block the turn */ }
+      return
+    }, { priority: 50 })
+  },
+}
+'''
+
+
+def _ts_plugin_dest(host: str, *, base_dir=None, workspace=None):
+    home = _hook_home()
+    if host == "opencode":
+        return home / ".config" / "opencode" / "plugin" / "omw-recall.ts"
+    if host == "openclaw":
+        return home / ".openclaw" / "plugins" / "omw-recall" / "index.ts"
+    return None
+
+
+def wire_ts_plugin(host: str, *, dest=None, config_path=None,
+                   base_dir=None, workspace=None) -> tuple[bool, str]:
+    """Install the bundled omw-recall TS plugin for a plugin-based host.
+
+    opencode: drop an auto-loaded plugin file (no registration needed).
+    openclaw: drop the plugin file AND register it in openclaw.json (plugins.entries).
+    Idempotent: skips if the plugin file already exists. Returns (changed, detail)."""
+    import json
+    from pathlib import Path
+    path = Path(dest) if dest else _ts_plugin_dest(host, base_dir=base_dir, workspace=workspace)
+    if path is None:
+        return False, f"no TS plugin for host {host!r}"
+    content = _OPENCODE_PLUGIN_TS if host == "opencode" else _OPENCLAW_PLUGIN_TS
+    # Idempotency marker present in both templates (plugin id / comment).
+    if path.exists() and "omw-recall" in path.read_text(encoding="utf-8"):
+        return False, f"already installed ({path})"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    except OSError as e:
+        return False, f"write failed {path}: {e}"
+    if host == "openclaw":
+        cfg = Path(config_path) if config_path else (_hook_home() / ".openclaw" / "openclaw.json")
+        try:
+            data = json.loads(cfg.read_text(encoding="utf-8")) if cfg.exists() else {}
+            if not isinstance(data, dict):
+                return True, f"installed {path} (openclaw.json unexpected shape; not registered)"
+            entries = data.setdefault("plugins", {}).setdefault("entries", {})
+            entries["omw-recall"] = {"enabled": True,
+                                     "hooks": {"allowConversationAccess": True}}
+            cfg.parent.mkdir(parents=True, exist_ok=True)
+            if cfg.exists():
+                bak = cfg.with_suffix(cfg.suffix + ".omw-bak")
+                if not bak.exists():
+                    bak.write_text(cfg.read_text(encoding="utf-8"), encoding="utf-8")
+            cfg.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+                           encoding="utf-8")
+        except (OSError, ValueError) as e:
+            return True, f"installed {path} (registration failed: {e})"
+    return True, f"installed {path}"
+
+
 def main(argv=None) -> int:
     import argparse
     ap = argparse.ArgumentParser(prog="omw recall")
     ap.add_argument("action", choices=["preamble", "prompt", "pretool"])
     ap.add_argument("--text", default=None, help="prompt text (else read stdin)")
+    ap.add_argument("--format", dest="fmt", default="plain",
+                    choices=["plain", "claude-json", "gemini-json", "hermes-json"],
+                    help="stdout shape for the calling host's hook system")
+    ap.add_argument("--event", default="", help="concrete host event name (for json formats)")
     args = ap.parse_args(argv)
     if args.action == "preamble":
         out = preamble()
@@ -465,8 +671,9 @@ def main(argv=None) -> int:
         out = pretool(None)
     else:
         out = prompt(args.text)
-    if out:
-        print(out)
+    rendered = _format_output(out or "", args.fmt, args.event)
+    if rendered:
+        print(rendered)
     return 0
 
 

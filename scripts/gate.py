@@ -173,10 +173,18 @@ def _omw_bin() -> str:
 
 
 def _gate_hook_specs(host: str) -> dict:
-    if host != "claude":
+    """turn-end event name -> (command, status) for JSON-mechanism hosts. The gate is a
+    control hook (a maintenance check, no context injection), so it just needs to run at
+    the host's turn-end: claude/codex `Stop`, gemini `AfterAgent`. hermes/opencode/openclaw
+    turn-end is wired by their own writers."""
+    from scripts import hosts
+    if hosts.hook_mech(host) != "json":
+        return {}
+    event = hosts.hook_event(host, "turnend")
+    if not event:
         return {}
     omw = _omw_bin()
-    return {"Stop": (f'"{omw}" gate check', "omw wiki upkeep gate")}
+    return {event: (f'"{omw}" gate check', "omw wiki upkeep gate")}
 
 
 def _event_has_gate(entries: list) -> bool:

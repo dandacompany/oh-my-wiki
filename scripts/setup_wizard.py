@@ -776,12 +776,21 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     commandmap.export(base, hosts, profile=profile, workspace=workspace)
     print(f"✓ recall mode '{mode}'; guidance injected into "
           f"{', '.join(p.name for p in written) or '(none)'}.")
-    # Tier 2: wire the host's native SessionStart + UserPromptSubmit hooks (global config).
-    hook_capable = recall.host_hook_configs()
+    # Tier 2: wire each host's NATIVE recall hook, dispatched by its hook mechanism
+    # (JSON shell hook / hermes YAML shell hook / TS plugin). Each host's event names +
+    # stdout inject format differ — see hosts.HOOK.
     for host in hosts:
-        if host in hook_capable:
+        mech = hostsmod.hook_mech(host)
+        if mech == "json":
             changed, detail = recall.wire_host(host)
             print(f"  {'✓' if changed else '–'} {host} hooks: {detail}")
+        elif mech == "yaml":  # hermes: only pre_llm_call can inject recall
+            changed, detail = recall.wire_hermes(profile=profile)
+            print(f"  {'✓' if changed else '–'} {host} hooks (pre_llm_call recall): {detail}")
+        elif mech in ("ts-opencode", "ts-openclaw"):
+            changed, detail = recall.wire_ts_plugin(host, base_dir=base,
+                                                    workspace=workspace)
+            print(f"  {'✓' if changed else '–'} {host} plugin: {detail}")
         else:
             print(f"  – {host}: block-only (no native hook)")
     return 0

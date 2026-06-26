@@ -27,6 +27,58 @@ HOSTS: dict[str, dict] = {
 _CONV_ORDER = ["claude", "agents", "gemini", "hermes", "openclaw"]
 
 
+# ── hook descriptor SSOT ─────────────────────────────────────────────────────
+# Per-host lifecycle-hook wiring. Each host's hook system differs (verified against
+# official docs, 2026-06): event NAMES, config FORMAT, and stdout INJECT FORMAT all
+# vary. `events` maps omw's abstract events → the host's concrete event name:
+#   session  → inject preamble at session start
+#   prompt   → recall on the user's prompt (the primary injection point)
+#   pretool  → nudge before a tool reads raw/
+#   turnend  → maintenance gate at turn end (a control hook, no injection)
+# `mech` selects the writer; `fmt` selects the stdout shape `omw recall` must emit:
+#   plain        → bare text (claude, codex: plain stdout is injected as context)
+#   gemini-json  → {"hookSpecificOutput": {"hookEventName", "additionalContext"}}
+#   hermes-json  → {"context": "..."}
+HOOK: dict[str, dict] = {
+    "claude": {
+        "mech": "json", "fmt": "plain", "path": "~/.claude/settings.json",
+        "events": {"session": "SessionStart", "prompt": "UserPromptSubmit",
+                   "pretool": "PreToolUse", "turnend": "Stop"},
+    },
+    "codex": {
+        "mech": "json", "fmt": "plain", "path": "~/.codex/hooks.json",
+        "events": {"session": "SessionStart", "prompt": "UserPromptSubmit",
+                   "pretool": "PreToolUse", "turnend": "Stop"},
+    },
+    "gemini": {
+        "mech": "json", "fmt": "gemini-json", "path": "~/.gemini/settings.json",
+        "events": {"session": "SessionStart", "prompt": "BeforeAgent",
+                   "pretool": "BeforeTool", "turnend": "AfterAgent"},
+    },
+    "hermes": {
+        # scoped: path resolved at runtime from the active/selected profile.
+        "mech": "yaml", "fmt": "hermes-json",
+        "events": {"session": "on_session_start", "prompt": "pre_llm_call",
+                   "pretool": "pre_tool_call", "turnend": "post_llm_call"},
+    },
+    "opencode": {"mech": "ts-opencode", "fmt": "plain"},
+    "openclaw": {"mech": "ts-openclaw", "fmt": "plain"},
+}
+
+
+def hook_mech(host: str) -> str | None:
+    return (HOOK.get(host) or {}).get("mech")
+
+
+def hook_fmt(host: str) -> str:
+    return (HOOK.get(host) or {}).get("fmt", "plain")
+
+
+def hook_event(host: str, abstract: str) -> str | None:
+    """Concrete event name for an abstract event (session/prompt/pretool/turnend)."""
+    return ((HOOK.get(host) or {}).get("events") or {}).get(abstract)
+
+
 def is_scoped(host: str) -> bool:
     return HOSTS.get(host, {}).get("kind") == "scoped"
 

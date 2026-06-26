@@ -170,7 +170,8 @@ def test_write_synthesis_includes_summary(tmp_path):
     os.environ.pop("OMW_HOME", None)
 
 
-# --- host hook wiring (claude/codex/gemini all share the schema) ---------------------
+# --- host hook wiring (claude/codex share Claude's event names; gemini differs —
+# --- see tests/test_per_host_hooks.py for per-host event-name/format coverage) -------
 
 def test_prompt_from_stdin_extracts_json_prompt():
     from scripts import recall
