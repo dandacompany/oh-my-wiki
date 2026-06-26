@@ -972,7 +972,22 @@ def _cmd_embed(args) -> int:
         ok = embed_admin.embed_install.ensure_fastembed(assume_yes=True)
         print("fastembed ready" if ok else "error: fastembed install failed",
               file=sys.stderr if not ok else sys.stdout)
-        return 0 if ok else 1
+        if not ok:
+            return 1
+        # Best-effort: pre-warm the active model so the first embed() call is fast.
+        # A failure here is non-fatal — install already succeeded.
+        try:
+            from scripts import embed as _embed, config as _config
+            emb_cfg = (_config.load_config().get("recall") or {}).get("embedding") or {}
+            if not emb_cfg.get("provider") or emb_cfg.get("provider") == "none":
+                emb_cfg = {"provider": "fastembed", "model": _embed.DEFAULT_LOCAL_MODEL, "dim": 384}
+            embedder = _embed.get_embedder(emb_cfg)
+            if embedder is not None:
+                embedder.embed(["warm"])
+                print(f"model warmed: {emb_cfg.get('model', _embed.DEFAULT_LOCAL_MODEL)}")
+        except Exception as _warm_err:
+            print(f"warning: model warm failed (non-fatal): {_warm_err}", file=sys.stderr)
+        return 0
     if sub == "reindex":
         out = embed_admin.reindex_all(db)
         print(f"reindexed {out['vaults_reindexed']} vault(s)"); return 0

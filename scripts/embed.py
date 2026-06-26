@@ -66,6 +66,10 @@ class FastEmbedEmbedder(Embedder):
         self._te = None
 
     def embed(self, texts: list[str]) -> list[list[float]]:
+        # v1 uses symmetric embedding (no "query:"/"passage:" e5 prefixes) — both
+        # index and query texts are embedded the same way. Asymmetric prefixes are
+        # intentionally omitted here; add them in a future version if retrieval
+        # quality tests show a meaningful improvement.
         if self._te is None:
             from fastembed import TextEmbedding  # optional dep; lazy
             self._te = TextEmbedding(model_name=self.model)

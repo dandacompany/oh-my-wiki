@@ -711,16 +711,26 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                 _dim_str = _prompt("text", "Embedding dim",
                                    default=str(cur_emb.get("dim", 1536))) or str(cur_emb.get("dim", 1536))
                 dim = int(_dim_str)
+        # Determine effective provider — make the fastembed default explicit so
+        # configure_recall writes "fastembed" (not "none") when no provider was
+        # passed.  embed_admin.switch_model owns the final recall.embedding.*
+        # writes for the fastembed path and will overwrite what configure_recall
+        # wrote, so the intermediate write is intentionally corrected below.
+        cur_emb_provider = cur_emb.get("provider") or "none"
+        effective_provider = provider or (
+            cur_emb_provider
+            if cur_emb_provider in ("openai", "fake")
+            else "fastembed"
+        )
         configure_recall(
             strategy=strategy,
-            provider=provider or cur_emb.get("provider", "none"),
+            provider=effective_provider,
             model=model or cur_emb.get("model", "text-embedding-3-small"),
             dim=int(dim) if dim else cur_emb.get("dim", 1536),
             mode=mode,
             submode=submode,
             noninteractive=True,
         )
-        effective_provider = provider or cur_emb.get("provider") or "none"
         if effective_provider not in ("openai", "fake"):
             from scripts import embed as _embed
             chosen = model or _embed.DEFAULT_LOCAL_MODEL

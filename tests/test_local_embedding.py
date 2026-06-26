@@ -1,8 +1,10 @@
+import json as _json
 import types
 
 import pytest
 
-from scripts import embed
+from scripts import config as _config
+from scripts import embed, embed_admin, embed_install, omw_cli, setup_wizard, vector_index
 
 
 def test_get_embedder_fastembed_returns_fastembed_embedder():
@@ -39,9 +41,6 @@ def test_fastembed_embed_lazy_imports_and_maps(monkeypatch):
     assert calls["model_name"] == "m"
 
 
-from scripts import embed_install
-
-
 def test_ensure_fastembed_noop_when_present(monkeypatch):
     monkeypatch.setattr(embed_install, "fastembed_available", lambda: True)
     called = {"pip": False}
@@ -61,10 +60,16 @@ def test_ensure_fastembed_installs_when_absent(monkeypatch):
     assert "fastembed" in " ".join(ran["argv"])
 
 
-from scripts import vector_index
-
-
-from scripts import embed_admin, config as _config
+def test_ensure_fastembed_no_consent_no_pip(monkeypatch):
+    """When consent is withheld (assume_yes=False, non-interactive), ensure_fastembed
+    must return False without ever calling pip (subprocess.run)."""
+    monkeypatch.setattr(embed_install, "fastembed_available", lambda: False)
+    pip_called = {"n": 0}
+    monkeypatch.setattr(embed_install.subprocess, "run",
+                        lambda *a, **k: pip_called.__setitem__("n", pip_called["n"] + 1))
+    result = embed_install.ensure_fastembed(assume_yes=False, interactive=False)
+    assert result is False
+    assert pip_called["n"] == 0, "pip must NOT be called when consent is not given"
 
 
 def _fake_env(tmp_path, monkeypatch):
@@ -136,11 +141,6 @@ def test_vector_index_reset_allows_new_dim(tmp_path, monkeypatch):
                                rows=[("wiki/a.md", "hello")]) == 1
 
 
-import json as _json
-
-from scripts import omw_cli
-
-
 def test_cli_embed_status_json(tmp_path, monkeypatch, capsys):
     db = _fake_env(tmp_path, monkeypatch)
     assert omw_cli.main(["embed", "status"]) == 0
@@ -169,9 +169,6 @@ def test_embed_op_in_registry_and_help():
     op = next(o for o in ops_registry.OPS if o.name == "embed")
     for sub in ["status", "list", "use", "add", "install", "reindex"]:
         assert sub in op.cli_template
-
-
-from scripts import setup_wizard
 
 
 def test_setup_recall_embedding_triggers_switch_model(tmp_path, monkeypatch):
