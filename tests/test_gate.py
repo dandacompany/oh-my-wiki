@@ -131,23 +131,13 @@ def test_render_advisory_is_softer():
     assert "offer" in out.lower()
 
 
-def test_wire_host_json_hosts_use_their_turnend_event(tmp_path):
-    # gate now wires every JSON-mechanism host at its own turn-end event.
-    for host, event in (("codex", "Stop"), ("gemini", "AfterAgent")):
+def test_wire_host_non_claude_skips(tmp_path):
+    # gate stays Claude-only: no other host surfaces turn-end output, so wiring would no-op.
+    for host in ("codex", "gemini", "hermes", "opencode"):
         cfg = tmp_path / f"{host}.json"
         ok, _ = gate.wire_host(host, config_path=cfg)
-        assert ok is True
-        data = json.loads(cfg.read_text())
-        assert event in data["hooks"]
-        assert "gate check" in data["hooks"][event][0]["hooks"][0]["command"]
-
-
-def test_wire_host_non_hook_host_skips(tmp_path):
-    # non-JSON hosts have no gate turn-end wired in Phase 1 (hermes/opencode/openclaw).
-    cfg = tmp_path / "x.json"
-    ok, msg = gate.wire_host("opencode", config_path=cfg)
-    assert ok is False
-    assert not cfg.exists()
+        assert ok is False
+        assert not cfg.exists()
 
 
 def test_wire_host_is_idempotent(tmp_path):

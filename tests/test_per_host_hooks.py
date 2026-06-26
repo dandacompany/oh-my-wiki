@@ -43,47 +43,67 @@ def test_gemini_wire_uses_gemini_event_names_and_json_format(tmp_path):
     assert changed
     data = json.loads(cfg.read_text())
     events = set(data["hooks"])
-    assert {"SessionStart", "BeforeAgent", "BeforeTool"} <= events
+    # gemini injects on Session/BeforeAgent; BeforeTool injection is unconfirmed → not wired.
+    assert {"SessionStart", "BeforeAgent"} <= events
     assert "UserPromptSubmit" not in events and "PreToolUse" not in events
-    # the prompt hook (BeforeAgent) must emit the gemini JSON envelope
     cmd = data["hooks"]["BeforeAgent"][0]["hooks"][0]["command"]
     assert "recall prompt" in cmd and "gemini-json" in cmd
 
 
-def test_codex_wire_uses_claude_names_and_plain(tmp_path):
+def test_codex_wire_session_prompt_plain_no_pretool(tmp_path):
     cfg = tmp_path / "hooks.json"
     recall.wire_host("codex", config_path=cfg)
     data = json.loads(cfg.read_text())
-    assert {"SessionStart", "UserPromptSubmit", "PreToolUse"} <= set(data["hooks"])
+    events = set(data["hooks"])
+    assert {"SessionStart", "UserPromptSubmit"} <= events
+    assert "PreToolUse" not in events  # codex doesn't inject on pre-tool → not wired
     cmd = data["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
     assert "recall prompt" in cmd and "plain" in cmd
 
 
-def test_claude_wire_unchanged_names(tmp_path):
+def test_claude_wires_pretool_as_claude_json(tmp_path):
     cfg = tmp_path / "settings.json"
     recall.wire_host("claude", config_path=cfg)
     data = json.loads(cfg.read_text())
     assert {"SessionStart", "UserPromptSubmit", "PreToolUse"} <= set(data["hooks"])
+    # Claude's PreToolUse injects via the JSON envelope, not plain text
+    cmd = data["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+    assert "recall pretool" in cmd and "claude-json" in cmd
 
 
-# ── gate turn-end generalized beyond Claude to the other JSON hosts ──────────
-
-def test_gate_wires_codex_stop(tmp_path):
-    cfg = tmp_path / "hooks.json"
-    changed, _ = gate.wire_host("codex", config_path=cfg)
+def test_wire_migrates_stale_wrong_event_hooks(tmp_path):
+    # a gemini config left with OLD Claude-named omw hooks must be cleaned on re-wire.
+    cfg = tmp_path / "settings.json"
+    cfg.write_text(json.dumps({"hooks": {
+        "UserPromptSubmit": [{"hooks": [{"type": "command",
+                                         "command": '"omw" recall prompt'}]}],
+        "Stop": [{"hooks": [{"type": "command", "command": "keepme.sh"}]}],
+    }}))
+    changed, _ = recall.wire_host("gemini", config_path=cfg)
     assert changed
     data = json.loads(cfg.read_text())
-    assert "Stop" in data["hooks"]
+    # stale omw hook under the wrong event is gone; non-omw hooks preserved
+    assert "UserPromptSubmit" not in data["hooks"]
+    assert data["hooks"]["Stop"][0]["hooks"][0]["command"] == "keepme.sh"
+    assert "BeforeAgent" in data["hooks"]
+
+
+# ── gate (turn-end) stays Claude-only — no other host surfaces turn-end output ──
+
+def test_gate_wires_claude_stop(tmp_path):
+    cfg = tmp_path / "settings.json"
+    changed, _ = gate.wire_host("claude", config_path=cfg)
+    assert changed
+    data = json.loads(cfg.read_text())
     assert "gate check" in data["hooks"]["Stop"][0]["hooks"][0]["command"]
 
 
-def test_gate_wires_gemini_afteragent(tmp_path):
-    cfg = tmp_path / "settings.json"
-    changed, _ = gate.wire_host("gemini", config_path=cfg)
-    assert changed
-    data = json.loads(cfg.read_text())
-    assert "AfterAgent" in data["hooks"]
-    assert "Stop" not in data["hooks"]  # gemini has no Stop event
+def test_gate_skips_codex_and_gemini(tmp_path):
+    # codex Stop / gemini AfterAgent don't surface turn-end output → no silent no-op hook.
+    for host in ("codex", "gemini"):
+        cfg = tmp_path / f"{host}.json"
+        ok, _ = gate.wire_host(host, config_path=cfg)
+        assert ok is False and not cfg.exists()
 
 
 # ── P2: hermes YAML shell hooks ──────────────────────────────────────────────
@@ -154,3 +174,17 @@ def test_wire_ts_plugin_idempotent(tmp_path):
     recall.wire_ts_plugin("opencode", dest=dest)
     changed2, _ = recall.wire_ts_plugin("opencode", dest=dest)
     assert changed2 is False  # already present
+
+
+def test_openclaw_registers_even_when_plugin_file_preexists(tmp_path):
+    # B5: a pre-existing plugin file must not leave openclaw.json unregistered.
+    dest = tmp_path / "plugins" / "omw-recall" / "index.ts"
+    dest.parent.mkdir(parents=True)
+    dest.write_text("// omw-recall (pre-existing)\n")
+    cfg = tmp_path / "openclaw.json"
+    cfg.write_text(json.dumps({"plugins": {"entries": {}}, "gateway": {"token": "T"}}))
+    changed, _ = recall.wire_ts_plugin("openclaw", dest=dest, config_path=cfg)
+    assert changed  # registration happened despite the file already existing
+    reg = json.loads(cfg.read_text())
+    assert reg["plugins"]["entries"]["omw-recall"]["enabled"] is True
+    assert reg["gateway"]["token"] == "T"

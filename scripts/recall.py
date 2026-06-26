@@ -433,35 +433,63 @@ _RECALL_VERBS = {
 
 def _recall_hook_specs(host: str = "claude") -> dict:
     """Concrete event name -> (command, statusMessage) for a host, derived from the
-    hosts.HOOK descriptor. The command bakes in the host's `--format` and `--event` so
-    `omw recall` emits the host's required stdout shape under the host's event name."""
+    hosts.HOOK descriptor. Only the events in the host's `recall` list are wired (events
+    that actually inject context). Each command bakes in the per-event `--format` and the
+    host's `--event` so `omw recall` emits the right stdout shape under the right event."""
     from scripts import hosts
     omw = _omw_bin()
-    fmt = hosts.hook_fmt(host)
     specs = {}
-    for abstract, (verb, status) in _RECALL_VERBS.items():
+    for abstract in hosts.hook_recall_events(host):
+        verb, status = _RECALL_VERBS[abstract]
         event = hosts.hook_event(host, abstract)
         if not event:
             continue
+        fmt = hosts.hook_event_fmt(host, abstract)
         cmd = f'"{omw}" recall {verb} --format {fmt} --event {event}'
         specs[event] = (cmd, status)
     return specs
 
 
-def _event_has_recall(entries: list) -> bool:
-    """True if any hook in this event is already an `omw recall …` invocation
-    (path/quoting-agnostic — matches the `recall preamble|prompt|pretool` subcommand)."""
-    for group in entries or []:
-        for h in (group or {}).get("hooks", []):
-            cmd = (h or {}).get("command", "")
-            if "recall" in cmd and ("preamble" in cmd or "prompt" in cmd or "pretool" in cmd):
-                return True
-    return False
+def _is_omw_recall_cmd(cmd: str) -> bool:
+    return "recall" in cmd and ("preamble" in cmd or "prompt" in cmd or "pretool" in cmd)
+
+
+def _strip_omw_recall(hooks: dict) -> bool:
+    """Remove every omw-recall hook group from ALL events (migration: drops stale commands
+    and hooks left under wrong/renamed event keys). Prunes empties. Returns True if changed."""
+    changed = False
+    for event in list(hooks):
+        groups = hooks.get(event) or []
+        kept = [g for g in groups
+                if not any(_is_omw_recall_cmd((h or {}).get("command", ""))
+                           for h in (g or {}).get("hooks", []))]
+        if len(kept) != len(groups):
+            changed = True
+            if kept:
+                hooks[event] = kept
+            else:
+                del hooks[event]
+    return changed
+
+
+def _atomic_write(path, text: str) -> None:
+    """Backup-once then write via a temp file + os.replace (atomic; never leaves a half file)."""
+    import os
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        bak = path.with_suffix(path.suffix + ".omw-bak")
+        if not bak.exists():
+            bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    tmp = path.with_suffix(path.suffix + ".omw-tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def wire_host(host: str, *, config_path=None) -> tuple[bool, str]:
-    """Idempotently merge recall SessionStart + UserPromptSubmit + PreToolUse hooks
-    into a host config (JSON). Preserves all existing content. Returns (changed, detail)."""
+    """Wire a host's native recall hooks (JSON mechanism). Rebuilds omw-owned hooks: strips
+    any existing omw-recall entries from every event (migrating away stale formats / renamed
+    events), then inserts the host's correct event set + per-event `--format`. Preserves all
+    non-omw content. Idempotent (no write when already correct). Returns (changed, detail)."""
     import json
     from pathlib import Path
     path = Path(config_path) if config_path else host_hook_configs().get(host)
@@ -473,24 +501,21 @@ def wire_host(host: str, *, config_path=None) -> tuple[bool, str]:
         return False, f"unreadable {path}: {e}"
     if not isinstance(data, dict):
         return False, f"unexpected config shape in {path}"
+    before = json.dumps(data, sort_keys=True)
     hooks = data.setdefault("hooks", {})
+    _strip_omw_recall(hooks)  # migration: clear all omw-recall hooks first
     added = []
     for event, (command, status) in _recall_hook_specs(host).items():
-        entries = hooks.setdefault(event, [])
-        if _event_has_recall(entries):
-            continue
-        entries.append({"hooks": [{"type": "command", "command": command,
-                                   "timeout": 5, "statusMessage": status}]})
+        hooks.setdefault(event, []).append(
+            {"hooks": [{"type": "command", "command": command,
+                        "timeout": 5, "statusMessage": status}]})
         added.append(event)
-    if not added:
+    if not data.get("hooks"):  # don't leave an empty hooks block
+        data.pop("hooks", None)
+    if json.dumps(data, sort_keys=True) == before:
         return False, f"already wired ({path})"
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists():  # one-shot backup before first mutation
-            bak = path.with_suffix(path.suffix + ".omw-bak")
-            if not bak.exists():
-                bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        _atomic_write(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
     except OSError as e:
         return False, f"write failed {path}: {e}"
     return True, f"wired {'+'.join(added)} → {path}"
@@ -515,6 +540,14 @@ def wire_hermes(*, profile=None, config_path=None, allowlist_path=None) -> tuple
     import json
     from pathlib import Path
     import yaml
+    if config_path is None and profile is None:
+        # Default to the active profile (mirrors instruction-injection scoping); the docs'
+        # profile config is ~/.hermes/profiles/<p>/config.yaml.
+        try:
+            from scripts import hosts
+            profile = hosts.active_profile()
+        except Exception:
+            profile = None
     path = Path(config_path) if config_path else _hermes_config_path(profile)
     omw = _omw_bin()
     command = f'"{omw}" recall prompt --format hermes-json'
@@ -532,13 +565,7 @@ def wire_hermes(*, profile=None, config_path=None, allowlist_path=None) -> tuple
         return False, f"already wired ({path})"
     entries.append({"command": command, "timeout": 10})
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists():
-            bak = path.with_suffix(path.suffix + ".omw-bak")
-            if not bak.exists():
-                bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
-        path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
-                        encoding="utf-8")
+        _atomic_write(path, yaml.safe_dump(data, allow_unicode=True, sort_keys=False))
     except OSError as e:
         return False, f"write failed {path}: {e}"
     # Pre-seed the consent allowlist (keyed on the exact command string).
@@ -551,9 +578,7 @@ def wire_hermes(*, profile=None, config_path=None, allowlist_path=None) -> tuple
                    for a in approvals):
             approvals.append({"event": "pre_llm_call", "command": command})
             adata["approvals"] = approvals
-            allow.parent.mkdir(parents=True, exist_ok=True)
-            allow.write_text(json.dumps(adata, indent=2, ensure_ascii=False) + "\n",
-                             encoding="utf-8")
+            _atomic_write(allow, json.dumps(adata, indent=2, ensure_ascii=False) + "\n")
     except (OSError, ValueError):
         pass  # allowlist pre-seed is best-effort; hermes will prompt on first use
     return True, f"wired pre_llm_call → {path}"
@@ -626,33 +651,34 @@ def wire_ts_plugin(host: str, *, dest=None, config_path=None,
     if path is None:
         return False, f"no TS plugin for host {host!r}"
     content = _OPENCODE_PLUGIN_TS if host == "opencode" else _OPENCLAW_PLUGIN_TS
-    # Idempotency marker present in both templates (plugin id / comment).
-    if path.exists() and "omw-recall" in path.read_text(encoding="utf-8"):
-        return False, f"already installed ({path})"
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-    except OSError as e:
-        return False, f"write failed {path}: {e}"
-    if host == "openclaw":
-        cfg = Path(config_path) if config_path else (_hook_home() / ".openclaw" / "openclaw.json")
+    # Plugin-file idempotency is tracked separately from openclaw.json registration so a
+    # pre-existing plugin file never leaves openclaw unregistered (B5).
+    file_present = path.exists() and "omw-recall" in path.read_text(encoding="utf-8")
+    changed = False
+    if not file_present:
         try:
-            data = json.loads(cfg.read_text(encoding="utf-8")) if cfg.exists() else {}
-            if not isinstance(data, dict):
-                return True, f"installed {path} (openclaw.json unexpected shape; not registered)"
-            entries = data.setdefault("plugins", {}).setdefault("entries", {})
-            entries["omw-recall"] = {"enabled": True,
-                                     "hooks": {"allowConversationAccess": True}}
-            cfg.parent.mkdir(parents=True, exist_ok=True)
-            if cfg.exists():
-                bak = cfg.with_suffix(cfg.suffix + ".omw-bak")
-                if not bak.exists():
-                    bak.write_text(cfg.read_text(encoding="utf-8"), encoding="utf-8")
-            cfg.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
-                           encoding="utf-8")
-        except (OSError, ValueError) as e:
-            return True, f"installed {path} (registration failed: {e})"
-    return True, f"installed {path}"
+            _atomic_write(path, content)
+            changed = True
+        except OSError as e:
+            return False, f"write failed {path}: {e}"
+    if host == "opencode":  # auto-loaded; no registration step
+        return (changed, f"installed {path}" if changed else f"already installed ({path})")
+    # openclaw: ALWAYS ensure registration in openclaw.json (even if the plugin file existed).
+    cfg = Path(config_path) if config_path else (_hook_home() / ".openclaw" / "openclaw.json")
+    desired = {"enabled": True, "hooks": {"allowConversationAccess": True}}
+    try:
+        data = json.loads(cfg.read_text(encoding="utf-8")) if cfg.exists() else {}
+        if not isinstance(data, dict):
+            return changed, f"installed {path} (openclaw.json unexpected shape; not registered)"
+        entries = data.setdefault("plugins", {}).setdefault("entries", {})
+        if entries.get("omw-recall") != desired:
+            entries["omw-recall"] = desired
+            _atomic_write(cfg, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+            changed = True
+    except (OSError, ValueError) as e:
+        return changed, f"installed {path} (registration failed: {e})"
+    return changed, (f"installed + registered {path}" if changed
+                     else f"already installed ({path})")
 
 
 def main(argv=None) -> int:
