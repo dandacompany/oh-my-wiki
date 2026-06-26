@@ -109,7 +109,10 @@ def test_skill_dirs_for_new_agents():
     from scripts import agent_skills
     from pathlib import Path
     assert agent_skills._SKILLS_DIR["opencode"] == Path.home() / ".config" / "opencode" / "skills"
-    assert agent_skills._SKILLS_DIR["openclaw"] == Path.home() / ".openclaw" / "skills"
+    # openclaw reads the shared personal catalog (~/.agents/skills), NOT ~/.openclaw/skills
+    # (paths under ~/.openclaw/skills resolve outside openclaw's configured skill root and
+    # are skipped). Install there so the skill is actually discoverable.
+    assert agent_skills._SKILLS_DIR["openclaw"] == Path.home() / ".agents" / "skills"
 
 
 def _make_hermes(tmp_path, profiles=(), installed=()):
