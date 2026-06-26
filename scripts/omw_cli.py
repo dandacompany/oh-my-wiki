@@ -11,6 +11,7 @@ import json
 import sys
 
 from scripts import adapters, lint, nextstep, registry, reindex, vault_ops, wizard
+from scripts import history as _history
 from scripts.paths import ensure_home, registry_path, resolve_vault_root
 
 AGENTIC_OPS = [
@@ -404,6 +405,51 @@ def _cmd_inbox(args) -> int:
     if args.inbox_cmd == "add-feed":
         res = inbox.add_feed(db, vault_id=vid, feed_url=args.feed_url)
         print(json.dumps(res, ensure_ascii=False, indent=2))
+        return 0
+    return 1
+
+
+def _cmd_history(args) -> int:
+    from scripts import history
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    vid = vault["id"]
+    cmd = args.history_cmd
+    if cmd == "log":
+        try:
+            i = history.log(db, vault_id=vid, request_type=args.type, request=args.request,
+                            summary=args.summary, outcome=args.outcome, revises_id=args.revises,
+                            focus=args.focus, refs=args.ref or [], tags=args.tag or [])
+        except history.HistoryError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        print(json.dumps({"id": i, "vault": vault["name"], "type": args.type}, ensure_ascii=False))
+        return 0
+    if cmd == "similar":
+        print(json.dumps(history.similar(db, vault_id=vid, text=args.text, limit=args.limit,
+                                         request_type=args.type), ensure_ascii=False, indent=2))
+        return 0
+    if cmd == "prefs":
+        print(json.dumps(history.prefs(db, vault_id=vid, request_type=args.type),
+                         ensure_ascii=False, indent=2))
+        return 0
+    if cmd == "find":
+        print(json.dumps(history.find(db, vault_id=vid, query=args.query, limit=args.limit),
+                         ensure_ascii=False, indent=2))
+        return 0
+    if cmd == "list":
+        print(json.dumps(history.list_(db, vault_id=vid, request_type=args.type,
+                                       outcome=args.outcome, since=args.since, ref=args.ref,
+                                       limit=args.limit), ensure_ascii=False, indent=2))
+        return 0
+    if cmd == "show":
+        row = history.get(db, vault_id=vid, id_=args.id)
+        if row is None:
+            print(f"error: no interaction #{args.id} in this vault", file=sys.stderr)
+            return 1
+        print(json.dumps(row, ensure_ascii=False, indent=2))
         return 0
     return 1
 
@@ -1215,6 +1261,49 @@ def build_parser() -> argparse.ArgumentParser:
     ibf.add_argument("feed_url")
     ibf.add_argument("--vault", default=None)
     ibf.set_defaults(func=_cmd_inbox)
+
+    phi = sub.add_parser("history", help="Record + recall request/work history (per vault).")
+    phi.add_argument("--vault", default=None, help="vault name (default: active)")
+    hsub = phi.add_subparsers(dest="history_cmd", required=True)
+
+    hlog = hsub.add_parser("log", help="Record one unit of work.")
+    hlog.add_argument("--type", required=True,
+                      metavar="{" + "|".join(_history.REQUEST_TYPES) + "}")
+    hlog.add_argument("--request", required=True)
+    hlog.add_argument("--summary", default=None)
+    hlog.add_argument("--outcome", default="new", choices=list(_history.OUTCOMES))
+    hlog.add_argument("--revises", type=int, default=None)
+    hlog.add_argument("--focus", default=None)
+    hlog.add_argument("--ref", action="append", default=None)
+    hlog.add_argument("--tag", action="append", default=None)
+    hlog.set_defaults(func=_cmd_history)
+
+    hsim = hsub.add_parser("similar", help="Rank past requests similar to TEXT.")
+    hsim.add_argument("text")
+    hsim.add_argument("--limit", type=int, default=8)
+    hsim.add_argument("--type", default=None)
+    hsim.set_defaults(func=_cmd_history)
+
+    hpref = hsub.add_parser("prefs", help="Aggregate recurring revision focus.")
+    hpref.add_argument("--type", default=None)
+    hpref.set_defaults(func=_cmd_history)
+
+    hfind = hsub.add_parser("find", help="Token search over request/summary/focus.")
+    hfind.add_argument("query")
+    hfind.add_argument("--limit", type=int, default=10)
+    hfind.set_defaults(func=_cmd_history)
+
+    hlist = hsub.add_parser("list", help="Faceted listing.")
+    hlist.add_argument("--type", default=None)
+    hlist.add_argument("--outcome", default=None)
+    hlist.add_argument("--since", default=None)
+    hlist.add_argument("--ref", default=None)
+    hlist.add_argument("--limit", type=int, default=50)
+    hlist.set_defaults(func=_cmd_history)
+
+    hshow = hsub.add_parser("show", help="Show one interaction by id.")
+    hshow.add_argument("id", type=int)
+    hshow.set_defaults(func=_cmd_history)
 
     pfe = sub.add_parser("fetch", help="Fetch one URL into raw/ (single-shot, no LLM).")
     pfe.add_argument("url")

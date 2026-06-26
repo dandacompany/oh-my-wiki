@@ -1,0 +1,44 @@
+import json
+
+from scripts import omw_cli
+from scripts import ops_registry as reg
+
+
+def test_history_registered_deterministic_meta():
+    spec = reg.get("history")
+    assert spec is not None and spec.kind == "deterministic" and spec.phase == "meta"
+
+
+def _seed(tmp_path, monkeypatch):
+    from tests.conftest import make_vault_with_pages
+    return make_vault_with_pages(tmp_path, monkeypatch, pages={"raw/a.md": "# A\n\nx"})
+
+
+def test_cli_log_then_show(tmp_path, monkeypatch, capsys):
+    _seed(tmp_path, monkeypatch)
+    rc = omw_cli.main(["history", "log", "--type", "generate", "--request", "make a slide",
+                       "--summary", "made 1", "--ref", "wiki/concepts/x.md", "--tag", "slide"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["type"] == "generate"
+    rc = omw_cli.main(["history", "show", str(out["id"])])
+    shown = json.loads(capsys.readouterr().out)
+    assert rc == 0 and shown["request"] == "make a slide" and shown["refs"] == ["wiki/concepts/x.md"]
+
+
+def test_cli_log_bad_type_errors(tmp_path, monkeypatch, capsys):
+    _seed(tmp_path, monkeypatch)
+    rc = omw_cli.main(["history", "log", "--type", "nope", "--request", "x"])
+    err = capsys.readouterr().err
+    assert rc == 1 and "request_type" in err
+
+
+def test_cli_similar_and_prefs(tmp_path, monkeypatch, capsys):
+    _seed(tmp_path, monkeypatch)
+    omw_cli.main(["history", "log", "--type", "generate", "--request", "slide about agents"])
+    capsys.readouterr()
+    rc = omw_cli.main(["history", "similar", "agents slide"])
+    hits = json.loads(capsys.readouterr().out)
+    assert rc == 0 and hits and hits[0]["score"] > 0
+    rc = omw_cli.main(["history", "prefs"])
+    p = json.loads(capsys.readouterr().out)
+    assert rc == 0 and "focus_terms" in p
