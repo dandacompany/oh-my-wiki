@@ -410,7 +410,6 @@ def _cmd_inbox(args) -> int:
 
 
 def _cmd_history(args) -> int:
-    from scripts import history
     db = registry_path()
     registry.init_db(db)   # idempotent: ensures the interactions table exists on a pre-existing DB
     vault = _require_vault_row(db, args.vault)
@@ -420,33 +419,33 @@ def _cmd_history(args) -> int:
     cmd = args.history_cmd
     if cmd == "log":
         try:
-            i = history.log(db, vault_id=vid, request_type=args.type, request=args.request,
-                            summary=args.summary, outcome=args.outcome, revises_id=args.revises,
-                            focus=args.focus, refs=args.ref or [], tags=args.tag or [])
-        except history.HistoryError as e:
+            i = _history.log(db, vault_id=vid, request_type=args.type, request=args.request,
+                             summary=args.summary, outcome=args.outcome, revises_id=args.revises,
+                             focus=args.focus, refs=args.ref or [], tags=args.tag or [])
+        except _history.HistoryError as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
         print(json.dumps({"id": i, "vault": vault["name"], "type": args.type}, ensure_ascii=False))
         return 0
     if cmd == "similar":
-        print(json.dumps(history.similar(db, vault_id=vid, text=args.text, limit=args.limit,
-                                         request_type=args.type), ensure_ascii=False, indent=2))
+        print(json.dumps(_history.similar(db, vault_id=vid, text=args.text, limit=args.limit,
+                                          request_type=args.type), ensure_ascii=False, indent=2))
         return 0
     if cmd == "prefs":
-        print(json.dumps(history.prefs(db, vault_id=vid, request_type=args.type),
+        print(json.dumps(_history.prefs(db, vault_id=vid, request_type=args.type),
                          ensure_ascii=False, indent=2))
         return 0
     if cmd == "find":
-        print(json.dumps(history.find(db, vault_id=vid, query=args.query, limit=args.limit),
+        print(json.dumps(_history.find(db, vault_id=vid, query=args.query, limit=args.limit),
                          ensure_ascii=False, indent=2))
         return 0
     if cmd == "list":
-        print(json.dumps(history.list_(db, vault_id=vid, request_type=args.type,
-                                       outcome=args.outcome, since=args.since, ref=args.ref,
-                                       limit=args.limit), ensure_ascii=False, indent=2))
+        print(json.dumps(_history.list_(db, vault_id=vid, request_type=args.type,
+                                        outcome=args.outcome, since=args.since, ref=args.ref,
+                                        limit=args.limit), ensure_ascii=False, indent=2))
         return 0
     if cmd == "show":
-        row = history.get(db, vault_id=vid, id_=args.id)
+        row = _history.get(db, vault_id=vid, id_=args.id)
         if row is None:
             print(f"error: no interaction #{args.id} in this vault", file=sys.stderr)
             return 1
@@ -1268,8 +1267,7 @@ def build_parser() -> argparse.ArgumentParser:
     hsub = phi.add_subparsers(dest="history_cmd", required=True)
 
     hlog = hsub.add_parser("log", help="Record one unit of work.")
-    hlog.add_argument("--type", required=True,
-                      metavar="{" + "|".join(_history.REQUEST_TYPES) + "}")
+    hlog.add_argument("--type", required=True, choices=list(_history.REQUEST_TYPES))
     hlog.add_argument("--request", required=True)
     hlog.add_argument("--summary", default=None)
     hlog.add_argument("--outcome", default="new", choices=list(_history.OUTCOMES))
@@ -1296,7 +1294,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     hlist = hsub.add_parser("list", help="Faceted listing.")
     hlist.add_argument("--type", default=None)
-    hlist.add_argument("--outcome", default=None)
+    hlist.add_argument("--outcome", default=None, choices=list(_history.OUTCOMES))
     hlist.add_argument("--since", default=None)
     hlist.add_argument("--ref", default=None)
     hlist.add_argument("--limit", type=int, default=50)

@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from scripts import omw_cli
 from scripts import ops_registry as reg
 
@@ -27,9 +29,12 @@ def test_cli_log_then_show(tmp_path, monkeypatch, capsys):
 
 def test_cli_log_bad_type_errors(tmp_path, monkeypatch, capsys):
     _seed(tmp_path, monkeypatch)
-    rc = omw_cli.main(["history", "log", "--type", "nope", "--request", "x"])
+    # argparse rejects an out-of-enum --type at the parser layer (exit 2 via SystemExit).
+    with pytest.raises(SystemExit) as exc:
+        omw_cli.main(["history", "log", "--type", "nope", "--request", "x"])
+    assert exc.value.code != 0
     err = capsys.readouterr().err
-    assert rc == 1 and "request_type" in err
+    assert "invalid choice" in err or "nope" in err
 
 
 def test_cli_similar_and_prefs(tmp_path, monkeypatch, capsys):
@@ -57,3 +62,15 @@ def test_cli_history_recreates_missing_table(tmp_path, monkeypatch, capsys):
     rc = omw_cli.main(["history", "log", "--type", "query", "--request", "after upgrade"])
     out = json.loads(capsys.readouterr().out)
     assert rc == 0 and out["type"] == "query"
+
+
+def test_cli_find_and_list_outcome(tmp_path, monkeypatch, capsys):
+    _seed(tmp_path, monkeypatch)
+    omw_cli.main(["history", "log", "--type", "generate", "--request", "draft email about agents"])
+    capsys.readouterr()
+    rc = omw_cli.main(["history", "find", "agents"])
+    hits = json.loads(capsys.readouterr().out)
+    assert rc == 0 and any("agents" in h["request"] for h in hits)
+    rc = omw_cli.main(["history", "list", "--outcome", "new"])
+    rows = json.loads(capsys.readouterr().out)
+    assert rc == 0 and all(r["outcome"] == "new" for r in rows)
