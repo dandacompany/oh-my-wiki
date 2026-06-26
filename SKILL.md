@@ -36,9 +36,9 @@ A storage-agnostic LLM Wiki skill. Implements Andrej Karpathy's three-layer patt
 
 ## Current status — v1 shipped, v2 in progress
 
-v1 (Plans A + B + C) is complete: dispatcher + foundation scripts, vault management (`vault-setup`, `vault-use`, `vault-list`, `vault-forget`, `vault-import-memo`), memo-mode ops (`create`, `find`, `open`, `edit`, `move`, `delete`), wiki-mode ops (`ingest`, `query`), and the common `lint` op (with wiki-mode structural extensions). 91 pytest tests pass on GitHub Actions matrix (Python 3.10/3.11/3.12 × ubuntu/macos). See `README.md`, `TUTORIAL.md`, `TUTORIAL.ko.md` for usage.
+v1 (Plans A + B + C) is complete: dispatcher + foundation scripts, vault management (`omw vault` sub-commands), memo-mode ops (`create`, `find`, `open`, `edit`, `move`, `delete`), wiki-mode ops (`ingest`, `query`), and the common `lint` op (with wiki-mode structural extensions). 91 pytest tests pass on GitHub Actions matrix (Python 3.10/3.11/3.12 × ubuntu/macos). See `README.md`, `TUTORIAL.md`, `TUTORIAL.ko.md` for usage.
 
-v2 adds session hot cache, 6 vault-setup modes, extended wiki-lint categories, autoresearch, wiki-maintenance personas (wiki-librarian / curator / fact-checker / consistency-checker / terminology-manager), Obsidian/Logseq viewers, URL fetch + inbox, and per-prompt wiki recall hooks. (Earlier prototypes of a tmux-based multi-agent swarm/team runtime were removed — omw stays focused on the wiki; the host AI agent handles orchestration.)
+v2 adds 6 vault modes, extended wiki-lint categories, autoresearch, wiki-maintenance personas (wiki-librarian / curator / fact-checker / consistency-checker / terminology-manager), Obsidian/Logseq viewers, URL fetch + inbox, and per-prompt wiki recall hooks. (Earlier prototypes of a tmux-based multi-agent swarm/team runtime were removed — omw stays focused on the wiki; the host AI agent handles orchestration.)
 
 ## Step 1 — Read registry state
 
@@ -104,12 +104,12 @@ Parse the JSON output. Fields:
 
 ## Step 2 — Route by `needs`
 
-| `needs`     | Action                                                                                                                          |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `"setup"`   | Load `commands/vault-setup.md`.                                                                                                 |
-| `"select"`  | Load `commands/vault-use.md`.                                                                                                   |
-| `"migrate"` | Load `commands/migrate.md`.                                                                                                     |
-| `"op"`      | Inspect the user's input. If it names an op explicitly, load that op's `commands/<op>.md`. Otherwise run the Op Wizard (below). |
+| `needs`     | Action                                                                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"setup"`   | Run `omw vault create <name> [--mode …]` directly (deterministic). See the `omw-commandmap` block / `omw vault -h` for subcommands + modes. |
+| `"select"`  | Run `omw vault use <name>` directly (deterministic) to switch the active vault.                                                             |
+| `"migrate"` | Load `commands/migrate.md`.                                                                                                                 |
+| `"op"`      | Inspect the user's input. If it names an op explicitly, load that op's `commands/<op>.md`. Otherwise run the Op Wizard (below).             |
 
 For deterministic vault management you may call the `omw` CLI directly (e.g.
 `omw vault list`); for content ops always load `commands/<op>.md` and follow it.
@@ -141,11 +141,11 @@ Use `AskUserQuestion` (max 4 options). The option set depends on `active.mode`:
 
 These hold across all commands. Each `commands/<op>.md` repeats the relevant ones.
 
-- **Destructive ops always confirm**: `delete`, `vault-forget`, `--hard` deletes.
-- **`vault-forget` never touches files** — only the registry row.
+- **Destructive ops always confirm**: `delete`, `omw vault forget`, `--hard` deletes.
+- **`omw vault forget` never touches files** — only the registry row.
 - **Inferred targets are stated**, then confirmed: "방금 작성한 X 메모 말씀이시죠?"
 - **No silent fallbacks**: if a vault path is missing on disk, report it and stop. Don't auto-`forget`.
-- **Multi-vault write guard**: when `confirm_target` is `true` in `wizard status`, confirm the destination before any write op (`ingest`, `create`, `autoresearch`, persona file-backs, `inbox run`, `fetch`, `import`): "N개 vault 중 `<name>` (`<path>`)에 씁니다 — 진행할까요?". Skip the confirmation if the same vault was already confirmed earlier in this session; reset the confirmation state after any `vault-use` switch.
+- **Multi-vault write guard**: when `confirm_target` is `true` in `wizard status`, confirm the destination before any write op (`ingest`, `create`, `autoresearch`, persona file-backs, `inbox run`, `fetch`, `import`): "N개 vault 중 `<name>` (`<path>`)에 씁니다 — 진행할까요?". Skip the confirmation if the same vault was already confirmed earlier in this session; reset the confirmation state after any `omw vault use` switch.
 - **SMB-mounted vaults** (e.g. `/Volumes/...`): use `rsync -rlpt` rather than `cp`. Never `cp -a` on SMB.
 - **Recommended option goes first** in any AskUserQuestion list and is suffixed with `(추천)` / `(recommended)`.
 
@@ -189,38 +189,15 @@ Before handling a substantive or repeat-style request, consult it:
 `omw history similar "<request>"` for prior references and `omw history prefs` for
 the user's recurring focus. See `commands/history.md` for the full procedure.
 
-## Trigger-phrase routing hint
+## Trigger-phrase routing
 
-If the user input matches an op keyword, prefer that op over the wizard:
-
-| Keyword (EN / KO)                                                                  | Op                                                              |
-| ---------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| "ingest", "정리", "흡수"                                                           | `ingest`                                                        |
-| "query", "물어봐", "찾아봐"                                                        | `query`                                                         |
-| "find", "검색", "찾아줘"                                                           | `find`                                                          |
-| "open", "열어줘"                                                                   | `open`                                                          |
-| "edit", "수정", "편집"                                                             | `edit`                                                          |
-| "move", "이동", "옮겨"                                                             | `move`                                                          |
-| "delete", "삭제", "지워"                                                           | `delete`                                                        |
-| "lint", "점검", "정리하기"                                                         | `lint`                                                          |
-| "setup", "새 vault", "vault 만들기"                                                | `vault-setup`                                                   |
-| "use", "vault 전환", "vault 바꿔"                                                  | `vault-use`                                                     |
-| "list", "vault 목록"                                                               | `vault-list`                                                    |
-| "forget", "vault 제거"                                                             | `vault-forget`                                                  |
-| "import memo", "memo 가져오기"                                                     | `vault-import-memo`                                             |
-| "autoresearch", "research this", "리서치", "조사"                                  | `autoresearch`                                                  |
-| "fact-check this" / "팩트체크해줘"                                                 | `persona-factcheck`                                             |
-| "check for contradictions" / "모순 봐줘"                                           | `persona-consistency`                                           |
-| "build a glossary" / "용어집 만들어줘"                                             | `persona-terminology`                                           |
-| "omw", "OMW", "/omw", "오엠더블유"                                                 | (alias for `oh-my-wiki`; routes through Step 1 wizard normally) |
-| "hot-cache", "session cache", "캐시 상태"                                          | `hot-cache`                                                     |
-| "view", "open in obsidian", "open in logseq", "뷰어로 열어줘", "옵시디언에서 열어" | `view`                                                          |
-| "visibility get", "visibility set", "공개 설정", "비공개 설정", "visibility"       | `visibility`                                                    |
-| "inbox add", "inbox list", "inbox run", "큐에 추가", "inbox"                       | `inbox`                                                         |
-| "fetch", "fetch this url", "url 가져와", "페이지 가져와"                           | `fetch`                                                         |
-| "connections", "의외의 연결점", "어떤 주제들이 이어지나", "what links my topics"   | `connections` → `commands/connections.md`                       |
-| `recall.strategy=llm` (hook emits `<omw-recall>` instruction)                      | agent retrieval procedure → `commands/recall-llm.md`            |
-| "run upkeep", "maintenance gate", an `<omw-gate>` block appears                    | gate cycle → `commands/gate.md`                                 |
+Match the user's phrasing to an op via the **triggers** column of the generated
+`<!-- omw-commandmap:start -->` block in your host instruction file (CLAUDE.md /
+AGENTS.md / GEMINI.md). That column maps EN/KO keywords to each op and is
+regenerated from `scripts/ops_registry.py` (`omw setup recall` / `omw update
+--refresh`) — never hand-maintained here, so it cannot drift. If a keyword
+matches, prefer that op over the wizard. Ops without keywords (e.g. `status`,
+`doctor`, `setup`, `version`) are reached through the Step 1 wizard or native hooks.
 
 ## Command map (deterministic vs procedure)
 
@@ -256,7 +233,7 @@ If the user pastes ≥ 200 characters without naming an op:
 
 Always confirm before writing. Show the proposed slug + destination first.
 
-`vault-setup` accepts these modes: `memo`, `wiki`, `personal`, `book`, `business`, `github-codebase`, `website`. See README "Vault modes (v2.0)" for the layout each one scaffolds.
+`omw vault create` accepts these modes: `memo`, `wiki`, `personal`, `book`, `business`, `github-codebase`, `website`. See README "Vault modes (v2.0)" for the layout each one scaffolds.
 
 ## Resources
 
