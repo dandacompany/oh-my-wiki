@@ -30,8 +30,11 @@ def db_connect():
 
 @pytest.fixture(autouse=True)
 def _isolate_omw_home(monkeypatch, tmp_path):
-    """Every test gets an isolated OMW_HOME so the real ~/.omw is never touched."""
+    """Every test gets an isolated OMW_HOME so the real ~/.omw is never touched. Also
+    isolate OMW_HOOK_HOME so host hook wiring (~/.claude, ~/.codex, ~/.gemini, ~/.hermes,
+    ~/.config/opencode, ~/.openclaw) writes under tmp, never the real home."""
     monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw-test"))
+    monkeypatch.setenv("OMW_HOOK_HOME", str(tmp_path / ".home-test"))
 
 
 def make_vault_with_pages(tmp_path, monkeypatch, pages: dict) -> tuple:

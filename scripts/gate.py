@@ -173,6 +173,11 @@ def _omw_bin() -> str:
 
 
 def _gate_hook_specs(host: str) -> dict:
+    """turn-end gate event -> (command, status). The gate surfaces a maintenance nudge, so
+    it needs an event whose output actually reaches the user/model. Verified: only Claude's
+    `Stop` does this — codex `Stop` and gemini `AfterAgent` do NOT inject turn-end output, so
+    wiring them would be a silent no-op. Kept Claude-only until per-host turn-end surfacing is
+    confirmed."""
     if host != "claude":
         return {}
     omw = _omw_bin()
@@ -203,12 +208,8 @@ def _load_host(path):
 
 
 def _backup_write(path, data):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        bak = path.with_suffix(path.suffix + ".omw-bak")
-        if not bak.exists():
-            bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    from scripts import recall
+    recall._atomic_write(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
 def wire_host(host, *, config_path=None) -> tuple[bool, str]:

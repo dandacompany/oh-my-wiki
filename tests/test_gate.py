@@ -131,14 +131,13 @@ def test_render_advisory_is_softer():
     assert "offer" in out.lower()
 
 
-def test_wire_host_non_claude_skips_with_honest_message(tmp_path):
-    cfg = tmp_path / "hooks.json"
-    for host in ("codex", "gemini"):
-        ok, msg = gate.wire_host(host, config_path=cfg)
+def test_wire_host_non_claude_skips(tmp_path):
+    # gate stays Claude-only: no other host surfaces turn-end output, so wiring would no-op.
+    for host in ("codex", "gemini", "hermes", "opencode"):
+        cfg = tmp_path / f"{host}.json"
+        ok, _ = gate.wire_host(host, config_path=cfg)
         assert ok is False
-        assert "Phase 1" in msg or "Claude" in msg
-        # must NOT have written anything
-        assert not cfg.exists(), f"{host}: file should not have been created"
+        assert not cfg.exists()
 
 
 def test_wire_host_is_idempotent(tmp_path):
