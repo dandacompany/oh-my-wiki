@@ -7,15 +7,12 @@ wiki/log.md (a content changelog). stdlib only; no FTS5.
 from __future__ import annotations
 
 import json
-import re
 from datetime import datetime, timezone
 
 from scripts import registry
 
 REQUEST_TYPES = ("research", "query", "generate", "edit", "fix", "ingest", "other")
 OUTCOMES = ("new", "revised", "regenerated", "accepted")
-
-_TOKEN_RE = re.compile(r"[\w가-힣]+", re.UNICODE)
 
 
 class HistoryError(Exception):
