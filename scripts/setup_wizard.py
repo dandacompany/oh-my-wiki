@@ -890,40 +890,73 @@ def setup_playwright(*, noninteractive: bool = False) -> int:
     return 0
 
 
-def doctor() -> int:
+def doctor_checks() -> dict:
+    """Structured install/config health. No printing — the SSOT consumed by both
+    doctor() (renderer) and report.build() (install-health summary)."""
+    from pathlib import Path as _P
+    import scripts.fetch_chromium as _fc
+    from scripts import platform_env as _pe
+
     home = omw_home()
     db = registry_path()
-    print(f"omw home:   {home}  {'ok' if home.exists() else 'missing (run: omw setup)'}")
-    print(f"registry:   {db}  {'ok' if db.exists() else 'missing'}")
+    items: list[dict] = []
+    items.append({"name": "omw home", "ok": home.exists(), "detail": str(home),
+                  "hint": "" if home.exists() else "run: omw setup"})
+    items.append({"name": "registry", "ok": db.exists(), "detail": str(db),
+                  "hint": "" if db.exists() else "missing"})
+
     vaults = registry.list_vaults(db) if db.exists() else []
+    sandbox_warning = ""
     if vaults:
-        for v in vaults:
-            mark = "*" if v["is_active"] else " "
-            print(f"  {mark} {v['name']} ({v['mode']}/{v['type']}) {v['path']}")
-        # Sandbox advisory: project-local vaults index into the GLOBAL registry
-        # (~/.omw), which lives outside an agent's workspace-write sandbox — so
-        # reindex can fail with "readonly database" without an approval/escalation.
-        from pathlib import Path as _P
         cwd = _P.cwd()
         proj = [v for v in vaults if str(v["path"]).startswith(str(cwd))]
         if proj and not str(db).startswith(str(cwd)):
-            print(f"  ! registry lives at {db} (outside this folder). Agents with a "
-                  f"workspace-write sandbox may hit 'readonly database' on reindex —\n"
-                  f"    approve the write, or set OMW_HOME to a path inside the workspace.")
-    else:
-        print("  no vaults registered — run: omw setup")
-    import scripts.fetch_chromium as _fc
-    from scripts import platform_env as _pe
-    _ytcmd = " ".join(_pe.pip_install_argv("yt-dlp"))
-    ytdlp = "ok" if shutil.which("yt-dlp") else f"missing ({_ytcmd} — for YouTube)"
-    chromium = "ok" if _fc.available() else "missing (run: omw setup playwright — for SPA pages)"
-    print(f"fetch yt-dlp:  {ytdlp}")
-    print(f"fetch chromium: {chromium}")
+            sandbox_warning = (
+                f"registry lives at {db} (outside this folder); agents with a "
+                "workspace-write sandbox may hit 'readonly database' on reindex — "
+                "approve the write, or set OMW_HOME to a path inside the workspace")
+
+    ytdlp_ok = bool(shutil.which("yt-dlp"))
+    items.append({"name": "yt-dlp", "ok": ytdlp_ok, "detail": "",
+                  "hint": "" if ytdlp_ok else " ".join(_pe.pip_install_argv("yt-dlp")) + " — for YouTube"})
+    chromium_ok = _fc.available()
+    items.append({"name": "chromium", "ok": chromium_ok, "detail": "",
+                  "hint": "" if chromium_ok else "run: omw setup playwright — for SPA pages"})
     try:
         import questionary  # noqa: F401
-        wizard_ui = "ok"
+        wizard_ok = True
     except Exception:
-        _wzcmd = " ".join(_pe.pip_install_argv("oh-my-wiki[wizard]"))
-        wizard_ui = f"missing ({_wzcmd} — arrow-key setup UI; falls back to plain text)"
-    print(f"wizard UI:     {wizard_ui}")
+        wizard_ok = False
+    items.append({"name": "wizard UI", "ok": wizard_ok, "detail": "",
+                  "hint": "" if wizard_ok else " ".join(_pe.pip_install_argv("oh-my-wiki[wizard]")) + " — arrow-key setup UI; falls back to plain text"})
+
+    ok = all(i["ok"] for i in items if i["name"] in ("omw home", "registry"))
+    return {"ok": ok, "items": items, "vaults": [dict(v) for v in vaults],
+            "sandbox_warning": sandbox_warning, "home": str(home), "registry": str(db)}
+
+
+def doctor() -> int:
+    d = doctor_checks()
+    home_ok = next(i for i in d["items"] if i["name"] == "omw home")["ok"]
+    reg_ok = next(i for i in d["items"] if i["name"] == "registry")["ok"]
+    print(f"omw home:   {d['home']}  {'ok' if home_ok else 'missing (run: omw setup)'}")
+    print(f"registry:   {d['registry']}  {'ok' if reg_ok else 'missing'}")
+    if d["vaults"]:
+        for v in d["vaults"]:
+            mark = "*" if v["is_active"] else " "
+            print(f"  {mark} {v['name']} ({v['mode']}/{v['type']}) {v['path']}")
+        if d["sandbox_warning"]:
+            print(f"  ! {d['sandbox_warning']}")
+    else:
+        print("  no vaults registered — run: omw setup")
+
+    yt = "ok" if next(i for i in d["items"] if i["name"] == "yt-dlp")["ok"] \
+        else f"missing ({next(i for i in d['items'] if i['name'] == 'yt-dlp')['hint']})"
+    chromium = "ok" if next(i for i in d["items"] if i["name"] == "chromium")["ok"] \
+        else f"missing ({next(i for i in d['items'] if i['name'] == 'chromium')['hint']})"
+    wiz = "ok" if next(i for i in d["items"] if i["name"] == "wizard UI")["ok"] \
+        else f"missing ({next(i for i in d['items'] if i['name'] == 'wizard UI')['hint']})"
+    print(f"fetch yt-dlp:  {yt}")
+    print(f"fetch chromium: {chromium}")
+    print(f"wizard UI:     {wiz}")
     return 0

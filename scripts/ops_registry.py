@@ -114,6 +114,11 @@ OPS: tuple[OpSpec, ...] = (
                ArgSpec("--force", False, "allow exporting into a non-empty directory"))),
     _det("help", "Guided CLI overview grouped by lifecycle phase.", "omw help"),
     _det("version", "Print the installed omw version.", "omw version"),
+    _det("report", "Aggregate vault stats + health into one at-a-glance report.",
+         "omw report [--vault V] [--no-reindex] [--json]",
+         args=(ArgSpec("--vault", False, "vault name (default: active)"),
+               ArgSpec("--no-reindex", False, "skip the pre-report incremental reindex"),
+               ArgSpec("--json", False, "emit the structured report as JSON"))),
     _det("persona-run", "Dispatch a persona as an isolated one-shot subagent (any backend).",
          "omw persona-run <role> [--page P|--file F|--text T] [--backend B] [--apply PROP]",
          args=(ArgSpec("role", True, "persona name (fact-checker, consistency-checker, curator, terminology-manager, wiki-librarian)"),
@@ -168,6 +173,7 @@ _PHASE = {
     # meta — setup / introspection
     "status": "meta", "vault": "meta", "setup": "meta", "doctor": "meta",
     "update": "meta", "schema": "meta", "help": "meta", "version": "meta",
+    "report": "meta",
 }
 
 OPS = tuple(dataclasses.replace(op, phase=_PHASE.get(op.name, "meta")) for op in OPS)
