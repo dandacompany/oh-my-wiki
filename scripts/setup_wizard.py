@@ -938,8 +938,8 @@ def doctor_checks() -> dict:
 
 def doctor() -> int:
     d = doctor_checks()
-    home_ok = d["items"][0]["ok"]
-    reg_ok = d["items"][1]["ok"]
+    home_ok = next(i for i in d["items"] if i["name"] == "omw home")["ok"]
+    reg_ok = next(i for i in d["items"] if i["name"] == "registry")["ok"]
     print(f"omw home:   {d['home']}  {'ok' if home_ok else 'missing (run: omw setup)'}")
     print(f"registry:   {d['registry']}  {'ok' if reg_ok else 'missing'}")
     if d["vaults"]:
