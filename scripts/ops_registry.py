@@ -127,6 +127,8 @@ OPS: tuple[OpSpec, ...] = (
          args=(ArgSpec("--vault", False, "vault name (default: active)"),
                ArgSpec("--no-reindex", False, "skip the pre-report incremental reindex"),
                ArgSpec("--json", False, "emit the structured report as JSON"))),
+    _det("history", "Record + recall request/work history (per vault): log/similar/prefs/find/list/show.",
+         "omw history {log|similar|prefs|find|list|show} …"),
     _det("persona-run", "Dispatch a persona as an isolated one-shot subagent (any backend).",
          "omw persona-run <role> [--page P|--file F|--text T] [--backend B] [--apply PROP]",
          args=(ArgSpec("role", True, "persona name (fact-checker, consistency-checker, curator, terminology-manager, wiki-librarian)"),
@@ -182,6 +184,7 @@ _PHASE = {
     "status": "meta", "vault": "meta", "setup": "meta", "doctor": "meta",
     "update": "meta", "uninstall": "meta", "schema": "meta", "help": "meta", "version": "meta",
     "report": "meta",
+    "history": "meta",
 }
 
 OPS = tuple(dataclasses.replace(op, phase=_PHASE.get(op.name, "meta")) for op in OPS)
