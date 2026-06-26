@@ -919,6 +919,21 @@ def _cmd_agentic(args) -> int:
     return 0
 
 
+def _cmd_report(args) -> int:
+    from datetime import date
+    from scripts import report
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault) if args.vault else registry.get_active(db)
+    vault_id = vault["id"] if vault else None
+    today = getattr(args, "today", None) or date.today().isoformat()
+    data = report.build(db, vault_id, today=today, no_reindex=args.no_reindex)
+    if args.report_json:
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    else:
+        print(report.render(data))
+    return 0
+
+
 def _cmd_next(args) -> int:
     from datetime import date
     db = registry_path()
@@ -1200,6 +1215,15 @@ def build_parser() -> argparse.ArgumentParser:
     pnx.add_argument("--json", dest="next_json", action="store_true")
     pnx.add_argument("--today", default=None, help="YYYY-MM-DD (default: today)")
     pnx.set_defaults(func=_cmd_next)
+
+    prep = sub.add_parser("report", help="Aggregate vault stats + health into one report.")
+    prep.add_argument("--vault", default=None, help="vault name (default: active)")
+    prep.add_argument("--no-reindex", action="store_true",
+                      help="skip the pre-report incremental reindex")
+    prep.add_argument("--json", dest="report_json", action="store_true",
+                      help="emit the structured report as JSON")
+    prep.add_argument("--today", default=None, help=argparse.SUPPRESS)
+    prep.set_defaults(func=_cmd_report)
 
     pse = sub.add_parser("serve", help="Run the local query HTTP API (retrieve-only).")
     pse.add_argument("--host", default="127.0.0.1", help="bind host (default: localhost)")
