@@ -81,3 +81,20 @@ CREATE TABLE IF NOT EXISTS inbox_queue (
   UNIQUE(vault_id, normalized_url)
 );
 CREATE INDEX IF NOT EXISTS idx_inbox_vault_status ON inbox_queue(vault_id, status);
+
+CREATE TABLE IF NOT EXISTS interactions (
+  id           INTEGER PRIMARY KEY,
+  vault_id     INTEGER NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,
+  created_at   TEXT NOT NULL,
+  request_type TEXT NOT NULL,
+  request      TEXT NOT NULL,
+  summary      TEXT,
+  outcome      TEXT NOT NULL DEFAULT 'new'
+                 CHECK (outcome IN ('new', 'revised', 'regenerated', 'accepted')),
+  revises_id   INTEGER REFERENCES interactions(id) ON DELETE SET NULL,
+  focus        TEXT,
+  refs         TEXT NOT NULL DEFAULT '[]',
+  tags         TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS idx_interactions_vault ON interactions(vault_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_interactions_type  ON interactions(vault_id, request_type);
