@@ -104,12 +104,12 @@ Parse the JSON output. Fields:
 
 ## Step 2 — Route by `needs`
 
-| `needs`     | Action                                                                                                                          |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `"setup"`   | Load `commands/vault.md` (vault management wizard).                                                                             |
-| `"select"`  | Load `commands/vault.md` (vault selection / switch).                                                                            |
-| `"migrate"` | Load `commands/migrate.md`.                                                                                                     |
-| `"op"`      | Inspect the user's input. If it names an op explicitly, load that op's `commands/<op>.md`. Otherwise run the Op Wizard (below). |
+| `needs`     | Action                                                                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"setup"`   | Run `omw vault create <name> [--mode …]` directly (deterministic). See the `omw-commandmap` block / `omw vault -h` for subcommands + modes. |
+| `"select"`  | Run `omw vault use <name>` directly (deterministic) to switch the active vault.                                                             |
+| `"migrate"` | Load `commands/migrate.md`.                                                                                                                 |
+| `"op"`      | Inspect the user's input. If it names an op explicitly, load that op's `commands/<op>.md`. Otherwise run the Op Wizard (below).             |
 
 For deterministic vault management you may call the `omw` CLI directly (e.g.
 `omw vault list`); for content ops always load `commands/<op>.md` and follow it.

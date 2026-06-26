@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 _SKILL = Path(__file__).resolve().parent.parent / "SKILL.md"
@@ -20,3 +21,10 @@ def test_skill_points_at_generated_triggers():
 def test_skill_has_no_handmaintained_trigger_table():
     text = _SKILL.read_text(encoding="utf-8")
     assert "## Trigger-phrase routing hint" not in text
+
+
+def test_skill_card_references_exist():
+    text = _SKILL.read_text(encoding="utf-8")
+    root = _SKILL.parent
+    for rel in re.findall(r"commands/([a-z0-9-]+\.md)", text):
+        assert (root / "commands" / rel).exists(), f"SKILL.md references missing card commands/{rel}"
