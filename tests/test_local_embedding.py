@@ -169,3 +169,48 @@ def test_embed_op_in_registry_and_help():
     op = next(o for o in ops_registry.OPS if o.name == "embed")
     for sub in ["status", "list", "use", "add", "install", "reindex"]:
         assert sub in op.cli_template
+
+
+from scripts import setup_wizard
+
+
+def test_setup_recall_embedding_triggers_switch_model(tmp_path, monkeypatch):
+    db = _fake_env(tmp_path, monkeypatch)
+    captured = {}
+    monkeypatch.setattr(
+        setup_wizard, "_embed_admin_switch",
+        lambda *a, **k: captured.update(args=a, kw=k) or {
+            "ok": True, "model": embed.DEFAULT_LOCAL_MODEL, "dim": 384,
+            "vaults_reindexed": 1, "detail": None,
+        },
+        raising=False,
+    )
+    rc = setup_wizard.setup_recall(mode="auto", strategy="embedding", noninteractive=True)
+    assert rc == 0
+    assert captured, "embedding strategy must invoke _embed_admin_switch"
+
+
+def test_setup_recall_fts_does_not_trigger_switch_model(tmp_path, monkeypatch):
+    _fake_env(tmp_path, monkeypatch)
+    captured = {}
+    monkeypatch.setattr(
+        setup_wizard, "_embed_admin_switch",
+        lambda *a, **k: captured.update(args=a, kw=k) or {"ok": True},
+        raising=False,
+    )
+    rc = setup_wizard.setup_recall(mode="auto", strategy="fts", noninteractive=True)
+    assert rc == 0
+    assert not captured, "fts strategy must NOT invoke _embed_admin_switch"
+
+
+def test_setup_recall_llm_does_not_trigger_switch_model(tmp_path, monkeypatch):
+    _fake_env(tmp_path, monkeypatch)
+    captured = {}
+    monkeypatch.setattr(
+        setup_wizard, "_embed_admin_switch",
+        lambda *a, **k: captured.update(args=a, kw=k) or {"ok": True},
+        raising=False,
+    )
+    rc = setup_wizard.setup_recall(mode="auto", strategy="llm", noninteractive=True)
+    assert rc == 0
+    assert not captured, "llm strategy must NOT invoke _embed_admin_switch"

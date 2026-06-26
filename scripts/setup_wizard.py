@@ -640,6 +640,12 @@ def setup_agents(*, agents: list[str] | None = None, noninteractive: bool = Fals
     return 0 if all(r.get("ok") for r in results) else 1
 
 
+def _embed_admin_switch(db, model, *, assume_yes):
+    """Thin seam so tests can monkeypatch without importing embed_admin at import time."""
+    from scripts import embed_admin
+    return embed_admin.switch_model(db, model, assume_yes=assume_yes)
+
+
 def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                  submode: str | None = None, hosts: list[str] | None = None,
                  base_dir=None, noninteractive: bool = False,
@@ -714,6 +720,16 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
             submode=submode,
             noninteractive=True,
         )
+        effective_provider = provider or cur_emb.get("provider") or "none"
+        if effective_provider not in ("openai", "fake"):
+            from scripts import embed as _embed
+            chosen = model or _embed.DEFAULT_LOCAL_MODEL
+            res = _embed_admin_switch(registry_path(), chosen, assume_yes=noninteractive or interactive)
+            if not res["ok"]:
+                print(f"warning: embedding setup incomplete: {res['detail']}", file=sys.stderr)
+            else:
+                print(f"embedding ready: {res['model']} (dim {res['dim']}), "
+                      f"{res['vaults_reindexed']} vault(s) embedded")
     if strategy not in recall._IMPLEMENTED_STRATEGIES:  # only an unrecognized strategy
         print(f"  note: strategy '{strategy}'는 인식되지 않음 — 런타임에 'fts'로 폴백합니다.")
     warn = recall.cost_warning(mode, strategy)
