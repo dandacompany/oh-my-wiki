@@ -8,11 +8,12 @@ from __future__ import annotations
 import hashlib
 import struct
 
-DEFAULT_LOCAL_MODEL = "intfloat/multilingual-e5-small"
+DEFAULT_LOCAL_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 KNOWN_MODEL_DIMS = {
-    "intfloat/multilingual-e5-small": 384,
-    "intfloat/multilingual-e5-base": 768,
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": 384,
     "BAAI/bge-small-en-v1.5": 384,
+    "sentence-transformers/all-MiniLM-L6-v2": 384,
+    "intfloat/multilingual-e5-large": 1024,
 }
 
 

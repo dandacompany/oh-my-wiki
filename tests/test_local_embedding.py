@@ -9,10 +9,11 @@ from scripts import embed, embed_admin, embed_install, omw_cli, setup_wizard, ve
 
 def test_get_embedder_fastembed_returns_fastembed_embedder():
     e = embed.get_embedder({"provider": "fastembed",
-                            "model": "intfloat/multilingual-e5-small", "dim": 384})
+                            "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+                            "dim": 384})
     assert isinstance(e, embed.FastEmbedEmbedder)
     assert e.dim == 384
-    assert e.model == "intfloat/multilingual-e5-small"
+    assert e.model == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 
 def test_get_embedder_fastembed_defaults():
@@ -91,10 +92,13 @@ def test_switch_model_writes_config_resets_and_reindexes(tmp_path, monkeypatch):
     reidx = {"vaults": 0}
     monkeypatch.setattr(embed_admin.reindex, "refresh_embeddings",
                         lambda d, *, vault_id, relpaths=None: reidx.__setitem__("vaults", reidx["vaults"] + 1) or 1)
-    out = embed_admin.switch_model(db, "intfloat/multilingual-e5-small", assume_yes=True)
+    # stub count: return 0 (no wiki notes) so vault counts as ok (no wiki pages)
+    monkeypatch.setattr(embed_admin.vector_index, "count", lambda d, *, vault_id: 0)
+    model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    out = embed_admin.switch_model(db, model, assume_yes=True)
     assert out["ok"] is True and out["dim"] == 384
     emb = _config.load_config()["recall"]["embedding"]
-    assert emb["provider"] == "fastembed" and emb["model"] == "intfloat/multilingual-e5-small" and emb["dim"] == 384
+    assert emb["provider"] == "fastembed" and emb["model"] == model and emb["dim"] == 384
     assert reset_called["n"] == 1 and reidx["vaults"] == 1
 
 
@@ -151,10 +155,11 @@ def test_cli_embed_status_json(tmp_path, monkeypatch, capsys):
 def test_cli_embed_use_invokes_switch(tmp_path, monkeypatch, capsys):
     db = _fake_env(tmp_path, monkeypatch)
     called = {}
+    model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     monkeypatch.setattr(embed_admin, "switch_model",
                         lambda d, m, **k: called.update(model=m) or {"ok": True, "model": m, "dim": 384, "vaults_reindexed": 1, "detail": None})
-    assert omw_cli.main(["embed", "use", "intfloat/multilingual-e5-small"]) == 0
-    assert called["model"] == "intfloat/multilingual-e5-small"
+    assert omw_cli.main(["embed", "use", model]) == 0
+    assert called["model"] == model
 
 
 def test_cli_embed_use_failure_returns_1(tmp_path, monkeypatch, capsys):
@@ -211,3 +216,114 @@ def test_setup_recall_llm_does_not_trigger_switch_model(tmp_path, monkeypatch):
     rc = setup_wizard.setup_recall(mode="auto", strategy="llm", noninteractive=True)
     assert rc == 0
     assert not captured, "llm strategy must NOT invoke _embed_admin_switch"
+
+
+# ---------------------------------------------------------------------------
+# FIX 2: vec_meta fail-closed tests
+# ---------------------------------------------------------------------------
+
+def test_vector_index_query_fails_closed_on_dim_mismatch(tmp_path, monkeypatch):
+    """upsert with dim=8, then query with dim=16 → [] (fail-closed)."""
+    if not vector_index.available():
+        pytest.skip("sqlite-vec not installed")
+    from scripts import registry as _reg
+    db = tmp_path / "registry.db"
+    _reg.init_db(db)
+    v = _reg.add_vault(db, name="v1", path=tmp_path / "v1", type_="markdown", mode="wiki")
+    e8 = embed.FakeEmbedder(dim=8)
+    vector_index.upsert(db, vault_id=v["id"], embedder=e8, rows=[("wiki/a.md", "hello")])
+    e16 = embed.FakeEmbedder(dim=16)
+    results = vector_index.query(db, vault_id=v["id"], embedder=e16, text="hello")
+    assert results == [], "should return [] when dims differ (fail-closed)"
+
+
+def test_vector_index_query_works_when_model_is_none(tmp_path, monkeypatch):
+    """upsert with FakeEmbedder (no model attr, dim=8) then query with FakeEmbedder
+    (no model, dim=8) should succeed — model=None means no mismatch."""
+    if not vector_index.available():
+        pytest.skip("sqlite-vec not installed")
+    from scripts import registry as _reg
+    db = tmp_path / "registry.db"
+    _reg.init_db(db)
+    v = _reg.add_vault(db, name="v1", path=tmp_path / "v1", type_="markdown", mode="wiki")
+    e = embed.FakeEmbedder(dim=8)
+    # FakeEmbedder has no .model attribute — getattr returns None
+    assert not hasattr(e, "model")
+    vector_index.upsert(db, vault_id=v["id"], embedder=e, rows=[("wiki/a.md", "hello")])
+    results = vector_index.query(db, vault_id=v["id"], embedder=embed.FakeEmbedder(dim=8),
+                                 text="hello")
+    assert isinstance(results, list)
+    # Should return results (not fail-closed) since both models are None
+
+
+def test_vector_index_count_returns_stored_count(tmp_path, monkeypatch):
+    """count() returns the number of rows stored for a given vault."""
+    if not vector_index.available():
+        pytest.skip("sqlite-vec not installed")
+    from scripts import registry as _reg
+    db = tmp_path / "registry.db"
+    _reg.init_db(db)
+    v = _reg.add_vault(db, name="v1", path=tmp_path / "v1", type_="markdown", mode="wiki")
+    e = embed.FakeEmbedder(dim=8)
+    assert vector_index.count(db, vault_id=v["id"]) == 0
+    vector_index.upsert(db, vault_id=v["id"], embedder=e, rows=[
+        ("wiki/a.md", "hello"),
+        ("wiki/b.md", "world"),
+    ])
+    assert vector_index.count(db, vault_id=v["id"]) == 2
+
+
+def test_vector_index_meta_is_none_after_reset(tmp_path, monkeypatch):
+    """After reset(), meta() returns None."""
+    if not vector_index.available():
+        pytest.skip("sqlite-vec not installed")
+    from scripts import registry as _reg
+    db = tmp_path / "registry.db"
+    _reg.init_db(db)
+    v = _reg.add_vault(db, name="v1", path=tmp_path / "v1", type_="markdown", mode="wiki")
+    e = embed.FakeEmbedder(dim=8)
+    vector_index.upsert(db, vault_id=v["id"], embedder=e, rows=[("wiki/a.md", "hello")])
+    assert vector_index.meta(db) is not None
+    vector_index.reset(db)
+    assert vector_index.meta(db) is None
+
+
+# ---------------------------------------------------------------------------
+# FIX 3: switch_model zero-embed detection
+# ---------------------------------------------------------------------------
+
+def test_switch_model_fails_when_no_vectors_produced_for_wiki_vault(tmp_path, monkeypatch):
+    """switch_model returns ok=False when wiki notes exist but no vectors were stored."""
+    from scripts import registry as _reg
+    db = _fake_env(tmp_path, monkeypatch)
+    monkeypatch.setattr(embed_admin.embed_install, "ensure_fastembed", lambda **k: True)
+    monkeypatch.setattr(embed_admin, "resolve_dim", lambda d, m: 384)
+    monkeypatch.setattr(embed_admin.vector_index, "reset", lambda d: None)
+    monkeypatch.setattr(embed_admin.reindex, "refresh_embeddings",
+                        lambda d, *, vault_id, relpaths=None: None)
+    # Simulate: vault has 3 wiki notes but 0 vectors (model unsupported)
+    monkeypatch.setattr(embed_admin.vector_index, "count", lambda d, *, vault_id: 0)
+
+    # We need the vault's notes table to report wiki notes.
+    # Patch registry.connect to return a fake conn for the notes count query.
+    real_connect = _reg.connect
+    class _FakeConn:
+        def execute(self, sql, params=()):
+            if "FROM notes" in sql:
+                class _Row:
+                    def __getitem__(self, k): return 3
+                class _Cursor:
+                    def fetchone(self): return _Row()
+                return _Cursor()
+            # delegate everything else
+            return real_connect(db).execute(sql, params)
+        def close(self): pass
+
+    monkeypatch.setattr(embed_admin.registry, "connect", lambda p: _FakeConn())
+    monkeypatch.setattr(embed_admin.registry, "list_vaults",
+                        lambda d: [{"id": 1, "name": "v1"}])
+
+    out = embed_admin.switch_model(db, "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+                                   assume_yes=True)
+    assert out["ok"] is False
+    assert "no vectors" in out["detail"]

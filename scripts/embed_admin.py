@@ -30,12 +30,43 @@ def switch_model(db_path, model: str, *, assume_yes: bool = False,
     config.set_config("recall.embedding.dim", dim)
     vector_index.reset(db_path)
     n = 0
-    for v in registry.list_vaults(db_path):
+    failed = False
+    conn = registry.connect(db_path)
+    try:
+        vaults = registry.list_vaults(db_path)
+    finally:
+        conn.close()
+    for v in vaults:
         try:
             reindex.refresh_embeddings(db_path, vault_id=v["id"], relpaths=None)
-            n += 1
         except Exception:
             pass
+        # Check how many wiki notes exist in this vault
+        db_conn = registry.connect(db_path)
+        try:
+            row = db_conn.execute(
+                "SELECT COUNT(*) AS c FROM notes WHERE vault_id=? AND relpath LIKE 'wiki/%' AND parse_error=0",
+                (v["id"],),
+            ).fetchone()
+            wiki_count = int(row["c"]) if row else 0
+        except Exception:
+            wiki_count = 0
+        finally:
+            db_conn.close()
+        vec_count = vector_index.count(db_path, vault_id=v["id"])
+        if wiki_count > 0:
+            if vec_count > 0:
+                n += 1
+            else:
+                failed = True
+    if failed:
+        return {
+            "ok": False,
+            "model": model,
+            "dim": dim,
+            "vaults_reindexed": n,
+            "detail": "embedding produced no vectors (model id may be unsupported)",
+        }
     return {"ok": True, "model": model, "dim": dim, "vaults_reindexed": n, "detail": None}
 
 
@@ -77,19 +108,9 @@ def status(db_path) -> dict:
     emb = cfg.get("embedding") or {}
     vaults = []
     if vector_index.available():
-        conn = registry.connect(db_path)
-        try:
-            has = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='vec_notes'"
-            ).fetchone()
-            for v in registry.list_vaults(db_path):
-                cnt = 0
-                if has:
-                    cnt = conn.execute("SELECT COUNT(*) AS c FROM vec_notes WHERE vault_id = ?",
-                                       (v["id"],)).fetchone()["c"]
-                vaults.append({"name": v["name"], "embedded": cnt})
-        finally:
-            conn.close()
+        for v in registry.list_vaults(db_path):
+            cnt = vector_index.count(db_path, vault_id=v["id"])
+            vaults.append({"name": v["name"], "embedded": cnt})
     else:
         vaults = [{"name": v["name"], "embedded": 0} for v in registry.list_vaults(db_path)]
     return {
