@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 from scripts import uninstall
 
@@ -54,4 +53,11 @@ def test_strip_hooks_noop_when_absent(tmp_path):
 def test_strip_hooks_noop_when_no_omw(tmp_path):
     cfg = tmp_path / "settings.json"
     cfg.write_text(json.dumps({"hooks": {"X": [{"hooks": [{"command": "other"}]}]}}), encoding="utf-8")
+    assert uninstall._strip_omw_hooks(cfg) == (0, False)
+
+
+def test_strip_hooks_survives_nondict_hook_entry(tmp_path):
+    cfg = tmp_path / "settings.json"
+    cfg.write_text(json.dumps({"hooks": {"X": [{"hooks": [42, "weird", None]}]}}), encoding="utf-8")
+    # must not raise; nothing matches → no-op
     assert uninstall._strip_omw_hooks(cfg) == (0, False)

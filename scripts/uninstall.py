@@ -69,7 +69,7 @@ def _strip_omw_hooks(config_path) -> tuple[int, bool]:
         kept = []
         for group in groups:
             inner = (group or {}).get("hooks", []) if isinstance(group, dict) else []
-            if any(_is_omw_recall_cmd((h or {}).get("command", "")) for h in inner):
+            if any(_is_omw_recall_cmd((h if isinstance(h, dict) else {}).get("command", "")) for h in inner):
                 removed += 1
             else:
                 kept.append(group)
