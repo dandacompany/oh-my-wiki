@@ -106,6 +106,8 @@ OPS: tuple[OpSpec, ...] = (
          "omw context <query> [--limit N]",
          args=(ArgSpec("query", True, "the question / search text"),
                ArgSpec("--limit", False, "max hits (default 8)"))),
+    _det("embed", "Local embedding model management (status/list/use/add/install/reindex).",
+         "omw embed {status|list|use <model>|add <model>|install|reindex}"),
     _det("find", "Deterministic full-text search over the vault index.",
          "omw find <query> [--limit N] [--vault V] [--json]",
          args=(ArgSpec("query", True, "search text (title/slug/tags/snippet)"),
@@ -170,7 +172,7 @@ _PHASE = {
     # synthesize — combine into new knowledge
     "query": "synthesize", "context": "synthesize", "autoresearch": "synthesize",
     # retrieve — find what's stored
-    "search": "retrieve", "find": "retrieve", "serve": "retrieve",
+    "search": "retrieve", "find": "retrieve", "serve": "retrieve", "embed": "retrieve",
     # maintain — keep the wiki healthy
     "lint": "maintain", "review": "maintain", "supersede": "maintain", "merge": "maintain",
     "visibility": "maintain", "gate": "maintain", "maint": "maintain", "next": "maintain",

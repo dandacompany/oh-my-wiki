@@ -134,3 +134,38 @@ def test_vector_index_reset_allows_new_dim(tmp_path, monkeypatch):
     e16 = embed.FakeEmbedder(dim=16)
     assert vector_index.upsert(db, vault_id=v["id"], embedder=e16,
                                rows=[("wiki/a.md", "hello")]) == 1
+
+
+import json as _json
+
+from scripts import omw_cli
+
+
+def test_cli_embed_status_json(tmp_path, monkeypatch, capsys):
+    db = _fake_env(tmp_path, monkeypatch)
+    assert omw_cli.main(["embed", "status"]) == 0
+    out = _json.loads(capsys.readouterr().out)
+    assert out["strategy"] == "fts" and "vaults" in out
+
+
+def test_cli_embed_use_invokes_switch(tmp_path, monkeypatch, capsys):
+    db = _fake_env(tmp_path, monkeypatch)
+    called = {}
+    monkeypatch.setattr(embed_admin, "switch_model",
+                        lambda d, m, **k: called.update(model=m) or {"ok": True, "model": m, "dim": 384, "vaults_reindexed": 1, "detail": None})
+    assert omw_cli.main(["embed", "use", "intfloat/multilingual-e5-small"]) == 0
+    assert called["model"] == "intfloat/multilingual-e5-small"
+
+
+def test_cli_embed_use_failure_returns_1(tmp_path, monkeypatch, capsys):
+    db = _fake_env(tmp_path, monkeypatch)
+    monkeypatch.setattr(embed_admin, "switch_model",
+                        lambda d, m, **k: {"ok": False, "model": m, "dim": None, "vaults_reindexed": 0, "detail": "boom"})
+    assert omw_cli.main(["embed", "use", "x/y"]) == 1
+
+
+def test_embed_op_in_registry_and_help():
+    from scripts import ops_registry
+    op = next(o for o in ops_registry.OPS if o.name == "embed")
+    for sub in ["status", "list", "use", "add", "install", "reindex"]:
+        assert sub in op.cli_template
