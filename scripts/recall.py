@@ -91,22 +91,16 @@ def _active(db):
 
 
 def _strip_josa(token: str) -> str:
-    """Drop a trailing Korean postposition so 'ARIMA와'/'평가지표를' match the index.
-    Only Hangul-ending tokens, and only when ≥2 chars remain."""
-    import re
-    if not re.search(r"[가-힣]$", token):
-        return token
-    from scripts.text_match import _JOSA
-    for j in sorted(_JOSA, key=len, reverse=True):
-        if token.endswith(j) and len(token) - len(j) >= 2:
-            return token[: -len(j)]
-    return token
+    """Drop a trailing Korean postposition (delegates to text_normalize)."""
+    from scripts import text_normalize
+    return text_normalize.normalize_token(token)
 
 
 def normalize_query(text: str) -> str:
-    """Josa-normalize a free-text prompt for FTS recall (the index tokenizer is
-    plain — natural Korean prompts attach josa that would otherwise miss)."""
-    return " ".join(_strip_josa(t) for t in (text or "").split())
+    """Josa-normalize a free-text prompt for FTS recall (delegates to
+    text_normalize so the index and query use the same analyzer)."""
+    from scripts import text_normalize
+    return text_normalize.normalize_text(text)
 
 
 def _record_use(relpaths: list[str]) -> None:
