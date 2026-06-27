@@ -150,6 +150,13 @@ def test_export_registered_deterministic():
     assert reg.get("export") is not None and reg.get("export").kind == "deterministic"
 
 
+def test_persona_fanout_registered_deterministic():
+    op = reg.get("persona-fanout")
+    assert op is not None
+    assert op.kind == "deterministic"
+    assert op.triggers  # routable: must have triggers (test_triggers guard)
+
+
 def test_persona_bundle_registered_deterministic():
     op = reg.get("persona-bundle")
     assert op is not None
