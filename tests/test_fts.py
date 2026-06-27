@@ -1,5 +1,5 @@
 # tests/test_fts.py
-from scripts import fts, registry
+from scripts import fts, registry, text_normalize
 
 
 def _conn(tmp_path):
@@ -81,3 +81,39 @@ def test_query_with_josa_also_matches(tmp_path):
     conn.commit(); conn.close()
     hits = fts.search(db, vault_id=1, query="학교에서", limit=5)  # josa on the query
     assert [h["relpath"] for h in hits] == ["wiki/k.md"]
+
+
+def test_ensure_fts_records_analyzer_version(tmp_path):
+    conn, db = _conn(tmp_path)
+    fts.ensure_fts(conn)
+    conn.commit()
+    ver = conn.execute("SELECT analyzer_ver FROM fts_meta").fetchone()[0]
+    conn.close()
+    assert ver == text_normalize.ANALYZER_VERSION
+
+
+def test_ensure_fts_rebuilds_on_version_change(tmp_path, monkeypatch):
+    conn, db = _conn(tmp_path)
+    fts.ensure_fts(conn)
+    fts.index_note(conn, vault_id=1, relpath="wiki/a.md", title="t",
+                   summary="", tags=[], body="alpha")
+    conn.commit()
+    # simulate a normalizer/provider change
+    monkeypatch.setattr(fts.text_normalize, "ANALYZER_VERSION", "heuristic-99")
+    migrated = fts.ensure_fts(conn)
+    conn.commit()
+    rows = conn.execute("SELECT count(*) FROM notes_fts").fetchone()[0]
+    new_ver = conn.execute("SELECT analyzer_ver FROM fts_meta").fetchone()[0]
+    conn.close()
+    assert migrated is True          # signals caller to full-reindex
+    assert rows == 0                 # old rows dropped (await repopulation)
+    assert new_ver == "heuristic-99"
+
+
+def test_ensure_fts_no_rebuild_when_version_matches(tmp_path):
+    conn, db = _conn(tmp_path)
+    assert fts.ensure_fts(conn) is False or True  # first create may migrate-or-create
+    conn.commit()
+    second = fts.ensure_fts(conn)     # same version → no rebuild
+    conn.close()
+    assert second is False

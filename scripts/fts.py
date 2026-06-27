@@ -29,22 +29,44 @@ def fts5_available() -> bool:
     return _FTS5_AVAILABLE
 
 
+def _read_analyzer_ver(conn: sqlite3.Connection) -> str | None:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='fts_meta'"
+    ).fetchone()
+    if not row:
+        return None
+    r = conn.execute("SELECT analyzer_ver FROM fts_meta LIMIT 1").fetchone()
+    return r[0] if r else None
+
+
+def _write_analyzer_ver(conn: sqlite3.Connection) -> None:
+    conn.execute("CREATE TABLE IF NOT EXISTS fts_meta (analyzer_ver TEXT)")
+    conn.execute("DELETE FROM fts_meta")
+    conn.execute("INSERT INTO fts_meta(analyzer_ver) VALUES (?)",
+                 (text_normalize.ANALYZER_VERSION,))
+
+
 def ensure_fts(conn: sqlite3.Connection) -> bool:
-    """Ensure notes_fts exists with a visibility column.
-    Returns True if it migrated an old-shape (no-visibility) table — the caller
-    must then full-reindex to repopulate the rebuilt index."""
+    """Ensure notes_fts exists with a visibility column AND matches the current
+    analyzer version. Returns True if it (re)built the table — the caller must
+    then full-reindex to repopulate."""
+    rebuilt = False
     existing = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='notes_fts'"
     ).fetchone()
     if existing:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(notes_fts)")}
-        if "visibility" in cols:
+        stale_shape = "visibility" not in cols
+        stale_analyzer = _read_analyzer_ver(conn) != text_normalize.ANALYZER_VERSION
+        if not stale_shape and not stale_analyzer:
             return False
         conn.execute("DROP TABLE notes_fts")  # FTS5 has no ALTER ADD COLUMN
         _create_fts(conn)
+        _write_analyzer_ver(conn)
         return True
     _create_fts(conn)
-    return False
+    _write_analyzer_ver(conn)
+    return rebuilt
 
 
 def _create_fts(conn: sqlite3.Connection) -> None:
