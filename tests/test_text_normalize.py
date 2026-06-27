@@ -45,6 +45,16 @@ def test_analyzer_version_present_and_provider_tagged():
     assert tn._provider() in tn.ANALYZER_VERSION  # version encodes the provider id
 
 
+def test_analyzer_version_is_function_and_heuristic_tagged():
+    assert callable(tn.analyzer_version)
+    tn._reset_provider_cache()
+    assert tn.analyzer_version() == "heuristic-1"
+
+
+def test_heuristic_text_strips_each_token():
+    assert tn._heuristic_text("학교에서 평가지표를") == "학교 평가지표"
+
+
 def test_provider_defaults_to_heuristic():
     tn._reset_provider_cache()
     assert tn._provider() == "heuristic"
