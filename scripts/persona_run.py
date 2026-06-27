@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -102,14 +103,31 @@ def _gather_inputs(role: str, *, db_path, vault_id, source: dict | None = None) 
     return task, meta
 
 
+_MODEL_UNSUPPORTED_RE = re.compile(r"model[^\n]*is not supported", re.IGNORECASE)
+
+
+def _model_unsupported(stdout: str, stderr: str) -> bool:
+    """True if the backend rejected the requested model (retry without --model)."""
+    blob = f"{stdout or ''}\n{stderr or ''}"
+    return bool(_MODEL_UNSUPPORTED_RE.search(blob))
+
+
 def _dispatch(persona_body: str, task_prompt: str, *, backend: str, model: str,
               override_cli_path: str | None, timeout: int = 600) -> str:
-    argv = backends.build_invocation(
-        backend, persona_body=persona_body, task_prompt=task_prompt,
-        model=model, skip_permissions=True, override_cli_path=override_cli_path,
-    )
+    def _run(m: str):
+        argv = backends.build_invocation(
+            backend, persona_body=persona_body, task_prompt=task_prompt,
+            model=m, skip_permissions=True, override_cli_path=override_cli_path,
+        )
+        return subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
+                              stdin=subprocess.DEVNULL)
     try:
-        cp = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        cp = _run(model)
+        # codex (ChatGPT-account) rejects catalog model ids with "is not supported";
+        # retry once without --model so codex uses the account default.
+        if (cp.returncode != 0 and backend == "codex" and model
+                and _model_unsupported(cp.stdout, cp.stderr)):
+            cp = _run("")
     except subprocess.TimeoutExpired as exc:
         raise RunError(f"{backend} dispatch timed out after {timeout}s") from exc
     if cp.returncode != 0:
