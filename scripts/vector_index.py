@@ -86,8 +86,9 @@ def query(db_path, *, vault_id: int, embedder, text: str, limit: int = 5) -> lis
     if not available() or embedder is None or not (text or "").strip():
         return []
     import sqlite_vec
-    conn = _connect(db_path)
+    conn = None
     try:
+        conn = _connect(db_path)
         _ensure_table(conn, embedder.dim)
         # Fail-closed: reject if dim or model differs from stored meta
         meta_row = conn.execute("SELECT model, dim FROM vec_meta WHERE id=1").fetchone()
@@ -116,10 +117,15 @@ def query(db_path, *, vault_id: int, embedder, text: str, limit: int = 5) -> lis
             (vault_id, sqlite_vec.serialize_float32(qv), limit))
         return [{"relpath": r["relpath"], "score": 1.0 / (1.0 + float(r["distance"]))}
                 for r in cur.fetchall()]
-    except Exception:
+    except Exception as e:
+        print(
+            f"warning: vector query failed ({type(e).__name__}); falling back to FTS",
+            file=sys.stderr,
+        )
         return []
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
 
 
 def count(db_path, *, vault_id: int) -> int:
