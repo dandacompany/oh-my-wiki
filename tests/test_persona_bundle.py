@@ -1,4 +1,6 @@
 import pathlib
+import subprocess
+import sys as _sys
 
 import pytest
 
@@ -121,3 +123,13 @@ def test_run_bundle_tidy_integration_stages_index(tmp_path, monkeypatch):
     assert rc == 0
     assert index.read_text() == "ORIGINAL"                       # curator stages, never overwrites
     assert (index.parent / "index.md.proposed.md").exists()
+
+
+def test_cli_persona_bundle_list_runs():
+    proc = subprocess.run(
+        [_sys.executable, "-m", "scripts.omw_cli", "persona-bundle", "list"],
+        capture_output=True, text=True,
+        cwd=str(pathlib.Path(__file__).resolve().parent.parent),
+    )
+    assert proc.returncode == 0
+    assert "tidy" in proc.stdout

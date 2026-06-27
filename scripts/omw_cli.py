@@ -868,6 +868,29 @@ def _cmd_persona_run(args) -> int:
                            source=source, backend=args.backend)
 
 
+def _cmd_persona_bundle(args) -> int:
+    import json
+    from scripts import persona_bundle
+    if args.bundle_cmd == "list":
+        print(json.dumps(persona_bundle.list_bundles(), ensure_ascii=False, indent=2))
+        return 0
+    if args.bundle_cmd == "show":
+        try:
+            spec = persona_bundle.load_bundle(args.name)
+        except persona_bundle.BundleError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(spec, ensure_ascii=False, indent=2))
+        return 0
+    # run
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    return persona_bundle.run_bundle(args.name, db_path=db, vault_id=vault["id"],
+                                     page=args.page, backend=args.backend)
+
+
 def _cmd_merge(args) -> int:
     import json
     from scripts import merge, registry, links, frontmatter
@@ -1571,6 +1594,19 @@ def build_parser() -> argparse.ArgumentParser:
     ppr.add_argument("--apply", dest="apply_path", default=None,
                      help="apply a staged <target>.proposed.md")
     ppr.set_defaults(func=_cmd_persona_run)
+
+    pb = sub.add_parser("persona-bundle", help="Run a named team of personas in sequence.")
+    bsub = pb.add_subparsers(dest="bundle_cmd", required=True)
+    bsub.add_parser("list", help="List available bundles (JSON)")
+    pbs = bsub.add_parser("show", help="Show one bundle's spec (JSON)")
+    pbs.add_argument("name")
+    pbr = bsub.add_parser("run", help="Run a bundle's personas in order")
+    pbr.add_argument("name")
+    pbr.add_argument("--page", default=None)
+    pbr.add_argument("--vault", default=None)
+    pbr.add_argument("--backend", choices=["claude", "codex", "gemini", "opencode"],
+                     default=None)
+    pb.set_defaults(func=_cmd_persona_bundle)
 
     from scripts import ops_registry as _reg
     for _name in _reg.PROCEDURE_NAMES:
