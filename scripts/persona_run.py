@@ -128,8 +128,26 @@ def apply_proposal(proposal: Path) -> Path:
     return target
 
 
-# Roles whose output rewrites an existing page — never auto-applied.
-_MUTATION_ROLES: frozenset[str] = frozenset({"curator"})
+def _propose_target(role, persona, source_meta, db_path, vault_id) -> Path:
+    """Resolve the content page a `propose` persona stages onto.
+
+    curator rewrites the vault index (its output_kind is stdout, so the target
+    is fixed, not derivable); any other propose persona resolves its target
+    from output_kind via personas.resolve_output_path.
+    """
+    if role == "curator":
+        return registry.get_vault_root(db_path, vault_id) / "wiki" / "index.md"
+    suffix = persona.get("output_suffix") or role.replace("-", "")
+    target = personas.resolve_output_path(
+        persona=persona, source_meta=source_meta,
+        db_path=Path(db_path), vault_id=vault_id, suffix=suffix,
+    )
+    if target is None:
+        raise RunError(
+            f"persona {role!r} has access=propose but output_kind "
+            f"{persona.get('output_kind')!r} yields no content target"
+        )
+    return target
 
 
 def run(
@@ -160,13 +178,13 @@ def run(
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
-    if role in _MUTATION_ROLES:
-        target = registry.get_vault_root(db_path, vault_id) / "wiki" / "index.md"
+    if persona["access"] == "propose":
+        target = _propose_target(role, persona, meta, db_path, vault_id)
         target.parent.mkdir(parents=True, exist_ok=True)
         prop = _stage_proposal(target, out)
         print(
             f"proposal staged: {prop}\n"
-            f"Review, then `omw persona-run {role} --apply` to apply."
+            f"Review, then `omw persona-run {role} --apply {prop}` to apply."
         )
         return 0
 
