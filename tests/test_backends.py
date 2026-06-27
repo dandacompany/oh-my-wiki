@@ -174,14 +174,14 @@ BUILD_CASES = [
     pytest.param(
         "codex", "gpt-5", False,
         ["codex", "exec"],
-        ["--model", "gpt-5", "--instructions", "gpt-5"],
+        ["--model", "gpt-5"],
         id="codex-no-skip",
     ),
     pytest.param(
         "codex", "gpt-5-high", True,
-        ["codex", "exec", "--yolo"],
+        ["codex", "exec", "--dangerously-bypass-approvals-and-sandbox"],
         ["--model", "gpt-5-high"],
-        id="codex-yolo",
+        id="codex-skip-perms",
     ),
     pytest.param(
         "gemini", "gemini-2.5-pro", False,
@@ -368,3 +368,26 @@ def test_fake_dry_run_produces_output(backend, cli_name, tmp_path):
     assert f"FAKE-{backend.upper()}" in content, (
         f"Expected 'FAKE-{backend.upper()}' in output; got: {content!r}"
     )
+
+
+def test_codex_folds_persona_into_prompt_no_invalid_flags():
+    argv = backends.build_invocation(
+        "codex",
+        persona_body="UNIQUE_PERSONA_SENTINEL",
+        task_prompt="TASK_SENTINEL",
+        model="gpt-5",
+        skip_permissions=True,
+    )
+    # invalid flags must be gone
+    assert "--instructions" not in argv
+    assert "--yolo" not in argv
+    # real skip flag present
+    assert "--dangerously-bypass-approvals-and-sandbox" in argv
+    # persona has no flag on codex — it is folded into the final positional prompt
+    assert "--system" not in argv and "--append-system-prompt" not in argv
+    prompt = argv[-1]
+    assert "UNIQUE_PERSONA_SENTINEL" in prompt
+    assert "TASK_SENTINEL" in prompt
+    # codex exec subcommand + model still present
+    assert argv[:2] == ["codex", "exec"]
+    assert "--model" in argv and argv[argv.index("--model") + 1] == "gpt-5"

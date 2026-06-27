@@ -34,9 +34,11 @@ BACKENDS: dict[str, dict[str, Any]] = {
         "cli_name": "codex",
         "detect_cmd": ["codex", "--version"],
         "auth_check_cmd": ["codex", "auth", "status"],
-        "skip_perm_flag": "--yolo",
+        # codex exec's no-approval/no-sandbox switch (there is no `--yolo` on exec)
+        "skip_perm_flag": "--dangerously-bypass-approvals-and-sandbox",
         "non_interactive_flag": "exec",
-        "system_prompt_flag": "--instructions",
+        # codex exec has NO system-prompt flag — None signals "fold persona into prompt"
+        "system_prompt_flag": None,
         "model_flag": "--model",
         "model_catalog_path": "backends/codex.json",
     },
@@ -228,16 +230,24 @@ def build_invocation(
         argv += [spec["model_flag"], model]
 
     # system / persona body
-    argv += [spec["system_prompt_flag"], persona_body]
+    # Backends with a system-prompt flag (claude/gemini/opencode) pass the persona
+    # via that flag. Backends without one (codex exec) fold the persona into the
+    # prompt itself, since the prompt is the agent's only instruction channel.
+    sp_flag = spec["system_prompt_flag"]
+    prompt = task_prompt
+    if sp_flag is not None:
+        argv += [sp_flag, persona_body]
+    else:
+        prompt = f"{persona_body}\n\n---\n\n{task_prompt}"
 
     # task prompt
     # For backends where non_interactive_flag == "-p" (claude, gemini):
-    #   the task prompt is passed as -p TASK
-    # For codex/opencode: task prompt is a positional after flags
+    #   the prompt is passed as -p PROMPT
+    # For codex/opencode: prompt is a positional after flags
     if ni_flag == "-p":
-        argv += ["-p", task_prompt]
+        argv += ["-p", prompt]
     else:
-        argv.append(task_prompt)
+        argv.append(prompt)
 
     # extra args (e.g. --output-format stream-json)
     if extra_args:
