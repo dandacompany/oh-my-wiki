@@ -18,6 +18,41 @@ from scripts import paths
 REPO_ROOT = paths.bundled_root()
 SKILL_ID = "dandacompany/oh-my-wiki@oh-my-wiki"
 
+# ── short-alias skill ────────────────────────────────────────────────────────
+# No native alias frontmatter key exists in the Agent Skills spec or in
+# Claude Code / Codex: `/omw` and `$omw` both resolve by a skill's `name`
+# (= its dir). So we ship a thin sibling skill whose name IS `omw`, installed
+# next to oh-my-wiki. Generated from this constant (not a repo file) so it is
+# present on every install path — dev repo, built wheel `_bundle`, skills CLI,
+# direct copy — with zero extra bundling config. The body forwards to the
+# canonical skill rather than duplicating its rules (single source of truth).
+_ALIAS_NAME = "omw"
+_ALIAS_SKILL_MD = """\
+---
+name: omw
+description: Short alias for the oh-my-wiki skill (OMW). Invoke the user's personal LLM-wiki via the omw CLI. Trigger phrases — "omw", "use omw", "/omw", "$omw", "open my wiki", "ingest this", "find a note about X"; Korean "오엠더블유", "오엠더블유 켜줘", "위키 열어줘", "이거 정리해줘". Same skill as oh-my-wiki, just the short name.
+argument-hint: "[ingest|query|find|search|vault|lint|status|reindex|list|export] [args]"
+---
+
+# omw — short alias for oh-my-wiki
+
+You invoked the **omw** short alias. It is the **same skill as `oh-my-wiki`** — `omw`
+is just the short name (and the CLI binary name).
+
+Load and follow the **`oh-my-wiki`** skill now, then carry out the user's request
+through the `omw` CLI. All HARD RULES, ops, dispatch logic, and command cards live
+in the `oh-my-wiki` skill — do not restate or improvise them here.
+"""
+
+
+def install_alias_into_dir(skills_dir, *, name: str = _ALIAS_NAME) -> Path:
+    """Write the short-alias skill to <skills_dir>/<name>/SKILL.md. Idempotent
+    (overwrites in place). Returns the alias skill dir."""
+    dest = Path(skills_dir) / name
+    dest.mkdir(parents=True, exist_ok=True)
+    (dest / "SKILL.md").write_text(_ALIAS_SKILL_MD, encoding="utf-8")
+    return dest
+
 _AGENT_BINS = {"claude": "claude", "codex": "codex", "hermes": "hermes",
                "gemini": "gemini", "opencode": "opencode", "openclaw": "openclaw"}
 _SKILLS_AGENT = {"claude": "claude-code", "codex": "codex", "gemini": "gemini"}
@@ -91,7 +126,9 @@ def install_into_dir(skills_dir, *, repo_root=REPO_ROOT) -> dict:
     rather than raising."""
     try:
         dest = _copy_bundle(skills_dir, repo_root=repo_root)
-        return {"ok": True, "method": "copy", "dest": str(dest), "detail": None}
+        alias = install_alias_into_dir(skills_dir)
+        return {"ok": True, "method": "copy", "dest": str(dest),
+                "alias_dest": str(alias), "detail": None}
     except OSError as exc:
         return {"ok": False, "method": "copy", "dest": None, "detail": str(exc)}
 
@@ -137,15 +174,21 @@ def install(agent, *, repo_root=REPO_ROOT, use_skills_cli=True) -> dict:
     """Install OMW into one agent's skill system. Returns a result dict."""
     if agent not in _AGENT_BINS:
         return {"agent": agent, "ok": False, "method": None, "dest": None, "detail": "unknown agent"}
+    # The short-alias `omw` skill rides along into the same skills dir, regardless
+    # of whether the main skill goes via the skills CLI or a direct copy.
+    alias = str(install_alias_into_dir(_SKILLS_DIR[agent]))
     if agent not in _SKILLS_AGENT:
         dest = _copy_bundle(_SKILLS_DIR[agent], repo_root=repo_root)
-        return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest)}
+        return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest),
+                "alias_dest": alias}
     if use_skills_cli:
         ok, dest = _install_via_skills_cli(agent)
         if ok:
-            return {"agent": agent, "ok": True, "method": "skills-cli", "dest": dest}
+            return {"agent": agent, "ok": True, "method": "skills-cli", "dest": dest,
+                    "alias_dest": alias}
     dest = _copy_bundle(_SKILLS_DIR[agent], repo_root=repo_root)
-    return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest)}
+    return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest),
+            "alias_dest": alias}
 
 
 def install_many(agents, *, repo_root=REPO_ROOT, use_skills_cli=True) -> list[dict]:

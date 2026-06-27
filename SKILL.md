@@ -1,6 +1,7 @@
 ---
 name: oh-my-wiki
 description: Karpathy-style LLM Wiki with multi-vault sqlite registry and Socratic wizard. Also addressable by the short alias OMW. Manages multiple knowledge vaults (markdown or Obsidian). On invocation, infers user intent from registry state — first-time users get a setup wizard, returning users go straight to operations. Supports memo-mode (lightweight notes) and wiki-mode (Karpathy's raw/wiki/index/log pattern with ingest/query/lint). Trigger phrases — English "open my wiki", "ingest this", "find a note about X", "what does my wiki say about X", "omw", "use omw", "/omw"; Korean "위키 열어줘", "이거 정리해줘", "X 관련 노트 찾아줘", "위키에 물어봐", "오엠더블유", "오엠더블유 켜줘". Also fires when the user pastes long-form content and asks to save it.
+argument-hint: "[ingest|query|find|search|vault|lint|status|reindex|list|export] [args]"
 ---
 
 # oh-my-wiki (OMW)

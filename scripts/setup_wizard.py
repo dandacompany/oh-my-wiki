@@ -633,6 +633,8 @@ def setup_agents(*, agents: list[str] | None = None, noninteractive: bool = Fals
         print(f"  {mark} {label} [{r.get('method') or '—'}]{detail}")
         if r.get("dest"):
             print(f"      → {r['dest']}")
+    if any(r.get("alias_dest") for r in results):
+        print("  alias: 짧은 이름 omw 스킬도 함께 설치됨 — /omw (claude) · $omw (codex) 로 호출 가능.")
     if any(r.get("method") == "skills-cli" and (r.get("dest") or "").find(".agents/skills") >= 0
            for r in results):
         print("  note: 프로젝트 로컬(.agents/skills)에 설치됐습니다 — 해당 폴더에서 "

@@ -132,16 +132,20 @@ def _detect_hooks() -> list:
 
 def _detect_skills() -> list:
     from scripts import agent_skills
+    # the main bundle + the short-alias skill dir installed beside it
+    names = ("oh-my-wiki", agent_skills._ALIAS_NAME)
     out = []
     for agent, skills_dir in agent_skills._SKILLS_DIR.items():
-        bundle = Path(skills_dir) / "oh-my-wiki"
-        if bundle.exists():
-            out.append({"agent": agent, "path": str(bundle)})
+        for nm in names:
+            bundle = Path(skills_dir) / nm
+            if bundle.exists():
+                out.append({"agent": agent, "path": str(bundle)})
     # hermes per-profile targets (beyond the main ~/.hermes/skills already covered above)
     for t in _safe(agent_skills.hermes_profile_targets, []):
-        bundle = Path(t["skills_dir"]) / "oh-my-wiki"
-        if bundle.exists() and not any(s["path"] == str(bundle) for s in out):
-            out.append({"agent": f"hermes:{t['name']}", "path": str(bundle)})
+        for nm in names:
+            bundle = Path(t["skills_dir"]) / nm
+            if bundle.exists() and not any(s["path"] == str(bundle) for s in out):
+                out.append({"agent": f"hermes:{t['name']}", "path": str(bundle)})
     return out
 
 
@@ -221,11 +225,13 @@ def apply(plan_dict, *, purge=False, vaults=False, dry_run=False) -> dict:
         summary["hooks_removed"].append({"host": hk["host"], "path": hk["path"],
                                          "count": hk.get("count", 0)})
 
-    # Tier 1c: remove skill bundles (only the oh-my-wiki dir).
+    # Tier 1c: remove skill bundles (only our own dirs: oh-my-wiki + the omw alias).
+    from scripts import agent_skills
+    _ours = ("oh-my-wiki", agent_skills._ALIAS_NAME)
     for sk in plan_dict.get("skills", []):
         bundle = Path(sk["path"])
-        if not dry_run and bundle.name == "oh-my-wiki" and bundle.exists():
-            _safe(lambda: shutil.rmtree(bundle), None)
+        if not dry_run and bundle.name in _ours and bundle.exists():
+            _safe(lambda b=bundle: shutil.rmtree(b), None)
         summary["skills_removed"].append({"agent": sk["agent"], "path": sk["path"]})
 
     home = plan_dict.get("home") or {}
