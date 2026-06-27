@@ -24,6 +24,17 @@ class RunError(Exception):
     pass
 
 
+# Roles that compute their own deterministic input (lint/drift reports) and need
+# no source document. Single source of truth for persona_bundle's --page check;
+# matches _gather_inputs's self-gathering branches.
+_SELF_GATHERING_ROLES = frozenset({"consistency-checker", "curator"})
+
+
+def needs_source(role: str) -> bool:
+    """True if the persona requires a source document (page/file/text) to run."""
+    return role not in _SELF_GATHERING_ROLES
+
+
 def _override_path() -> str | None:
     return os.environ.get("OMW_BACKEND_OVERRIDE_PATH") or None
 

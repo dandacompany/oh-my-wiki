@@ -162,6 +162,9 @@ OPS: tuple[OpSpec, ...] = (
          args=(ArgSpec("role", True, "persona name (fact-checker, consistency-checker, curator, terminology-manager, wiki-librarian)"),
                ArgSpec("--backend", False, "claude|codex|gemini|opencode (default: first authed)",
                        ("claude", "codex", "gemini", "opencode")))),
+    _det("persona-bundle", "Run a named team of personas in sequence (any backend).",
+         "omw persona-bundle {list|show <name>|run <name> [--page P] [--backend B]}",
+         triggers=("persona bundle", "run a team", "페르소나 팀", "번들 실행")),
     # --- agentic procedures (you execute commands/<op>.md; do NOT trust a shelled result) ---
     _proc("ingest", "Pull a source (path/URL) into raw/ and reindex.",
           args=(ArgSpec("source", True, "file path or URL"),), uses=("fetch", "reindex"),
@@ -214,7 +217,7 @@ _PHASE = {
     # maintain — keep the wiki healthy
     "lint": "maintain", "review": "maintain", "supersede": "maintain", "merge": "maintain",
     "visibility": "maintain", "gate": "maintain", "maint": "maintain", "next": "maintain",
-    "recall": "maintain", "persona-run": "maintain", "persona-factcheck": "maintain",
+    "recall": "maintain", "persona-run": "maintain", "persona-bundle": "maintain", "persona-factcheck": "maintain",
     "persona-consistency": "maintain", "persona-terminology": "maintain",
     # use — pull knowledge back out
     "view": "use", "list": "use", "export": "use",
