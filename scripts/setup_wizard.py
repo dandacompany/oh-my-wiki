@@ -650,12 +650,19 @@ def _embed_admin_switch(db, model, *, assume_yes):
     return embed_admin.switch_model(db, model, assume_yes=assume_yes)
 
 
+def _normalize_admin_switch(db, provider, *, assume_yes):
+    """Thin seam so tests can monkeypatch without importing normalize_admin at import time."""
+    from scripts import normalize_admin
+    return normalize_admin.switch_provider(db, provider, assume_yes=assume_yes)
+
+
 def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                  submode: str | None = None, hosts: list[str] | None = None,
                  base_dir=None, noninteractive: bool = False,
                  provider: str | None = None, model: str | None = None,
                  dim: int | None = None,
-                 profile: str | None = None, workspace: str | None = None) -> int:
+                 profile: str | None = None, workspace: str | None = None,
+                 normalizer: str | None = None) -> int:
     """Configure auto wiki-recall (two axes):
       mode     — trigger: off | advisory | auto
       strategy — retrieval: fts | embedding | hybrid | llm (+ llm.submode)
@@ -746,6 +753,22 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                       f"{res['vaults_reindexed']} vault(s) embedded")
     if strategy not in recall._IMPLEMENTED_STRATEGIES:  # only an unrecognized strategy
         print(f"  note: strategy '{strategy}'는 인식되지 않음 — 런타임에 'fts'로 폴백합니다.")
+    # Axis 3 — search normalizer (heuristic | kiwi). Affects FTS index + query.
+    cur_norm = (config.load_config().get("recall") or {}).get("normalizer", "heuristic")
+    norm_choices = ["heuristic", "kiwi"]
+    if interactive and normalizer is None:
+        normalizer = _prompt("select", "Search normalizer (Korean morphology)",
+                             choices=norm_choices, default=cur_norm) or cur_norm
+    chosen_norm = normalizer or cur_norm
+    if chosen_norm not in norm_choices:
+        print(f"error: unknown normalizer {chosen_norm!r}; choose from {norm_choices}",
+              file=sys.stderr)
+        return 1
+    if chosen_norm != cur_norm or normalizer is not None:
+        res = _normalize_admin_switch(registry_path(), chosen_norm, assume_yes=noninteractive)
+        if not res.get("ok"):
+            print(f"normalizer switch failed: {res.get('detail')}", file=sys.stderr)
+            # non-fatal: config of other axes already applied; keep prior normalizer
     warn = recall.cost_warning(mode, strategy)
     if warn:
         print(f"  {warn}")
