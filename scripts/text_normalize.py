@@ -59,11 +59,16 @@ def _heuristic_token(tok: str) -> str:
     return tok
 
 
+_NORMALIZERS = {"heuristic": _heuristic_token}
+
+
 def normalize_token(tok: str) -> str:
-    """Normalize one whitespace-delimited token under the active provider.
-    Provider dispatch is the seam; only 'heuristic' is implemented today."""
-    # _provider() == "kiwi" branch plugs in here (optional import) in the future.
-    return _heuristic_token(tok)
+    """Normalize one whitespace-delimited token under the active provider (the seam).
+    Only 'heuristic' is implemented today; a future 'kiwi' provider adds its entry
+    to _NORMALIZERS. Never raises."""
+    if not tok:
+        return ""
+    return _NORMALIZERS.get(_provider(), _heuristic_token)(tok)
 
 
 def normalize_text(text: str | None) -> str:

@@ -48,3 +48,16 @@ def test_analyzer_version_present_and_provider_tagged():
 def test_provider_defaults_to_heuristic():
     tn._reset_provider_cache()
     assert tn._provider() == "heuristic"
+
+
+def test_normalize_token_empty_and_none():
+    """FIX 1: normalize_token must handle None and empty strings (contract: never raise)."""
+    assert tn.normalize_token("") == ""
+    assert tn.normalize_token(None) == ""
+
+
+def test_normalize_token_dispatches_via_provider():
+    """FIX 2: normalize_token must route through the provider dispatch table."""
+    tn._reset_provider_cache()
+    assert tn.normalize_token("학교에서") == "학교"   # routes through _NORMALIZERS[_provider()]
+    assert "heuristic" in tn._NORMALIZERS
