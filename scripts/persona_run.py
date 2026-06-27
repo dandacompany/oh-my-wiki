@@ -28,7 +28,8 @@ class RunError(Exception):
 # Roles that compute their own deterministic input (lint/drift reports) and need
 # no source document. Single source of truth for persona_bundle's --page check;
 # matches _gather_inputs's self-gathering branches.
-_SELF_GATHERING_ROLES = frozenset({"consistency-checker", "curator"})
+_SELF_GATHERING_ROLES = frozenset({"consistency-checker", "curator",
+                                    "wiki-auditor", "wiki-librarian"})
 
 
 def needs_source(role: str) -> bool:
@@ -74,8 +75,10 @@ def _gather_inputs(role: str, *, db_path, vault_id, source: dict | None = None) 
     Roles:
     - consistency-checker: embeds contradiction_candidates JSON from wiki_lint.check.
     - curator: embeds links.index_drift JSON.
-    - fact-checker / terminology-manager / wiki-librarian: calls personas.resolve_input
-      with the provided source dict and embeds content in task_prompt.
+    - wiki-auditor: embeds lint + broken_links health signal JSON (no --page needed).
+    - wiki-librarian: embeds orphans + graph + broken_links link graph JSON (no --page needed).
+    - fact-checker / terminology-manager: calls personas.resolve_input with the provided
+      source dict and embeds content in task_prompt.
     """
     if role == "consistency-checker":
         rep = _wiki_lint.check(Path(db_path), vault_id=vault_id)
@@ -90,7 +93,28 @@ def _gather_inputs(role: str, *, db_path, vault_id, source: dict | None = None) 
                 "(JSON):\n" + json.dumps(drift, ensure_ascii=False, indent=2))
         return task, {}
 
-    # fact-checker / terminology-manager / wiki-librarian: source-driven
+    if role == "wiki-auditor":
+        data = {
+            "lint": _wiki_lint.check(Path(db_path), vault_id=vault_id),
+            "broken_links": _links.broken_links(Path(db_path), vault_id),
+        }
+        task = ("Diagnose what's sick in this vault and emit a prioritized triage. "
+                "Deterministic health signal (JSON):\n"
+                + json.dumps(data, ensure_ascii=False, indent=2))
+        return task, {}
+
+    if role == "wiki-librarian":
+        data = {
+            "orphans": _links.orphans(Path(db_path), vault_id),
+            "graph": _links.graph(Path(db_path), vault_id),
+            "broken_links": _links.broken_links(Path(db_path), vault_id),
+        }
+        task = ("Propose structure fixes (missing cross-links, orphan resolution, "
+                "merge/split candidates). Deterministic link graph (JSON):\n"
+                + json.dumps(data, ensure_ascii=False, indent=2))
+        return task, {}
+
+    # fact-checker / terminology-manager: source-driven
     src = source or {}
     content, meta = personas.resolve_input(
         text=src.get("text"),
