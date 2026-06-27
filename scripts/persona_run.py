@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -102,10 +103,13 @@ def _gather_inputs(role: str, *, db_path, vault_id, source: dict | None = None) 
     return task, meta
 
 
+_MODEL_UNSUPPORTED_RE = re.compile(r"model[^\n]*is not supported", re.IGNORECASE)
+
+
 def _model_unsupported(stdout: str, stderr: str) -> bool:
     """True if the backend rejected the requested model (retry without --model)."""
-    blob = f"{stdout or ''}\n{stderr or ''}".lower()
-    return "is not supported" in blob and "model" in blob
+    blob = f"{stdout or ''}\n{stderr or ''}"
+    return bool(_MODEL_UNSUPPORTED_RE.search(blob))
 
 
 def _dispatch(persona_body: str, task_prompt: str, *, backend: str, model: str,

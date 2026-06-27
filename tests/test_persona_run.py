@@ -204,8 +204,27 @@ def test_dispatch_no_fallback_for_non_model_errors(monkeypatch):
         return _CP(1, "some other error")
 
     monkeypatch.setattr(persona_run.subprocess, "run", fake_run)
-    import pytest
     with pytest.raises(persona_run.RunError):
         persona_run._dispatch("body", "task", backend="codex", model="gpt-5",
                               override_cli_path=None)
     assert len(calls) == 1                       # no retry on unrelated errors
+
+
+def test_dispatch_no_model_fallback_for_non_codex(monkeypatch):
+    calls = []
+
+    class _CP:
+        def __init__(self, rc, out):
+            self.returncode = rc
+            self.stdout = out
+            self.stderr = ""
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        return _CP(1, "the 'X' model is not supported")
+
+    monkeypatch.setattr(persona_run.subprocess, "run", fake_run)
+    with pytest.raises(persona_run.RunError):
+        persona_run._dispatch("body", "task", backend="claude", model="m",
+                              override_cli_path=None)
+    assert len(calls) == 1   # non-codex never retries, even on a model-unsupported message
