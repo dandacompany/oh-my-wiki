@@ -8,6 +8,8 @@ isolated one-shot subagent that persona_run dispatches.
 """
 from __future__ import annotations
 
+import sys
+
 import yaml
 
 from scripts import paths, personas
@@ -63,3 +65,31 @@ def list_bundles() -> list[dict]:
         except BundleError:
             continue
     return out
+
+
+def run_bundle(name, *, db_path, vault_id, page=None, backend=None,
+               override_cli_path=None) -> int:
+    """Run a bundle's roles in order. Returns 0 iff every role succeeded."""
+    from scripts import persona_run
+    try:
+        bundle = load_bundle(name)
+    except BundleError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    roles = bundle["roles"]
+    if page is None:
+        missing = [r for r in roles if persona_run.needs_source(r)]
+        if missing:
+            print(f"error: bundle {name!r} has source-driven role(s) {missing} "
+                  f"but no --page was given", file=sys.stderr)
+            return 1
+    results = []
+    for role in roles:
+        src = {"vault_relpath": page} if (page and persona_run.needs_source(role)) else None
+        rc = persona_run.run(role, db_path=db_path, vault_id=vault_id, source=src,
+                             backend=backend, override_cli_path=override_cli_path)
+        results.append((role, rc))
+    print(f"\n--- bundle {name!r} summary ---")
+    for role, rc in results:
+        print(f"  {'ok  ' if rc == 0 else 'FAIL'}  {role}")
+    return 0 if all(rc == 0 for _, rc in results) else 1
