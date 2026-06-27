@@ -1,3 +1,7 @@
+import sys
+
+import pytest
+
 import scripts.setup_wizard as sw
 from scripts import platform_env
 
@@ -51,6 +55,7 @@ def test_ensure_one_attempt_per_process(monkeypatch):
     assert len(runs) == 1  # second call short-circuits on the flag
 
 
+@pytest.mark.skipif(not sys.stdin.isatty(), reason="interactive prompt requires a TTY")
 def test_prompt_invokes_ensure(monkeypatch):
     spy = []
     monkeypatch.setattr(sw, "ensure_wizard_ui", lambda: spy.append(True) or True)

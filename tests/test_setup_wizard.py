@@ -1,4 +1,7 @@
 """omw setup wizard — non-interactive contract."""
+import sys
+
+import pytest
 import yaml
 
 from scripts import omw_cli, registry
@@ -150,6 +153,7 @@ def _fake_input(answers):
     return _inp
 
 
+@pytest.mark.skipif(not sys.stdin.isatty(), reason="interactive prompt requires a TTY")
 def test_setup_serve_interactive_prompts_for_token(monkeypatch):
     from scripts import setup_wizard, config
     from scripts.paths import omw_home
@@ -162,6 +166,7 @@ def test_setup_serve_interactive_prompts_for_token(monkeypatch):
     assert (omw_home() / ".env").stat().st_mode & 0o777 == 0o600
 
 
+@pytest.mark.skipif(not sys.stdin.isatty(), reason="interactive prompt requires a TTY")
 def test_setup_serve_interactive_generate(monkeypatch):
     from scripts import setup_wizard, config
     monkeypatch.delenv("OMW_SERVE_TOKEN", raising=False)
@@ -181,6 +186,7 @@ def test_setup_serve_noninteractive_flag_unchanged(monkeypatch):
     assert config.read_secret("OMW_SERVE_TOKEN") == "flagtok"
 
 
+@pytest.mark.skipif(not sys.stdin.isatty(), reason="interactive prompt requires a TTY")
 def test_setup_personas_interactive_selects_roster(monkeypatch, tmp_path):
     from scripts import setup_wizard, config
     monkeypatch.setattr(setup_wizard.sys.stdin, "isatty", lambda: True)
@@ -239,6 +245,7 @@ def test_run_all_returns_first_nonzero_but_continues(monkeypatch, tmp_path):
     assert calls == ["vault", "search", "serve", "personas", "import", "viewer", "agents", "recall"]
 
 
+@pytest.mark.skipif(not sys.stdin.isatty(), reason="interactive prompt requires a TTY")
 def test_setup_import_interactive_stores_notion_key(monkeypatch):
     from scripts import setup_wizard, config
     monkeypatch.delenv("NOTION_API_KEY", raising=False)

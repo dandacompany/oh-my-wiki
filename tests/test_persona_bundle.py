@@ -154,6 +154,17 @@ def test_load_bundle_rejects_empty_name(tmp_path, monkeypatch):
         persona_bundle.load_bundle("badname")
 
 
+def test_load_bundle_rejects_duplicate_keys(tmp_path, monkeypatch):
+    d = tmp_path / "bundles"
+    d.mkdir()
+    (d / "dup.yaml").write_text(
+        "name: dup\ndescription: d\nroles: [consistency-checker]\nroles: [curator]\n",
+        encoding="utf-8")
+    monkeypatch.setattr(persona_bundle, "BUNDLES_ROOT", d)
+    with pytest.raises(persona_bundle.BundleError, match="duplicate"):
+        persona_bundle.load_bundle("dup")
+
+
 def test_cli_persona_bundle_list_runs():
     proc = subprocess.run(
         [_sys.executable, "-m", "scripts.omw_cli", "persona-bundle", "list"],
