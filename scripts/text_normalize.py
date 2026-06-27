@@ -98,8 +98,9 @@ def _kiwi_text(text: str) -> str:
             _KIWI = Kiwi()
         out = []
         for tok in _KIWI.tokenize(text):
-            if tok.tag in _KIWI_KEEP:
-                out.append(tok.form + "다" if tok.tag in _KIWI_VERB else tok.form)
+            base = tok.tag.split("-")[0]
+            if base in _KIWI_KEEP:
+                out.append(tok.form + "다" if base in _KIWI_VERB else tok.form)
         return " ".join(out)
     except Exception:
         return _heuristic_text(text)

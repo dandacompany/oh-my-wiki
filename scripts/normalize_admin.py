@@ -18,6 +18,8 @@ def switch_provider(db_path, provider: str, *, assume_yes: bool = False,
             return {"ok": False, "provider": provider, "vaults_reindexed": 0,
                     "detail": "kiwipiepy not installed"}
     config.set_config("recall.normalizer", provider)
+    from scripts import text_normalize
+    text_normalize._reset_provider_cache()
     n = 0
     for v in registry.list_vaults(db_path):
         try:

@@ -20,3 +20,11 @@ def test_kiwi_adjective_dictionary_form():
     assert "아프다" in toks        # adjective → dictionary form
     assert "약" in toks
     assert "먹다" in toks
+
+
+def test_kiwi_irregular_predicates_kept():
+    out = tn._kiwi_text("더운 날씨에 걸어서 집을 지었다")
+    toks = out.split()
+    assert "덥다" in toks    # ㅂ-irregular adjective (VA-I)
+    assert "걷다" in toks    # ㄷ-irregular verb (VV-I)
+    assert "짓다" in toks    # ㅅ-irregular verb (VV-I)
