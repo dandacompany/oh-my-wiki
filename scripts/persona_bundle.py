@@ -22,13 +22,31 @@ class BundleError(Exception):
     """Raised for unknown bundle, malformed yaml, unknown role, etc."""
 
 
+class _NoDupKeyLoader(yaml.SafeLoader):
+    """SafeLoader that rejects duplicate mapping keys (silent key loss is a footgun)."""
+
+
+def _construct_mapping_no_dup(loader, node, deep=False):
+    mapping = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise BundleError(f"duplicate key in bundle: {key!r}")
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_NoDupKeyLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_mapping_no_dup)
+
+
 def _known_roles() -> set[str]:
     return {p["name"] for p in personas.list_personas()}
 
 
 def _parse_bundle_text(text: str, *, known_roles: set[str]) -> dict:
     try:
-        data = yaml.safe_load(text)
+        data = yaml.load(text, Loader=_NoDupKeyLoader)
     except yaml.YAMLError as exc:
         raise BundleError(f"malformed bundle yaml: {exc}") from exc
     if not isinstance(data, dict):
