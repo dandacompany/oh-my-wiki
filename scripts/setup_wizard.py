@@ -605,7 +605,7 @@ def _install_hermes_profiles(interactive: bool) -> list[dict]:
 
 def setup_agents(*, agents: list[str] | None = None, noninteractive: bool = False) -> int:
     """Install the OMW skill into selected agents' skill systems."""
-    from scripts import agent_skills
+    from scripts import agent_skills, hosts as hostsmod
     detected = agent_skills.detect_agents()
     interactive = (not noninteractive) and sys.stdin.isatty()
     if agents is None:
@@ -613,15 +613,34 @@ def setup_agents(*, agents: list[str] | None = None, noninteractive: bool = Fals
             print("no agents detected (claude/codex/hermes/gemini) — skipping skill install.")
             return 0
         if interactive:
-            picked = _prompt("checkbox", "Install OMW skill into which agents?", choices=detected)
-            agents = picked if picked is not None else detected
+            all_hosts = list(hostsmod.HOSTS.keys())
+            def _label(h):
+                if h in detected:
+                    return h
+                if h == "hermes":
+                    return "hermes (--profile)"
+                if h == "openclaw":
+                    return "openclaw (--workspace)"
+                return f"{h} (not installed)"
+            labels = [_label(h) for h in all_hosts]
+            picked = _prompt("checkbox", "Install OMW skill into which agents?", choices=labels)
+            if picked is None:
+                agents = detected
+            else:
+                chosen = {lbl.split(" (")[0] for lbl in picked}
+                agents = [h for h in all_hosts if h in chosen]
         else:
             agents = detected
     targets, skipped = [], []
     for a in agents:
         (targets if (not detected or a in detected) else skipped).append(a)
     for a in skipped:
-        print(f"  - {a}: not installed, skipped")
+        if hostsmod.is_scoped(a):
+            flag = "--profile" if a == "hermes" else "--workspace"
+            print(f"  - {a}: not configured — install with "
+                  f"`omw setup agents` after creating a {a} {flag} (skipped)")
+        else:
+            print(f"  - {a}: not installed, skipped")
     if not targets:
         print("agents setup skipped — no selected agent is installed.")
         return 0
