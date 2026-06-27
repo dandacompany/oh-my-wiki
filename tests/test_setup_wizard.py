@@ -333,3 +333,17 @@ def test_setup_recall_llm_persists_submode(tmp_path):
     assert rc == 0
     cfg = config.load_config()["recall"]
     assert cfg["strategy"] == "llm" and cfg["llm"]["submode"] == "generative"
+
+
+def test_ensure_vault_activates_preexisting(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw"))
+    from scripts import setup_wizard, registry
+    from scripts.paths import registry_path
+    db = registry_path()
+    setup_wizard._ensure_vault("alpha", "wiki", "markdown", "global")
+    setup_wizard._ensure_vault("beta", "wiki", "markdown", "global")
+    assert registry.get_active(db)["name"] == "beta"        # newest active
+    # re-running on the PRE-EXISTING 'alpha' must re-activate it (the bug: it didn't)
+    setup_wizard._ensure_vault("alpha", "wiki", "markdown", "global")
+    assert registry.get_active(db)["name"] == "alpha"
+    assert sum(1 for v in registry.list_vaults(db) if v["name"] == "alpha") == 1  # no duplicate

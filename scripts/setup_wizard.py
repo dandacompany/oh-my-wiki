@@ -71,14 +71,14 @@ def _ensure_vault(name: str, mode: str, type_: str, location: str) -> None:
     db = registry_path()
     if not db.exists():
         registry.init_db(db)
-    if any(v["name"] == name for v in registry.list_vaults(db)):
-        return  # idempotent: vault already registered
-    root = resolve_vault_root(name, location)
-    root.mkdir(parents=True, exist_ok=True)
-    adapters.get_adapter(type_, vault_name=name).init_vault(root, mode)
-    vault = registry.add_vault(db, name=name, path=root, type_=type_, mode=mode)
-    registry.set_active(db, name)
-    reindex.full(db, vault_id=vault["id"])
+    exists = any(v["name"] == name for v in registry.list_vaults(db))
+    if not exists:
+        root = resolve_vault_root(name, location)
+        root.mkdir(parents=True, exist_ok=True)
+        adapters.get_adapter(type_, vault_name=name).init_vault(root, mode)
+        vault = registry.add_vault(db, name=name, path=root, type_=type_, mode=mode)
+        reindex.full(db, vault_id=vault["id"])
+    registry.set_active(db, name)   # always: the wizard's chosen vault becomes active
 
 
 def _write_config(default_vault: str) -> None:
