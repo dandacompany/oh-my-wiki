@@ -161,3 +161,51 @@ def test_propose_access_generalizes_beyond_curator(tmp_path, monkeypatch):
 def test_mutation_roles_symbol_removed():
     """The hardcoded mutation set is gone — access drives staging now."""
     assert not hasattr(persona_run, "_MUTATION_ROLES")
+
+
+# ---------------------------------------------------------------------------
+# Codex model-unsupported fallback tests
+# ---------------------------------------------------------------------------
+
+def test_dispatch_codex_falls_back_when_model_unsupported(monkeypatch):
+    calls = []
+
+    class _CP:
+        def __init__(self, rc, out):
+            self.returncode = rc
+            self.stdout = out
+            self.stderr = ""
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        if "--model" in argv:
+            return _CP(1, "ERROR: The 'gpt-5' model is not supported when using Codex ...")
+        return _CP(0, "FALLBACK_OK")
+
+    monkeypatch.setattr(persona_run.subprocess, "run", fake_run)
+    out = persona_run._dispatch("body", "task", backend="codex", model="gpt-5",
+                                override_cli_path=None)
+    assert out == "FALLBACK_OK"
+    assert len(calls) == 2                      # tried with model, then retried without
+    assert "--model" in calls[0] and "--model" not in calls[1]
+
+
+def test_dispatch_no_fallback_for_non_model_errors(monkeypatch):
+    calls = []
+
+    class _CP:
+        def __init__(self, rc, out):
+            self.returncode = rc
+            self.stdout = out
+            self.stderr = "boom"
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        return _CP(1, "some other error")
+
+    monkeypatch.setattr(persona_run.subprocess, "run", fake_run)
+    import pytest
+    with pytest.raises(persona_run.RunError):
+        persona_run._dispatch("body", "task", backend="codex", model="gpt-5",
+                              override_cli_path=None)
+    assert len(calls) == 1                       # no retry on unrelated errors
