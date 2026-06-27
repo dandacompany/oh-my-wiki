@@ -387,12 +387,67 @@ def setup_fetch(*, noninteractive: bool = False, provider: str | None = None,
         zone=zone, create_zone=create_zone)
 
 
+def _expand_units(hosts, profiles, workspaces):
+    """Expand a host list into (host, profile, workspace) write-units.
+
+    hermes fans out over each selected profile; openclaw over each selected
+    workspace; repo hosts (claude/codex/gemini/opencode) emit one unit with no
+    scope. A scoped host with no selection yields a single (host, None, None) unit
+    so the existing resolve-skip / active-default behavior is preserved.
+    """
+    units = []
+    for h in hosts:
+        if h == "hermes":
+            for p in (profiles or [None]):
+                units.append((h, p, None))
+        elif h == "openclaw":
+            for w in (workspaces or [None]):
+                units.append((h, None, w))
+        else:
+            units.append((h, None, None))
+    return units
+
+
+def _pick_scoped(hosts, profiles, workspaces, hostsmod):
+    """Interactive multi-select of hermes profiles / openclaw workspaces.
+
+    Returns (profiles, workspaces) — each a list (or None when the host isn't
+    selected or nothing is resolvable). Pre-checks the active profile / default
+    workspace; an empty pick falls back to that default so a scoped host the user
+    explicitly selected is never silently dropped."""
+    if "hermes" in hosts and profiles is None:
+        avail = hostsmod.list_profiles()
+        active = hostsmod.active_profile()
+        if avail:
+            choices = [{"name": p, "checked": p == active} for p in avail]
+            picked = _prompt("checkbox", "Hermes profiles", choices=choices)
+            profiles = picked if picked else ([active] if active else [avail[0]])
+        else:
+            profiles = [active] if active else None
+    if "openclaw" in hosts and workspaces is None:
+        availw = hostsmod.list_workspaces()
+        dw = hostsmod.default_workspace()
+        if availw:
+            choices = [{"name": w, "checked": w == dw} for w in availw]
+            pickedw = _prompt("checkbox", "OpenClaw workspaces", choices=choices)
+            workspaces = pickedw if pickedw else ([dw] if dw else [availw[0]])
+        else:
+            workspaces = [dw] if dw else None
+    return profiles, workspaces
+
+
 def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
                    hosts: list[str] | None = None, base_dir=None,
                    noninteractive: bool = False,
                    profile: str | None = None, workspace: str | None = None,
+                   profiles: list[str] | None = None,
+                   workspaces: list[str] | None = None,
                    dry_run: bool = False) -> int:
-    """Record the enabled persona roster + main, and export to host instruction files."""
+    """Record the enabled persona roster + main, and export to host instruction files.
+
+    Scoped hosts fan out: hermes over every profile in `profiles`, openclaw over
+    every workspace in `workspaces`. The legacy single `profile`/`workspace` args
+    are still accepted (normalized into the lists) for back-compat."""
     from pathlib import Path
     from scripts import config, personas, persona_export
     from scripts import hosts as hostsmod
@@ -401,6 +456,11 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
     descriptions = {p["name"]: p.get("description", "") for p in specs}
     routes = {p["name"]: p.get("triggers", []) for p in specs}
     interactive = (not noninteractive) and sys.stdin.isatty()
+    # Normalize legacy single profile/workspace into the list form.
+    if profiles is None and profile:
+        profiles = [profile]
+    if workspaces is None and workspace:
+        workspaces = [workspace]
     # Load persisted config to use as fallback (preserve on re-run).
     cur_cfg = config.load_config().get("personas") or {}
     cur_enabled = cur_cfg.get("enabled")   # list or None
@@ -438,27 +498,9 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
         # Keep an empty pick distinct from "no argument": an interactive empty
         # selection means "no hosts" (skip all writes), NOT the all-hosts default.
         hosts = picked_hosts
-        # Scoped host sub-prompts: ask for profile/workspace when not yet provided.
+        # Scoped host sub-prompts: multi-select profiles/workspaces when not yet given.
         if hosts:
-            for host in hosts:
-                if not hostsmod.is_scoped(host):
-                    continue
-                if host == "hermes" and profile is None:
-                    profiles = hostsmod.list_profiles()
-                    if profiles:
-                        profile = _prompt("select", "Hermes profile",
-                                          choices=profiles,
-                                          default=hostsmod.active_profile()) or profiles[0]
-                    else:
-                        profile = hostsmod.active_profile()
-                elif host == "openclaw" and workspace is None:
-                    workspaces = hostsmod.list_workspaces()
-                    if workspaces:
-                        workspace = _prompt("select", "OpenClaw workspace",
-                                            choices=workspaces,
-                                            default=hostsmod.default_workspace()) or workspaces[0]
-                    else:
-                        workspace = hostsmod.default_workspace()
+            profiles, workspaces = _pick_scoped(hosts, profiles, workspaces, hostsmod)
     # Non-interactive fallback: preserve previously saved roster if no explicit arg.
     if enabled is None:
         enabled = list(cur_enabled) if cur_enabled else list(all_names)
@@ -480,29 +522,43 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
         # Non-interactive default: repo-trio hosts only (no scoped hosts auto-selected).
         hosts = [h for h, d in hostsmod.HOSTS.items() if d["kind"] == "repo"]
     base = Path(base_dir) if base_dir else Path.cwd()
-    # Filter to only hosts that can be resolved — mirror setup_recall's per-host skip pattern.
-    resolvable: list[str] = []
-    for host in hosts:
+    # Expand into (host, profile, workspace) write-units; scoped hosts fan out over
+    # each selected profile/workspace. Filter to only units that resolve.
+    units = _expand_units(hosts, profiles, workspaces)
+    resolvable: list[tuple] = []
+    for host, p, w in units:
         try:
-            hostsmod.resolve_instruction_path(host, base, profile=profile, workspace=workspace)
-            resolvable.append(host)
+            hostsmod.resolve_instruction_path(host, base, profile=p, workspace=w)
+            resolvable.append((host, p, w))
         except ValueError as exc:
-            print(f"  - {host}: skipped ({exc})")
+            scope = p or w
+            label = f"{host} ({scope})" if scope else host
+            print(f"  - {label}: skipped ({exc})")
     if dry_run:
         _dry(f"set personas.enabled={enabled}")
         _dry(f"set personas.main={main}")
-        _dry(f"export persona blocks → {resolvable}")
-        _dry(f"export command-map blocks → {resolvable}")
+        _dry(f"export persona + command-map blocks → "
+             f"{[f'{h}:{p or w}' if (p or w) else h for h, p, w in resolvable]}")
         return 0
     config.set_config("personas.enabled", enabled)
     config.set_config("personas.main", main)
-    written = persona_export.export_personas(
-        enabled=enabled, main=main, descriptions=descriptions,
-        base_dir=base, hosts=resolvable, profile=profile, workspace=workspace,
-        routes={n: routes.get(n, []) for n in enabled},
-    )
     from scripts import commandmap
-    commandmap.export(base, resolvable, profile=profile, workspace=workspace)
+    routemap = {n: routes.get(n, []) for n in enabled}
+    written: list = []
+    # Repo hosts grouped in one call (preserves codex/opencode AGENTS.md dedup);
+    # scoped hosts (hermes/openclaw) written once per selected profile/workspace.
+    repo_hosts = [h for h, p, w in resolvable if h not in ("hermes", "openclaw")]
+    if repo_hosts:
+        written += persona_export.export_personas(
+            enabled=enabled, main=main, descriptions=descriptions,
+            base_dir=base, hosts=repo_hosts, routes=routemap)
+        commandmap.export(base, repo_hosts)
+    for host, p, w in resolvable:
+        if host in ("hermes", "openclaw"):
+            written += persona_export.export_personas(
+                enabled=enabled, main=main, descriptions=descriptions,
+                base_dir=base, hosts=[host], profile=p, workspace=w, routes=routemap)
+            commandmap.export(base, [host], profile=p, workspace=w)
     print(f"✓ personas: {len(enabled)} enabled, main={main}; "
           f"exported to {', '.join(p.name for p in written)}")
     return 0
@@ -719,6 +775,8 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                  provider: str | None = None, model: str | None = None,
                  dim: int | None = None,
                  profile: str | None = None, workspace: str | None = None,
+                 profiles: list[str] | None = None,
+                 workspaces: list[str] | None = None,
                  normalizer: str | None = None,
                  dry_run: bool = False) -> int:
     """Configure auto wiki-recall (two axes):
@@ -737,6 +795,11 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     cur_emb = cur.get("embedding") or {}
     choices = ["auto", "advisory", "off"]
     interactive = (not noninteractive) and sys.stdin.isatty()
+    # Normalize legacy single profile/workspace into the list form.
+    if profiles is None and profile:
+        profiles = [profile]
+    if workspaces is None and workspace:
+        workspaces = [workspace]
     if interactive and mode is None:
         mode = _prompt("select", "Wiki recall mode (trigger)", choices=choices, default=cur_mode) or cur_mode
     mode = mode or cur_mode
@@ -859,27 +922,9 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
         # Keep an empty pick distinct from "no argument": an interactive empty
         # selection means "no hosts" (skip all writes), NOT the all-hosts default.
         hosts = picked_hosts
-        # Scoped host sub-prompts.
+        # Scoped host sub-prompts: multi-select profiles/workspaces.
         if hosts:
-            for host in hosts:
-                if not hostsmod.is_scoped(host):
-                    continue
-                if host == "hermes" and profile is None:
-                    profiles = hostsmod.list_profiles()
-                    if profiles:
-                        profile = _prompt("select", "Hermes profile",
-                                          choices=profiles,
-                                          default=hostsmod.active_profile()) or profiles[0]
-                    else:
-                        profile = hostsmod.active_profile()
-                elif host == "openclaw" and workspace is None:
-                    workspaces = hostsmod.list_workspaces()
-                    if workspaces:
-                        workspace = _prompt("select", "OpenClaw workspace",
-                                            choices=workspaces,
-                                            default=hostsmod.default_workspace()) or workspaces[0]
-                    else:
-                        workspace = hostsmod.default_workspace()
+            profiles, workspaces = _pick_scoped(hosts, profiles, workspaces, hostsmod)
     if hosts is None:
         # Non-interactive default: repo-trio hosts only.
         hosts = [h for h, d in hostsmod.HOSTS.items() if d["kind"] == "repo"]
@@ -887,12 +932,16 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     block = recall.render_recall_block(mode)
     written: list[Path] = []
     seen: set = set()
-    for host in hosts:
+    # Expand into (host, profile, workspace) units; scoped hosts fan out over each
+    # selected profile/workspace.
+    units = _expand_units(hosts, profiles, workspaces)
+    for host, p, w in units:
         try:
-            path = hostsmod.resolve_instruction_path(host, base,
-                                                     profile=profile, workspace=workspace)
+            path = hostsmod.resolve_instruction_path(host, base, profile=p, workspace=w)
         except ValueError as exc:
-            print(f"  - {host}: skipped ({exc})")
+            scope = p or w
+            label = f"{host} ({scope})" if scope else host
+            print(f"  - {label}: skipped ({exc})")
             continue
         if path not in seen:
             seen.add(path)
@@ -904,17 +953,25 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                                     marker=recall.ALWAYS_ON_MARKER)  # wiki-first (soft enforcement)
                 written.append(path)
     from scripts import commandmap, ask as ask_mod
+    repo_hosts = [h for h, p, w in units if h not in ("hermes", "openclaw")]
     if dry_run:
-        _dry(f"export command-map/ask blocks → {hosts}")
+        _dry(f"export command-map/ask blocks → "
+             f"{[f'{h}:{p or w}' if (p or w) else h for h, p, w in units]}")
     else:
-        commandmap.export(base, hosts, profile=profile, workspace=workspace)
-        ask_mod.export(base, hosts, profile=profile, workspace=workspace)  # omw-ask convention block
+        if repo_hosts:
+            commandmap.export(base, repo_hosts)
+            ask_mod.export(base, repo_hosts)
+        for host, p, w in units:
+            if host in ("hermes", "openclaw"):
+                commandmap.export(base, [host], profile=p, workspace=w)
+                ask_mod.export(base, [host], profile=p, workspace=w)
     print(f"✓ recall mode '{mode}'; guidance injected into "
           f"{', '.join(p.name for p in written) or '(none)'}.")
     # Tier 2: wire each host's NATIVE recall hook, dispatched by its hook mechanism
     # (JSON shell hook / hermes YAML shell hook / TS plugin). Each host's event names +
-    # stdout inject format differ — see hosts.HOOK.
-    for host in hosts:
+    # stdout inject format differ — see hosts.HOOK. Scoped hosts wire once per unit
+    # (each hermes profile / openclaw workspace).
+    for host, p, w in units:
         mech = hostsmod.hook_mech(host)
         if mech == "json":
             if dry_run:
@@ -924,16 +981,15 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                 print(f"  {'✓' if changed else '–'} {host} hooks: {detail}")
         elif mech == "yaml":  # hermes: only pre_llm_call can inject recall
             if dry_run:
-                _dry(f"wire {host} yaml recall hook")
+                _dry(f"wire {host} ({p}) yaml recall hook")
             else:
-                changed, detail = recall.wire_hermes(profile=profile)
-                print(f"  {'✓' if changed else '–'} {host} hooks (pre_llm_call recall): {detail}")
+                changed, detail = recall.wire_hermes(profile=p)
+                print(f"  {'✓' if changed else '–'} {host} ({p}) hooks (pre_llm_call recall): {detail}")
         elif mech in ("ts-opencode", "ts-openclaw"):
             if dry_run:
                 _dry(f"wire {host} {mech} recall hook")
             else:
-                changed, detail = recall.wire_ts_plugin(host, base_dir=base,
-                                                        workspace=workspace)
+                changed, detail = recall.wire_ts_plugin(host, base_dir=base, workspace=w)
                 print(f"  {'✓' if changed else '–'} {host} plugin: {detail}")
         else:
             print(f"  – {host}: block-only (no native hook)")

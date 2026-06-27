@@ -40,7 +40,9 @@ def test_interactive_empty_host_pick_writes_nothing(monkeypatch, tmp_path):
     assert rc == 0
     assert calls["upsert"] == []          # no instruction-block writes
     assert calls["wire"] == []            # no native hooks wired
-    assert calls["commandmap_hosts"] == []  # exported to zero hosts
+    # empty pick → no host units → command-map export skipped entirely (the old
+    # no-op call with [] was removed); "never called" (None) also means zero writes.
+    assert calls["commandmap_hosts"] in (None, [])  # exported to zero hosts
 
 
 def test_noninteractive_no_arg_defaults_to_repo_hosts(monkeypatch, tmp_path):
@@ -51,3 +53,27 @@ def test_noninteractive_no_arg_defaults_to_repo_hosts(monkeypatch, tmp_path):
                                    hosts=None, base_dir=str(tmp_path), noninteractive=True)
     assert rc == 0
     assert set(calls["commandmap_hosts"]) == repo_hosts  # repo-host default preserved
+
+
+def test_recall_hermes_multi_profiles_fan_out(monkeypatch, tmp_path):
+    """`profiles=[...]` injects the recall block + wires the hook into every
+    selected hermes profile."""
+    from pathlib import Path
+    from scripts import recall
+    calls = _patch_writers(monkeypatch)
+    wired = []
+    monkeypatch.setattr(recall, "wire_hermes",
+                        lambda *, profile=None, **k: (wired.append(profile) or (True, "wired")))
+    home = tmp_path / "home"
+    for name in ("iris", "mark"):
+        (home / ".hermes" / "profiles" / name).mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    rc = setup_wizard.setup_recall(mode="auto", strategy="fts", normalizer="heuristic",
+                                   hosts=["hermes"], profiles=["iris", "mark"],
+                                   base_dir=str(tmp_path), noninteractive=True)
+    assert rc == 0
+    # recall block injected into BOTH profiles' SOUL.md
+    upserted = " ".join(calls["upsert"])
+    assert "iris" in upserted and "mark" in upserted
+    # native hook wired once per profile
+    assert sorted(wired) == ["iris", "mark"]

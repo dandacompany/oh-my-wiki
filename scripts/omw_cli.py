@@ -789,11 +789,14 @@ def _cmd_setup(args) -> int:
     if args.section == "personas":
         enabled = [s.strip() for s in args.enable.split(",") if s.strip()] if args.enable else None
         hosts = [s.strip() for s in args.host.split(",") if s.strip()] if args.host else None
+        prof = getattr(args, "profile", None)
+        ws = getattr(args, "workspace", None)
+        profiles = [s.strip() for s in prof.split(",") if s.strip()] if prof else None
+        workspaces = [s.strip() for s in ws.split(",") if s.strip()] if ws else None
         return setup_wizard.setup_personas(
             enabled=enabled, main=args.main, hosts=hosts,
             base_dir=args.base_dir, noninteractive=args.noninteractive,
-            profile=getattr(args, "profile", None),
-            workspace=getattr(args, "workspace", None),
+            profiles=profiles, workspaces=workspaces,
             dry_run=args.dry_run,
         )
     if args.section == "search":
@@ -823,12 +826,15 @@ def _cmd_setup(args) -> int:
                                          dry_run=args.dry_run)
     if args.section == "recall":
         hosts = [s.strip() for s in args.host.split(",") if s.strip()] if args.host else None
+        prof = getattr(args, "profile", None)
+        ws = getattr(args, "workspace", None)
+        profiles = [s.strip() for s in prof.split(",") if s.strip()] if prof else None
+        workspaces = [s.strip() for s in ws.split(",") if s.strip()] if ws else None
         return setup_wizard.setup_recall(
             mode=args.provider, strategy=args.strategy, submode=args.submode,
             hosts=hosts, base_dir=args.base_dir, noninteractive=args.noninteractive,
             provider=args.embed_provider, model=args.embed_model, dim=args.embed_dim,
-            profile=getattr(args, "profile", None),
-            workspace=getattr(args, "workspace", None),
+            profiles=profiles, workspaces=workspaces,
             dry_run=args.dry_run,
         )
     if args.section == "gate":
@@ -1713,9 +1719,11 @@ def build_parser() -> argparse.ArgumentParser:
     pset.add_argument("--embed-dim", dest="embed_dim", type=int, default=None,
                       help="embedding dimension for `omw setup recall`")
     pset.add_argument("--profile", default=None,
-                      help="hermes profile name for `omw setup personas/recall`")
+                      help="hermes profile name(s) for `omw setup personas/recall` "
+                           "(comma-separated for multiple)")
     pset.add_argument("--workspace", default=None,
-                      help="openclaw workspace path for `omw setup personas/recall`")
+                      help="openclaw workspace path(s) for `omw setup personas/recall` "
+                           "(comma-separated for multiple)")
     pset.set_defaults(func=_cmd_setup)
 
     pimp = sub.add_parser("import", help="Import folder/Obsidian/Notion into a vault.")
