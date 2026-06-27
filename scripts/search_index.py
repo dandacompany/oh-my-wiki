@@ -18,7 +18,9 @@ _TOKEN_RE = re.compile(r"[\w가-힣]+", re.UNICODE)
 
 
 def _tokens(text: str) -> list[str]:
-    return [t.lower() for t in _TOKEN_RE.findall(text or "")]
+    from scripts import text_normalize
+    return [text_normalize.normalize_token(t).lower()
+            for t in _TOKEN_RE.findall(text or "")]
 
 
 def query(

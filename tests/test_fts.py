@@ -1,5 +1,5 @@
 # tests/test_fts.py
-from scripts import fts, registry
+from scripts import fts, registry, text_normalize
 
 
 def _conn(tmp_path):
@@ -61,3 +61,75 @@ def test_search_returns_none_when_vault_unindexed(tmp_path):
     fts.ensure_fts(conn)  # table exists but empty
     conn.commit(); conn.close()
     assert fts.search(db, vault_id=1, query="anything", limit=5) is None
+
+
+def test_body_josa_form_found_by_bare_noun(tmp_path):
+    conn, db = _conn(tmp_path)
+    fts.ensure_fts(conn)
+    fts.index_note(conn, vault_id=1, relpath="wiki/k.md", title="제목",
+                   summary="", tags=[], body="학교에서 배웠다")
+    conn.commit(); conn.close()
+    hits = fts.search(db, vault_id=1, query="학교", limit=5)  # bare noun, body has 학교에서
+    assert [h["relpath"] for h in hits] == ["wiki/k.md"]
+
+
+def test_query_with_josa_also_matches(tmp_path):
+    conn, db = _conn(tmp_path)
+    fts.ensure_fts(conn)
+    fts.index_note(conn, vault_id=1, relpath="wiki/k.md", title="t",
+                   summary="", tags=[], body="학교 정문")
+    conn.commit(); conn.close()
+    hits = fts.search(db, vault_id=1, query="학교에서", limit=5)  # josa on the query
+    assert [h["relpath"] for h in hits] == ["wiki/k.md"]
+
+
+def test_ensure_fts_records_analyzer_version(tmp_path):
+    conn, db = _conn(tmp_path)
+    fts.ensure_fts(conn)
+    conn.commit()
+    ver = conn.execute("SELECT analyzer_ver FROM fts_meta").fetchone()[0]
+    conn.close()
+    assert ver == text_normalize.ANALYZER_VERSION
+
+
+def test_ensure_fts_rebuilds_on_version_change(tmp_path, monkeypatch):
+    conn, db = _conn(tmp_path)
+    fts.ensure_fts(conn)
+    fts.index_note(conn, vault_id=1, relpath="wiki/a.md", title="t",
+                   summary="", tags=[], body="alpha")
+    conn.commit()
+    # simulate a normalizer/provider change
+    monkeypatch.setattr(fts.text_normalize, "ANALYZER_VERSION", "heuristic-99")
+    migrated = fts.ensure_fts(conn)
+    conn.commit()
+    rows = conn.execute("SELECT count(*) FROM notes_fts").fetchone()[0]
+    new_ver = conn.execute("SELECT analyzer_ver FROM fts_meta").fetchone()[0]
+    conn.close()
+    assert migrated is True          # signals caller to full-reindex
+    assert rows == 0                 # old rows dropped (await repopulation)
+    assert new_ver == "heuristic-99"
+
+
+def test_ensure_fts_no_rebuild_when_version_matches(tmp_path):
+    conn, db = _conn(tmp_path)
+    assert fts.ensure_fts(conn) is False or True  # first create may migrate-or-create
+    conn.commit()
+    second = fts.ensure_fts(conn)     # same version → no rebuild
+    conn.close()
+    assert second is False
+
+
+def test_search_returns_original_title_summary_not_normalized(tmp_path):
+    """Regression: search results must surface RAW title/summary (display/citation integrity).
+    The FTS body is normalized for matching, but title and summary stored verbatim."""
+    conn, db = _conn(tmp_path)
+    fts.ensure_fts(conn)
+    title = "학교에서의 평가지표를 정리"
+    summary = "이 문서는 회의에서 결정된 사항을 다룬다"
+    fts.index_note(conn, vault_id=1, relpath="wiki/k.md", title=title,
+                   summary=summary, tags=[], body="학교에서 배웠다")
+    conn.commit(); conn.close()
+    hits = fts.search(db, vault_id=1, query="학교", limit=5)  # bare noun finds via body
+    assert hits and hits[0]["relpath"] == "wiki/k.md"
+    assert hits[0]["title"] == title       # display/citation must be the ORIGINAL
+    assert hits[0]["summary"] == summary

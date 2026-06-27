@@ -215,3 +215,13 @@ def test_search_strategy_embedding_no_visibility_returns_both(tmp_path, monkeypa
     relpaths = {h["relpath"] for h in out}
     assert "wiki/concepts/pub.md" in relpaths, "public note must appear"
     assert "wiki/concepts/priv.md" in relpaths, "private note must also appear (no filter)"
+
+
+def test_tokens_strip_josa_for_symmetric_match():
+    # body-side josa form and bare-noun query reduce to the same token
+    assert "학교" in search_index._tokens("학교에서 배웠다")
+    assert search_index._tokens("학교") == ["학교"]
+
+
+def test_tokens_lowercase_ascii_preserved():
+    assert search_index._tokens("ARIMA Model") == ["arima", "model"]
