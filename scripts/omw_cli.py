@@ -1006,6 +1006,58 @@ def _cmd_uninstall(args) -> int:
     return 0
 
 
+def _cmd_embed(args) -> int:
+    from scripts import embed_admin
+    db = registry_path()
+    sub = args.embed_cmd
+    if sub == "status":
+        print(json.dumps(embed_admin.status(db), ensure_ascii=False, indent=2))
+        return 0
+    if sub == "list":
+        print(json.dumps(embed_admin.list_models(db), ensure_ascii=False, indent=2))
+        return 0
+    if sub == "install":
+        ok = embed_admin.embed_install.ensure_fastembed(assume_yes=True)
+        print("fastembed ready" if ok else "error: fastembed install failed",
+              file=sys.stderr if not ok else sys.stdout)
+        if not ok:
+            return 1
+        # Best-effort: pre-warm the active model so the first embed() call is fast.
+        # A failure here is non-fatal — install already succeeded.
+        try:
+            from scripts import embed as _embed, config as _config
+            emb_cfg = (_config.load_config().get("recall") or {}).get("embedding") or {}
+            if not emb_cfg.get("provider") or emb_cfg.get("provider") == "none":
+                emb_cfg = {"provider": "fastembed", "model": _embed.DEFAULT_LOCAL_MODEL, "dim": 384}
+            embedder = _embed.get_embedder(emb_cfg)
+            if embedder is not None:
+                embedder.embed(["warm"])
+                print(f"model warmed: {emb_cfg.get('model', _embed.DEFAULT_LOCAL_MODEL)}")
+        except Exception as _warm_err:
+            print(f"warning: model warm failed (non-fatal): {_warm_err}", file=sys.stderr)
+        return 0
+    if sub == "reindex":
+        out = embed_admin.reindex_all(db)
+        print(f"reindexed {out['vaults_reindexed']} vault(s)")
+        return 0
+    if sub == "use":
+        out = embed_admin.switch_model(db, args.model, assume_yes=args.yes)
+        if not out["ok"]:
+            print(f"error: {out['detail']}", file=sys.stderr)
+            return 1
+        print(f"using {out['model']} (dim {out['dim']}); reindexed {out['vaults_reindexed']} vault(s)")
+        return 0
+    if sub == "add":
+        out = embed_admin.add_model(db, args.model, assume_yes=args.yes)
+        if not out["ok"]:
+            print(f"error: {out['detail']}", file=sys.stderr)
+            return 1
+        print(f"registered {out['model']} (dim {out['dim']})")
+        return 0
+    print(f"error: unknown embed subcommand {sub!r}", file=sys.stderr)
+    return 1
+
+
 def _cmd_agentic(args) -> int:
     from scripts import ops_registry as reg
     from scripts import cards
@@ -1304,6 +1356,21 @@ def build_parser() -> argparse.ArgumentParser:
     hshow.add_argument("id", type=int)
     hshow.set_defaults(func=_cmd_history)
 
+    pemb = sub.add_parser("embed", help="Local embedding model management.")
+    embsub = pemb.add_subparsers(dest="embed_cmd", required=True)
+    embsub.add_parser("status", help="Show embedding provider/model/strategy + counts (JSON).").set_defaults(func=_cmd_embed)
+    embsub.add_parser("list", help="List known + registered models (JSON).").set_defaults(func=_cmd_embed)
+    eu = embsub.add_parser("use", help="Switch model (reset + reindex).")
+    eu.add_argument("model")
+    eu.add_argument("--yes", action="store_true")
+    eu.set_defaults(func=_cmd_embed)
+    ea = embsub.add_parser("add", help="Register a custom fastembed model.")
+    ea.add_argument("model")
+    ea.add_argument("--yes", action="store_true")
+    ea.set_defaults(func=_cmd_embed)
+    embsub.add_parser("install", help="Install fastembed + warm the active model.").set_defaults(func=_cmd_embed)
+    embsub.add_parser("reindex", help="Re-embed all vaults with the active model.").set_defaults(func=_cmd_embed)
+
     pfe = sub.add_parser("fetch", help="Fetch one URL into raw/ (single-shot, no LLM).")
     pfe.add_argument("url")
     pfe.add_argument("--backend", choices=["auto", "urllib", "chromium", "cloud"], default="auto")
@@ -1488,7 +1555,7 @@ def build_parser() -> argparse.ArgumentParser:
                      help="also remove ~/.omw config + secrets + registry (keeps vaults)")
     pun.add_argument("--vaults", action="store_true",
                      help="also DELETE vault content (requires --yes when non-interactive)")
-    pun.add_argument("--dry-run", action="store_true", help="preview only; write nothing")
+    pun.add_argument("--dry-run", action="store_true", help="preview only, write nothing")
     pun.add_argument("--yes", action="store_true", help="skip confirmations (non-interactive)")
     pun.add_argument("--base-dir", default=None, help=argparse.SUPPRESS)
     pun.set_defaults(func=_cmd_uninstall)

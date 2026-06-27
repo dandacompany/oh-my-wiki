@@ -4,6 +4,7 @@ One virtual table per registry DB, partitioned by vault_id. Graceful no-op when
 sqlite-vec is not installed — callers fall back to fts. Cosine via vec0 distance."""
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from scripts import registry
@@ -31,6 +32,24 @@ def _ensure_table(conn, dim: int) -> None:
         f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_notes USING vec0("
         f"  relpath TEXT, vault_id INTEGER, embedding FLOAT[{dim}])"
     )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS vec_meta("
+        "  id INTEGER PRIMARY KEY CHECK(id=1), model TEXT, dim INTEGER)"
+    )
+
+
+def reset(db_path) -> None:
+    """Drop the vector table so the next upsert recreates it (used when the
+    embedding model/dim changes). No-op when sqlite-vec is unavailable."""
+    if not available():
+        return
+    conn = _connect(db_path)
+    try:
+        conn.execute("DROP TABLE IF EXISTS vec_notes")
+        conn.execute("DROP TABLE IF EXISTS vec_meta")
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def upsert(db_path, *, vault_id: int, embedder, rows) -> int:
@@ -49,6 +68,12 @@ def upsert(db_path, *, vault_id: int, embedder, rows) -> int:
             conn.execute(
                 "INSERT INTO vec_notes(relpath, vault_id, embedding) VALUES (?, ?, ?)",
                 (relpath, vault_id, sqlite_vec.serialize_float32(v)))
+        # UPSERT meta row: single row tracks model + dim for the whole store
+        model_val = getattr(embedder, "model", None)
+        conn.execute(
+            "INSERT INTO vec_meta(id, model, dim) VALUES (1, ?, ?)"
+            " ON CONFLICT(id) DO UPDATE SET model=excluded.model, dim=excluded.dim",
+            (model_val, embedder.dim))
         conn.commit()
     finally:
         conn.close()
@@ -56,14 +81,34 @@ def upsert(db_path, *, vault_id: int, embedder, rows) -> int:
 
 
 def query(db_path, *, vault_id: int, embedder, text: str, limit: int = 5) -> list[dict]:
-    """Return [{relpath, score}] nearest to `text` (score = 1/(1+distance), higher=better)."""
+    """Return [{relpath, score}] nearest to `text` (score = 1/(1+distance), higher=better).
+    Returns [] (fail-closed) when the stored model/dim differs from the embedder."""
     if not available() or embedder is None or not (text or "").strip():
         return []
     import sqlite_vec
-    qv = embedder.embed([text])[0]
     conn = _connect(db_path)
     try:
         _ensure_table(conn, embedder.dim)
+        # Fail-closed: reject if dim or model differs from stored meta
+        meta_row = conn.execute("SELECT model, dim FROM vec_meta WHERE id=1").fetchone()
+        if meta_row is not None:
+            stored_dim = meta_row["dim"]
+            stored_model = meta_row["model"]
+            query_model = getattr(embedder, "model", None)
+            dim_mismatch = (stored_dim != embedder.dim)
+            model_mismatch = (
+                stored_model is not None
+                and query_model is not None
+                and stored_model != query_model
+            )
+            if dim_mismatch or model_mismatch:
+                print(
+                    "vector store was built with a different embedding model; "
+                    "run `omw embed reindex`",
+                    file=sys.stderr,
+                )
+                return []
+        qv = embedder.embed([text])[0]
         cur = conn.execute(
             "SELECT relpath, distance FROM vec_notes "
             "WHERE vault_id = ? AND embedding MATCH ? AND k = ? "
@@ -75,3 +120,47 @@ def query(db_path, *, vault_id: int, embedder, text: str, limit: int = 5) -> lis
         return []
     finally:
         conn.close()
+
+
+def count(db_path, *, vault_id: int) -> int:
+    """Return the number of vec_notes rows for the given vault (0 if table absent)."""
+    if not available():
+        return 0
+    try:
+        conn = _connect(db_path)
+        try:
+            has = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='vec_notes'"
+            ).fetchone()
+            if not has:
+                return 0
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM vec_notes WHERE vault_id = ?", (vault_id,)
+            ).fetchone()
+            return int(row["c"]) if row else 0
+        finally:
+            conn.close()
+    except Exception:
+        return 0
+
+
+def meta(db_path) -> "dict | None":
+    """Return {"model": ..., "dim": ...} from vec_meta, or None if absent/unavailable."""
+    if not available():
+        return None
+    try:
+        conn = _connect(db_path)
+        try:
+            has = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='vec_meta'"
+            ).fetchone()
+            if not has:
+                return None
+            row = conn.execute("SELECT model, dim FROM vec_meta WHERE id=1").fetchone()
+            if row is None:
+                return None
+            return {"model": row["model"], "dim": row["dim"]}
+        finally:
+            conn.close()
+    except Exception:
+        return None

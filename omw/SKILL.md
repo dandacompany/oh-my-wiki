@@ -27,6 +27,7 @@ The canonical skill provides:
   > `omw vault archive <name>` / `omw vault unarchive <name>` (hide/restore a vault; `omw vault list --all` shows archived),
   > `omw vault delete <name>` (soft-delete to trash by default; `--hard --yes` to purge irreversibly),
 - other ops: create / find / open / edit / move / delete / ingest / query / lint
+- embedding: `omw embed status|list|use <model>|add <model>|install|reindex` (manage the local fastembed model; default `intfloat/multilingual-e5-small`; configure via `omw setup recall` or `omw embed use`)
 - v2 in progress (hot cache, autoresearch, writing-agent personas, Obsidian/Logseq viewers, URL fetch + inbox, per-prompt recall)
 
 ## Why this stub exists
