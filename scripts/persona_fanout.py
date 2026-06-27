@@ -57,7 +57,8 @@ def resolve(role, *, db_path, vault_id, pages=None, tag=None, type=None,
             layer=layer, visibility=visibility)
         relpaths = [r["relpath"] for r in rows]
 
-    suffix = f" --backend {backend}" if backend else ""
-    commands = [f"omw persona-run {role} --page {shlex.quote(rp)}{suffix}" for rp in relpaths]
+    suffix = f" --backend {shlex.quote(backend)}" if backend else ""
+    commands = [f"omw persona-run {shlex.quote(role)} --page {shlex.quote(rp)}{suffix}"
+                for rp in relpaths]
     return {"role": role, "backend": backend, "count": len(relpaths),
             "pages": relpaths, "commands": commands}
