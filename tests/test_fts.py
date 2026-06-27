@@ -61,3 +61,23 @@ def test_search_returns_none_when_vault_unindexed(tmp_path):
     fts.ensure_fts(conn)  # table exists but empty
     conn.commit(); conn.close()
     assert fts.search(db, vault_id=1, query="anything", limit=5) is None
+
+
+def test_body_josa_form_found_by_bare_noun(tmp_path):
+    conn, db = _conn(tmp_path)
+    fts.ensure_fts(conn)
+    fts.index_note(conn, vault_id=1, relpath="wiki/k.md", title="제목",
+                   summary="", tags=[], body="학교에서 배웠다")
+    conn.commit(); conn.close()
+    hits = fts.search(db, vault_id=1, query="학교", limit=5)  # bare noun, body has 학교에서
+    assert [h["relpath"] for h in hits] == ["wiki/k.md"]
+
+
+def test_query_with_josa_also_matches(tmp_path):
+    conn, db = _conn(tmp_path)
+    fts.ensure_fts(conn)
+    fts.index_note(conn, vault_id=1, relpath="wiki/k.md", title="t",
+                   summary="", tags=[], body="학교 정문")
+    conn.commit(); conn.close()
+    hits = fts.search(db, vault_id=1, query="학교에서", limit=5)  # josa on the query
+    assert [h["relpath"] for h in hits] == ["wiki/k.md"]

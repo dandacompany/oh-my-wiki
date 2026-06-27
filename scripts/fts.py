@@ -10,7 +10,7 @@ import re
 import sqlite3
 from pathlib import Path
 
-from scripts import registry
+from scripts import registry, text_normalize
 
 _FTS5_AVAILABLE: bool | None = None
 _TOKEN_RE = re.compile(r"[\w가-힣]+", re.UNICODE)
@@ -67,15 +67,20 @@ def index_note(conn: sqlite3.Connection, *, vault_id: int, relpath: str,
     conn.execute(
         "INSERT INTO notes_fts(relpath, title, summary, tags, body, vault_id, visibility) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (relpath, title or "", summary or "", " ".join(tags or []),
-         body or "", str(vault_id), visibility if visibility in ("public", "private") else "private"),
+        (relpath,
+         text_normalize.normalize_text(title or ""),
+         text_normalize.normalize_text(summary or ""),
+         text_normalize.normalize_text(" ".join(tags or [])),
+         text_normalize.normalize_text(body or ""),
+         str(vault_id),
+         visibility if visibility in ("public", "private") else "private"),
     )
 
 
 def _match_query(query: str) -> str:
-    """Build a safe FTS5 MATCH expression: quote each token, OR-join.
+    """Build a safe FTS5 MATCH expression: josa-normalize, quote each token, OR-join.
     Quoting neutralizes FTS5 operators (*, :, AND, NEAR, quotes) so user input never raises."""
-    toks = _TOKEN_RE.findall(query or "")
+    toks = _TOKEN_RE.findall(text_normalize.normalize_text(query or ""))
     return " OR ".join(f'"{t}"' for t in toks)
 
 
