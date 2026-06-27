@@ -14,32 +14,63 @@ def connect(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    _migrate_existing(conn)
     return conn
 
 
 def _ensure_vault_columns(conn: sqlite3.Connection) -> None:
     """Idempotently add vaults columns introduced after a DB was first created.
-    Guard on pragma table_info (SQLite lacks ADD COLUMN IF NOT EXISTS)."""
+    Guard on pragma table_info (SQLite lacks ADD COLUMN IF NOT EXISTS).
+    The inner _add helper also swallows duplicate-column errors from races."""
+    def _add(sql: str) -> None:
+        try:
+            conn.execute(sql)
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
+
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(vaults)")}
     if "archived_at" not in cols:
-        conn.execute("ALTER TABLE vaults ADD COLUMN archived_at TEXT")
+        _add("ALTER TABLE vaults ADD COLUMN archived_at TEXT")
 
 
 def _ensure_note_columns(conn: sqlite3.Connection) -> None:
     """Idempotently add columns introduced after a vault's DB was first created.
-    SQLite has no ADD COLUMN IF NOT EXISTS, so guard on pragma table_info."""
+    SQLite has no ADD COLUMN IF NOT EXISTS, so guard on pragma table_info.
+    The inner _add helper also swallows duplicate-column errors from races."""
+    def _add(sql: str) -> None:
+        try:
+            conn.execute(sql)
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
+
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(notes)")}
     if "visibility" not in cols:
-        conn.execute(
+        _add(
             "ALTER TABLE notes ADD COLUMN visibility TEXT NOT NULL "
             "DEFAULT 'private' CHECK (visibility IN ('public', 'private'))"
         )
     if "aliases" not in cols:
-        conn.execute("ALTER TABLE notes ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'")
+        _add("ALTER TABLE notes ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'")
     if "type" not in cols:
-        conn.execute("ALTER TABLE notes ADD COLUMN type TEXT")
+        _add("ALTER TABLE notes ADD COLUMN type TEXT")
     if "status" not in cols:
-        conn.execute("ALTER TABLE notes ADD COLUMN status TEXT")
+        _add("ALTER TABLE notes ADD COLUMN status TEXT")
+
+
+def _migrate_existing(conn: sqlite3.Connection) -> None:
+    """Apply idempotent column migrations to tables that already exist, so every
+    connection self-heals a DB created by an older schema version (read paths like
+    list_vaults/doctor must not fail on a missing column when init_db wasn't re-run
+    after an upgrade). Skips tables that don't exist yet (fresh-DB init order)."""
+    names = {r["name"] for r in
+             conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "vaults" in names:
+        _ensure_vault_columns(conn)
+    if "notes" in names:
+        _ensure_note_columns(conn)
+    conn.commit()
 
 
 def init_db(db_path: Path) -> None:
