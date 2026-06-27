@@ -333,3 +333,90 @@ def test_setup_recall_llm_persists_submode(tmp_path):
     assert rc == 0
     cfg = config.load_config()["recall"]
     assert cfg["strategy"] == "llm" and cfg["llm"]["submode"] == "generative"
+
+
+def _wsl_prompt_router(answers, calls):
+    """Build a fake _prompt that answers by message prefix and records calls."""
+    def fake(kind, message, **kw):
+        calls.append(message)
+        for prefix, val in answers.items():
+            if message.startswith(prefix):
+                return val
+        return None
+    return fake
+
+
+def test_run_interactive_wsl_windows_path(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw"))
+    from scripts import setup_wizard, platform_env
+    import pathlib
+    monkeypatch.setattr(platform_env, "is_wsl", lambda: True)
+    monkeypatch.setattr(platform_env, "windows_user_profile",
+                        lambda: pathlib.Path("/mnt/c/Users/dante"))
+    captured = {}
+    monkeypatch.setattr(setup_wizard, "_ensure_vault",
+                        lambda name, mode, type_, location: captured.update(
+                            name=name, location=location))
+    monkeypatch.setattr(setup_wizard, "_write_config", lambda v: None)
+    calls = []
+    monkeypatch.setattr(setup_wizard, "_prompt", _wsl_prompt_router({
+        "Vault name": "myvault", "Mode": "wiki", "Type": "markdown",
+        "WSL detected": "Windows drive (open in Windows Obsidian)",
+    }, calls))  # no "Location" answer — it must never be asked (asserted below)
+    rc = setup_wizard._run_interactive("default", "wiki", "markdown", "global",
+                                       in_wizard=True)
+    assert rc == 0
+    assert captured["location"] == "/mnt/c/Users/dante/omw-vaults/myvault"
+    assert any(m.startswith("WSL detected") for m in calls)
+    assert not any(m.startswith("Location") for m in calls)   # skipped for Windows path
+
+
+def test_run_interactive_wsl_fallback_when_no_winprofile(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw"))
+    from scripts import setup_wizard, platform_env
+    monkeypatch.setattr(platform_env, "is_wsl", lambda: True)
+    monkeypatch.setattr(platform_env, "windows_user_profile", lambda: None)
+    captured = {}
+    monkeypatch.setattr(setup_wizard, "_ensure_vault",
+                        lambda name, mode, type_, location: captured.update(location=location))
+    monkeypatch.setattr(setup_wizard, "_write_config", lambda v: None)
+    calls = []
+    monkeypatch.setattr(setup_wizard, "_prompt", _wsl_prompt_router({
+        "Vault name": "v", "Mode": "wiki", "Type": "markdown",
+        "WSL detected": "Windows drive (open in Windows Obsidian)",
+        "Location": "global",
+    }, calls))
+    rc = setup_wizard._run_interactive("default", "wiki", "markdown", "global", in_wizard=True)
+    assert rc == 0
+    assert any(m.startswith("Location") for m in calls)   # fell back to Location prompt
+    assert captured["location"] == "global"
+
+
+def test_run_interactive_non_wsl_no_wsl_prompt(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw"))
+    from scripts import setup_wizard, platform_env
+    monkeypatch.setattr(platform_env, "is_wsl", lambda: False)
+    monkeypatch.setattr(setup_wizard, "_ensure_vault", lambda *a, **k: None)
+    monkeypatch.setattr(setup_wizard, "_write_config", lambda v: None)
+    calls = []
+    monkeypatch.setattr(setup_wizard, "_prompt", _wsl_prompt_router({
+        "Vault name": "v", "Mode": "wiki", "Type": "markdown", "Location": "global",
+    }, calls))
+    rc = setup_wizard._run_interactive("default", "wiki", "markdown", "global", in_wizard=True)
+    assert rc == 0
+    assert not any(m.startswith("WSL detected") for m in calls)   # no WSL prompt off-WSL
+    assert any(m.startswith("Location") for m in calls)
+
+
+def test_ensure_vault_activates_preexisting(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw"))
+    from scripts import setup_wizard, registry
+    from scripts.paths import registry_path
+    db = registry_path()
+    setup_wizard._ensure_vault("alpha", "wiki", "markdown", "global")
+    setup_wizard._ensure_vault("beta", "wiki", "markdown", "global")
+    assert registry.get_active(db)["name"] == "beta"        # newest active
+    # re-running on the PRE-EXISTING 'alpha' must re-activate it (the bug: it didn't)
+    setup_wizard._ensure_vault("alpha", "wiki", "markdown", "global")
+    assert registry.get_active(db)["name"] == "alpha"
+    assert sum(1 for v in registry.list_vaults(db) if v["name"] == "alpha") == 1  # no duplicate
