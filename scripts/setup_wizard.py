@@ -23,6 +23,10 @@ from scripts.viewers.base import VaultRef
 _WIZARD_UI_TRIED = False
 
 
+def _dry(msg: str) -> None:
+    print(f"  [dry-run] would {msg}")
+
+
 def _questionary_available() -> bool:
     try:
         import questionary  # noqa: F401
@@ -365,7 +369,8 @@ def setup_fetch(*, noninteractive: bool = False, provider: str | None = None,
 def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
                    hosts: list[str] | None = None, base_dir=None,
                    noninteractive: bool = False,
-                   profile: str | None = None, workspace: str | None = None) -> int:
+                   profile: str | None = None, workspace: str | None = None,
+                   dry_run: bool = False) -> int:
     """Record the enabled persona roster + main, and export to host instruction files."""
     from pathlib import Path
     from scripts import config, personas, persona_export
@@ -462,6 +467,12 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
             resolvable.append(host)
         except ValueError as exc:
             print(f"  - {host}: skipped ({exc})")
+    if dry_run:
+        _dry(f"set personas.enabled={enabled}")
+        _dry(f"set personas.main={main}")
+        _dry(f"export persona blocks → {resolvable}")
+        _dry(f"export command-map blocks → {resolvable}")
+        return 0
     config.set_config("personas.enabled", enabled)
     config.set_config("personas.main", main)
     written = persona_export.export_personas(
@@ -603,7 +614,8 @@ def _install_hermes_profiles(interactive: bool) -> list[dict]:
     return results
 
 
-def setup_agents(*, agents: list[str] | None = None, noninteractive: bool = False) -> int:
+def setup_agents(*, agents: list[str] | None = None, noninteractive: bool = False,
+                 dry_run: bool = False) -> int:
     """Install the OMW skill into selected agents' skill systems."""
     from scripts import agent_skills, hosts as hostsmod
     detected = agent_skills.detect_agents()
@@ -644,6 +656,9 @@ def setup_agents(*, agents: list[str] | None = None, noninteractive: bool = Fals
     if not targets:
         print("agents setup skipped — no selected agent is installed.")
         return 0
+    if dry_run:
+        _dry(f"install OMW skill → {targets}")
+        return 0
     hermes_selected = "hermes" in targets
     non_hermes = [a for a in targets if a != "hermes"]
     results = agent_skills.install_many(non_hermes) if non_hermes else []
@@ -683,7 +698,8 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                  provider: str | None = None, model: str | None = None,
                  dim: int | None = None,
                  profile: str | None = None, workspace: str | None = None,
-                 normalizer: str | None = None) -> int:
+                 normalizer: str | None = None,
+                 dry_run: bool = False) -> int:
     """Configure auto wiki-recall (two axes):
       mode     — trigger: off | advisory | auto
       strategy — retrieval: fts | embedding | hybrid | llm (+ llm.submode)
@@ -706,7 +722,10 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     if mode not in choices:
         print(f"error: unknown recall mode {mode!r}; choose from {choices}", file=sys.stderr)
         return 1
-    config.set_config("recall.mode", mode)
+    if dry_run:
+        _dry(f"set recall.mode={mode}")
+    else:
+        config.set_config("recall.mode", mode)
     if mode == "off":
         print("recall disabled (recall.mode=off). Re-run `omw setup recall` to enable.")
         return 0
@@ -718,7 +737,10 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     if strategy not in recall.STRATEGIES:
         print(f"error: unknown strategy {strategy!r}; choose from {list(recall.STRATEGIES)}", file=sys.stderr)
         return 1
-    config.set_config("recall.strategy", strategy)
+    if dry_run:
+        _dry(f"set recall.strategy={strategy}")
+    else:
+        config.set_config("recall.strategy", strategy)
     if strategy == "llm":
         if interactive and submode is None:
             submode = _prompt("select", "LLM submode", choices=list(recall.LLM_SUBMODES),
@@ -728,9 +750,12 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
             print(f"error: unknown llm submode {submode!r}; choose from {list(recall.LLM_SUBMODES)}",
                   file=sys.stderr)
             return 1
-        config.set_config("recall.llm.submode", submode)
-        configure_recall(strategy=strategy, provider="none", mode=mode, submode=submode,
-                         noninteractive=True)
+        if dry_run:
+            _dry(f"set recall.llm.submode={submode}")
+        else:
+            config.set_config("recall.llm.submode", submode)
+            configure_recall(strategy=strategy, provider="none", mode=mode, submode=submode,
+                             noninteractive=True)
     if strategy in {"embedding", "hybrid"}:
         if interactive and provider is None:
             provider = _prompt("select", "Embedding provider",
@@ -754,24 +779,27 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
             if cur_emb_provider in ("openai", "fake")
             else "fastembed"
         )
-        configure_recall(
-            strategy=strategy,
-            provider=effective_provider,
-            model=model or cur_emb.get("model", "text-embedding-3-small"),
-            dim=int(dim) if dim else cur_emb.get("dim", 1536),
-            mode=mode,
-            submode=submode,
-            noninteractive=True,
-        )
-        if effective_provider not in ("openai", "fake"):
-            from scripts import embed as _embed
-            chosen = model or _embed.DEFAULT_LOCAL_MODEL
-            res = _embed_admin_switch(registry_path(), chosen, assume_yes=noninteractive or interactive)
-            if not res["ok"]:
-                print(f"warning: embedding setup incomplete: {res['detail']}", file=sys.stderr)
-            else:
-                print(f"embedding ready: {res['model']} (dim {res['dim']}), "
-                      f"{res['vaults_reindexed']} vault(s) embedded")
+        if dry_run:
+            _dry(f"configure recall embedding strategy={strategy} provider={effective_provider}")
+        else:
+            configure_recall(
+                strategy=strategy,
+                provider=effective_provider,
+                model=model or cur_emb.get("model", "text-embedding-3-small"),
+                dim=int(dim) if dim else cur_emb.get("dim", 1536),
+                mode=mode,
+                submode=submode,
+                noninteractive=True,
+            )
+            if effective_provider not in ("openai", "fake"):
+                from scripts import embed as _embed
+                chosen = model or _embed.DEFAULT_LOCAL_MODEL
+                res = _embed_admin_switch(registry_path(), chosen, assume_yes=noninteractive or interactive)
+                if not res["ok"]:
+                    print(f"warning: embedding setup incomplete: {res['detail']}", file=sys.stderr)
+                else:
+                    print(f"embedding ready: {res['model']} (dim {res['dim']}), "
+                          f"{res['vaults_reindexed']} vault(s) embedded")
     if strategy not in recall._IMPLEMENTED_STRATEGIES:  # only an unrecognized strategy
         print(f"  note: strategy '{strategy}'는 인식되지 않음 — 런타임에 'fts'로 폴백합니다.")
     # Axis 3 — search normalizer (heuristic | kiwi). Affects FTS index + query.
@@ -786,10 +814,13 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
               file=sys.stderr)
         return 1
     if chosen_norm != cur_norm or normalizer is not None:
-        res = _normalize_admin_switch(registry_path(), chosen_norm, assume_yes=noninteractive)
-        if not res.get("ok"):
-            print(f"normalizer switch failed: {res.get('detail')}", file=sys.stderr)
-            # non-fatal: config of other axes already applied; keep prior normalizer
+        if dry_run:
+            _dry(f"switch normalizer → {chosen_norm}")
+        else:
+            res = _normalize_admin_switch(registry_path(), chosen_norm, assume_yes=noninteractive)
+            if not res.get("ok"):
+                print(f"normalizer switch failed: {res.get('detail')}", file=sys.stderr)
+                # non-fatal: config of other axes already applied; keep prior normalizer
     warn = recall.cost_warning(mode, strategy)
     if warn:
         print(f"  {warn}")
@@ -844,13 +875,19 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
             continue
         if path not in seen:
             seen.add(path)
-            recall.upsert_block(path, block)     # Tier 1: guidance in instruction file
-            recall.upsert_block(path, recall.render_always_on_block(),
-                                marker=recall.ALWAYS_ON_MARKER)  # wiki-first (soft enforcement)
-            written.append(path)
+            if dry_run:
+                _dry(f"inject recall block → {path}")
+            else:
+                recall.upsert_block(path, block)     # Tier 1: guidance in instruction file
+                recall.upsert_block(path, recall.render_always_on_block(),
+                                    marker=recall.ALWAYS_ON_MARKER)  # wiki-first (soft enforcement)
+                written.append(path)
     from scripts import commandmap, ask as ask_mod
-    commandmap.export(base, hosts, profile=profile, workspace=workspace)
-    ask_mod.export(base, hosts, profile=profile, workspace=workspace)  # omw-ask convention block
+    if dry_run:
+        _dry(f"export command-map/ask blocks → {hosts}")
+    else:
+        commandmap.export(base, hosts, profile=profile, workspace=workspace)
+        ask_mod.export(base, hosts, profile=profile, workspace=workspace)  # omw-ask convention block
     print(f"✓ recall mode '{mode}'; guidance injected into "
           f"{', '.join(p.name for p in written) or '(none)'}.")
     # Tier 2: wire each host's NATIVE recall hook, dispatched by its hook mechanism
@@ -859,15 +896,24 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     for host in hosts:
         mech = hostsmod.hook_mech(host)
         if mech == "json":
-            changed, detail = recall.wire_host(host)
-            print(f"  {'✓' if changed else '–'} {host} hooks: {detail}")
+            if dry_run:
+                _dry(f"wire {host} json recall hook")
+            else:
+                changed, detail = recall.wire_host(host)
+                print(f"  {'✓' if changed else '–'} {host} hooks: {detail}")
         elif mech == "yaml":  # hermes: only pre_llm_call can inject recall
-            changed, detail = recall.wire_hermes(profile=profile)
-            print(f"  {'✓' if changed else '–'} {host} hooks (pre_llm_call recall): {detail}")
+            if dry_run:
+                _dry(f"wire {host} yaml recall hook")
+            else:
+                changed, detail = recall.wire_hermes(profile=profile)
+                print(f"  {'✓' if changed else '–'} {host} hooks (pre_llm_call recall): {detail}")
         elif mech in ("ts-opencode", "ts-openclaw"):
-            changed, detail = recall.wire_ts_plugin(host, base_dir=base,
-                                                    workspace=workspace)
-            print(f"  {'✓' if changed else '–'} {host} plugin: {detail}")
+            if dry_run:
+                _dry(f"wire {host} {mech} recall hook")
+            else:
+                changed, detail = recall.wire_ts_plugin(host, base_dir=base,
+                                                        workspace=workspace)
+                print(f"  {'✓' if changed else '–'} {host} plugin: {detail}")
         else:
             print(f"  – {host}: block-only (no native hook)")
     return 0
