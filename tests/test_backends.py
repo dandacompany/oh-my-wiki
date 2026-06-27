@@ -391,3 +391,8 @@ def test_codex_folds_persona_into_prompt_no_invalid_flags():
     # codex exec subcommand + model still present
     assert argv[:2] == ["codex", "exec"]
     assert "--model" in argv and argv[argv.index("--model") + 1] == "gpt-5"
+
+
+def test_codex_auth_check_uses_login_status():
+    # codex-cli has no `auth` subcommand; auth status is `codex login status`
+    assert backends.BACKENDS["codex"]["auth_check_cmd"] == ["codex", "login", "status"]

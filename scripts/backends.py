@@ -33,7 +33,7 @@ BACKENDS: dict[str, dict[str, Any]] = {
     "codex": {
         "cli_name": "codex",
         "detect_cmd": ["codex", "--version"],
-        "auth_check_cmd": ["codex", "auth", "status"],
+        "auth_check_cmd": ["codex", "login", "status"],
         # codex exec's no-approval/no-sandbox switch (there is no `--yolo` on exec)
         "skip_perm_flag": "--dangerously-bypass-approvals-and-sandbox",
         "non_interactive_flag": "exec",
