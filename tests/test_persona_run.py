@@ -87,6 +87,29 @@ def test_gather_factcheck_uses_source(tmp_path, monkeypatch):
     assert "claim" in task.lower()
 
 
+def test_gather_wiki_auditor_self_gathers(tmp_path, monkeypatch):
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"wiki/a.md": "# A\n\nbody"})
+    task, meta = persona_run._gather_inputs("wiki-auditor", db_path=db, vault_id=vid)
+    assert meta == {}
+    assert "lint" in task and "broken_links" in task   # no --page needed
+
+
+def test_gather_wiki_librarian_self_gathers(tmp_path, monkeypatch):
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"wiki/a.md": "# A\n\nbody"})
+    task, meta = persona_run._gather_inputs("wiki-librarian", db_path=db, vault_id=vid)
+    assert meta == {}
+    assert "graph" in task and "orphans" in task
+
+
+def test_needs_source_after_self_gather_change():
+    assert persona_run.needs_source("wiki-auditor") is False
+    assert persona_run.needs_source("wiki-librarian") is False
+    assert persona_run.needs_source("consistency-checker") is False
+    assert persona_run.needs_source("curator") is False
+    assert persona_run.needs_source("fact-checker") is True
+    assert persona_run.needs_source("terminology-manager") is True
+
+
 # ---------------------------------------------------------------------------
 # Filing tests: additive direct and mutation staged
 # ---------------------------------------------------------------------------

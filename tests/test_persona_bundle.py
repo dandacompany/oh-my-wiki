@@ -14,8 +14,8 @@ FAKES = str(pathlib.Path(__file__).resolve().parent / "fakes")
 def test_needs_source_self_gathering_vs_source_driven():
     assert persona_run.needs_source("fact-checker") is True
     assert persona_run.needs_source("terminology-manager") is True
-    assert persona_run.needs_source("wiki-librarian") is True
-    assert persona_run.needs_source("wiki-auditor") is True
+    assert persona_run.needs_source("wiki-librarian") is False
+    assert persona_run.needs_source("wiki-auditor") is False
     assert persona_run.needs_source("consistency-checker") is False
     assert persona_run.needs_source("curator") is False
 
