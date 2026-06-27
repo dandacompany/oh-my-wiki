@@ -1544,7 +1544,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="create from flags/defaults without prompting",
     )
     pset.add_argument("--dry-run", dest="dry_run", action="store_true",
-                      help="preview host-config writes/hooks/skills; change nothing")
+                      help="preview recall/persona/agent host-config writes (blocks, hooks, skills); make none")
     pset.add_argument("--name", default="default")
     pset.add_argument("--mode", default=None,
                       help="vault mode (memo|wiki) for `omw setup vault`, "

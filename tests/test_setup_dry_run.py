@@ -23,6 +23,11 @@ def _trip_wire(monkeypatch):
         "_normalize_admin_switch",
         lambda *a, **k: (_ for _ in ()).throw(AssertionError("dry-run")),
     )
+    monkeypatch.setattr(
+        setup_wizard,
+        "_embed_admin_switch",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("dry-run")),
+    )
 
 
 def test_recall_dry_run_writes_nothing(monkeypatch, capsys, tmp_path):
@@ -55,6 +60,21 @@ def test_personas_dry_run_writes_nothing(monkeypatch, capsys, tmp_path):
     rc = setup_wizard.setup_personas(
         enabled=["wiki-librarian"],
         main="wiki-librarian",
+        hosts=["claude"],
+        base_dir=str(tmp_path),
+        noninteractive=True,
+        dry_run=True,
+    )
+    assert rc == 0
+    assert "would" in capsys.readouterr().out.lower()
+
+
+def test_recall_embedding_dry_run_writes_nothing(monkeypatch, capsys, tmp_path):
+    _trip_wire(monkeypatch)
+    rc = setup_wizard.setup_recall(
+        mode="auto",
+        strategy="embedding",
+        normalizer="heuristic",
         hosts=["claude"],
         base_dir=str(tmp_path),
         noninteractive=True,
