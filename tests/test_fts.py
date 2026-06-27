@@ -117,3 +117,19 @@ def test_ensure_fts_no_rebuild_when_version_matches(tmp_path):
     second = fts.ensure_fts(conn)     # same version → no rebuild
     conn.close()
     assert second is False
+
+
+def test_search_returns_original_title_summary_not_normalized(tmp_path):
+    """Regression: search results must surface RAW title/summary (display/citation integrity).
+    The FTS body is normalized for matching, but title and summary stored verbatim."""
+    conn, db = _conn(tmp_path)
+    fts.ensure_fts(conn)
+    title = "학교에서의 평가지표를 정리"
+    summary = "이 문서는 회의에서 결정된 사항을 다룬다"
+    fts.index_note(conn, vault_id=1, relpath="wiki/k.md", title=title,
+                   summary=summary, tags=[], body="학교에서 배웠다")
+    conn.commit(); conn.close()
+    hits = fts.search(db, vault_id=1, query="학교", limit=5)  # bare noun finds via body
+    assert hits and hits[0]["relpath"] == "wiki/k.md"
+    assert hits[0]["title"] == title       # display/citation must be the ORIGINAL
+    assert hits[0]["summary"] == summary
