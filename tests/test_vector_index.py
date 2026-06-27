@@ -24,3 +24,23 @@ def test_query_empty_when_unavailable(monkeypatch, tmp_path):
     out = vector_index.query(tmp_path / "x.db", vault_id=1,
                              embedder=embed.FakeEmbedder(), text="q", limit=3)
     assert out == []
+
+
+def test_query_surfaces_unexpected_error(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(vector_index, "available", lambda: True)
+
+    def boom(*a, **k):
+        raise RuntimeError("corrupt store")
+
+    monkeypatch.setattr(vector_index, "_connect", boom)
+
+    class _Emb:
+        dim = 384
+        model = "m"
+
+        def embed(self, texts):
+            return [[0.0] * 384 for _ in texts]
+
+    out = vector_index.query(tmp_path / "db.sqlite", vault_id=1, embedder=_Emb(), text="hi")
+    assert out == []  # contract preserved: still falls back
+    assert "vector query failed" in capsys.readouterr().err  # no longer silent

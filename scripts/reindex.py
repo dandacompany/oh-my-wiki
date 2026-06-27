@@ -25,7 +25,7 @@ def incremental(db_path: Path, *, vault_id: int) -> int:
     return res["indexed"]
 
 
-def refresh_embeddings(db_path: Path, *, vault_id: int, relpaths: list[str] | None = None) -> int:
+def refresh_embeddings(db_path: Path, *, vault_id: int, relpaths: list[str] | None = None, strict: bool = False) -> int:
     """Re-embed wiki/ pages for a vault. Best-effort: returns 0 on any error.
 
     When *relpaths* is given, only embed those wiki/ pages (filtered to wiki/-prefixed ones).
@@ -64,6 +64,8 @@ def refresh_embeddings(db_path: Path, *, vault_id: int, relpaths: list[str] | No
         ]
         return vector_index.upsert(db_path, vault_id=vault_id, embedder=embedder, rows=rows)
     except Exception as e:
+        if strict:
+            raise
         print(
             f"warning: embedding refresh failed ({type(e).__name__});"
             " embedding/hybrid recall may use stale vectors",
