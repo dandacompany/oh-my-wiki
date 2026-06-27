@@ -802,8 +802,9 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
             recall.upsert_block(path, recall.render_always_on_block(),
                                 marker=recall.ALWAYS_ON_MARKER)  # wiki-first (soft enforcement)
             written.append(path)
-    from scripts import commandmap
+    from scripts import commandmap, ask as ask_mod
     commandmap.export(base, hosts, profile=profile, workspace=workspace)
+    ask_mod.export(base, hosts, profile=profile, workspace=workspace)  # omw-ask convention block
     print(f"✓ recall mode '{mode}'; guidance injected into "
           f"{', '.join(p.name for p in written) or '(none)'}.")
     # Tier 2: wire each host's NATIVE recall hook, dispatched by its hook mechanism

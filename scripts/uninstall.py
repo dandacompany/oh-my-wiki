@@ -11,14 +11,15 @@ import json
 import shutil
 from pathlib import Path
 
-from scripts import persona_export, recall, commandmap
+from scripts import ask, persona_export, recall, commandmap
 
-#: The four managed marker names, sourced from their owning modules (SSOT).
+#: The managed marker names, sourced from their owning modules (SSOT).
 MARKERS: tuple[str, ...] = (
     persona_export.MARKER,        # "omw-personas"
     recall.MARKER,                # "omw-recall"
     recall.ALWAYS_ON_MARKER,      # "omw-wiki-first"
     commandmap.MARKER,            # "omw-commandmap"
+    ask.MARKER,                   # "omw-ask"
 )
 
 

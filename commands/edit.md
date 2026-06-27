@@ -72,3 +72,7 @@ reindex.incremental(db, vault_id=vault['id'])
 
 - Note not found → re-run search with broader limit, or ask for exact relpath.
 - Invalid frontmatter (rare; only if existing file was hand-broken) → suggest `lint` and stop.
+
+## Ask (omw-ask)
+
+This op's user fork is decision class `new-vs-update`. Surface it as a **structured choice** per the omw-ask convention (see SKILL.md + the `omw-ask` managed block) with the safe default **Propose as new** offered first; honor the session-sticky and non-interactive degrade rules.

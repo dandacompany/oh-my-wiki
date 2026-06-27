@@ -152,6 +152,29 @@ These hold across all commands. Each `commands/<op>.md` repeats the relevant one
 - **SMB-mounted vaults** (e.g. `/Volumes/...`): use `rsync -rlpt` rather than `cp`. Never `cp -a` on SMB.
 - **Recommended option goes first** in any AskUserQuestion list and is suffixed with `(추천)` / `(recommended)`.
 
+## Asking for user judgment (the `omw-ask` convention)
+
+Wiki save/structure work hits genuine forks — _propose-as-new vs update_, _merge /
+supersede / archive_, _publish vs keep private_, _delegate to a persona vs handle it_.
+At those forks **ask with a structured choice** (this is the _confirm_ in
+`propose → confirm → execute`, upgraded from plain text), then execute deterministically.
+
+- **Ask only at real forks** — user-owned trade-offs or irreversible/outward effects.
+  Never ask for trivial, reversible, or obvious-default steps.
+- **Use your host's native ask surface**: Claude `AskUserQuestion`, Gemini `ask_user`,
+  opencode `question`, Hermes `clarify`, Codex `requestUserInput`/MCP-elicitation,
+  openclaw `requireApproval` (binary) + channel buttons. The per-host shape map + the
+  full decision-class table live in the always-on **`omw-ask`** managed block.
+- **Safe (non-destructive) option first**, suffixed `(추천)`. **Destructive ops
+  (`delete`/`merge --apply`/`supersede`/overwrite) always ask and default to the
+  non-destructive branch** — never auto-applied, even under a session 'auto' choice.
+- **Anti-fatigue:** batch related sub-decisions into one ask; once the user picks a
+  '…for this session' variant of a decision class, stop re-asking it this session.
+- **Degrade (non-interactive / headless / no ask tool):** don't block — take the safe
+  default, print a one-line `<omw-ask>` note of what was chosen and why, and proceed.
+- **Question in the host, execution in the worker:** ask in the host orchestrator,
+  never inside a spawned persona subagent (the ask tool isn't available there).
+
 ## Maintenance gate (opt-in)
 
 When the user has enabled the gate (`omw setup gate --enable`), help it work:

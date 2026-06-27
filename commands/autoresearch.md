@@ -159,3 +159,7 @@ Tell the user:
 - Bright Data MCP unavailable → fall back to asking the user to paste source content for each claim.
 - User aborts on the "File this?" prompt → leave the session dir intact (it's small JSON; useful for later resume). Do not call file-back.
 - File-back called twice on the same session → idempotent; returns the prior relpath without re-writing.
+
+## Ask (omw-ask)
+
+This op's user fork is decision class `autoresearch-synthesize`. Surface it as a **structured choice** per the omw-ask convention (see SKILL.md + the `omw-ask` managed block) with the safe default **Leave in raw** offered first; honor the session-sticky and non-interactive degrade rules.

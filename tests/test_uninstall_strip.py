@@ -2,9 +2,10 @@ from scripts import uninstall
 
 
 def test_markers_are_sourced_from_modules():
-    from scripts import persona_export, recall, commandmap
+    from scripts import ask, persona_export, recall, commandmap
     assert set(uninstall.MARKERS) == {
-        persona_export.MARKER, recall.MARKER, recall.ALWAYS_ON_MARKER, commandmap.MARKER}
+        persona_export.MARKER, recall.MARKER, recall.ALWAYS_ON_MARKER, commandmap.MARKER,
+        ask.MARKER}
 
 
 def test_strip_removes_block_preserves_surrounding():

@@ -35,3 +35,7 @@ print(new_relpath)
 - Destination folder does not exist → `memo_ops.move` creates it; mention this.
 - Filename collision at destination → `memo_ops.move` auto-suffixes (`-2`, `-3`); report the final name.
 - Source not found → re-prompt with a broader search.
+
+## Ask (omw-ask)
+
+This op's user fork is decision class `move-backlinks`. Surface it as a **structured choice** per the omw-ask convention (see SKILL.md + the `omw-ask` managed block) with the safe default **Rewrite backlinks** offered first; honor the session-sticky and non-interactive degrade rules.

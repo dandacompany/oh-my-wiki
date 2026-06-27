@@ -178,3 +178,7 @@ For paste/md/txt, use `ingest.save_raw` with `ext` = `md` or `txt`. For pdf, use
 - PDF extraction empty → continue, but warn the user the PDF may be scanned (no OCR in Plan C); body stays empty, user can paste manually.
 - File not found → re-prompt for path or paste.
 - Index update on a layer without a section → `ingest.update_index` creates it automatically; mention this in the report.
+
+## Ask (omw-ask)
+
+This op's user fork is decision class `duplicate-ingest`. Surface it as a **structured choice** per the omw-ask convention (see SKILL.md + the `omw-ask` managed block) with the safe default **Skip** offered first; honor the session-sticky and non-interactive degrade rules.

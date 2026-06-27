@@ -36,3 +36,7 @@ print(result)  # trash relpath or None
 
 - Source not found → re-prompt with a broader search.
 - User aborts second confirm on hard delete → fall back to soft delete or cancel.
+
+## Ask (omw-ask)
+
+This op's user fork is decision class `delete-page` (⚠destructive — never session-stickied; always re-ask). Surface it as a **structured choice** per the omw-ask convention (see SKILL.md + the `omw-ask` managed block) with the safe default **Cancel** offered first; honor the session-sticky and non-interactive degrade rules.
