@@ -668,10 +668,14 @@ omw is host-neutral here: one engine, translated into each host's hook format.
 
 Host choices group by **instruction file (convention)** — `claude` (CLAUDE.md) ·
 `codex·opencode` (AGENTS.md, written once) · `gemini` (GEMINI.md) · `hermes`
-(pick a profile → `~/.hermes/profiles/<profile>/SOUL.md`) · `openclaw` (pick a
-workspace → `<workspace>/AGENTS.md`). Set the profile/workspace non-interactively
-with `--profile` / `--workspace`. Native hooks are wired for Claude Code, Codex,
-and Gemini only; OpenCode, Hermes, and OpenClaw get the guidance block only.
+(pick **one or more** profiles → `~/.hermes/profiles/<profile>/SOUL.md`) ·
+`openclaw` (pick **one or more** workspaces → `<workspace>/AGENTS.md`). The
+profile / workspace pickers are **multi-select** (check as many as you want; the
+active profile / default workspace is pre-checked) — the guidance block + native
+hook are written into every selected target. Set them non-interactively with
+`--profile` / `--workspace`, **comma-separated for multiple**
+(e.g. `--profile iris,mark`). Native hooks are wired for Claude Code, Codex, and
+Gemini only; OpenCode, Hermes, and OpenClaw get the guidance block only.
 
 Two axes you can configure:
 

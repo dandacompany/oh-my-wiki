@@ -647,7 +647,7 @@ omw setup recall
 (`SessionStart` + `UserPromptSubmit`)을 배선합니다. 여기서 omw는 호스트 중립적입니다.
 하나의 엔진을 각 호스트의 훅 포맷으로 번역할 뿐입니다.
 
-호스트 선택지는 **지침 파일(규약) 단위**로 묶입니다 — `claude`(CLAUDE.md) · `codex·opencode`(AGENTS.md, 한 번만 기록) · `gemini`(GEMINI.md) · `hermes`(프로필 선택 → `~/.hermes/profiles/<프로필>/SOUL.md`) · `openclaw`(워크스페이스 선택 → `<워크스페이스>/AGENTS.md`). 프로필/워크스페이스는 `--profile` / `--workspace`로 비대화형 지정합니다. 네이티브 훅은 Claude Code·Codex·Gemini에만 배선되고, OpenCode·Hermes·OpenClaw는 지침 블록만 들어갑니다(블록 전용).
+호스트 선택지는 **지침 파일(규약) 단위**로 묶입니다 — `claude`(CLAUDE.md) · `codex·opencode`(AGENTS.md, 한 번만 기록) · `gemini`(GEMINI.md) · `hermes`(프로필 **여러 개 선택** → `~/.hermes/profiles/<프로필>/SOUL.md`) · `openclaw`(워크스페이스 **여러 개 선택** → `<워크스페이스>/AGENTS.md`). 프로필/워크스페이스 선택은 **멀티 셀렉트(체크박스)** 입니다 — 원하는 만큼 체크하면(활성 프로필·기본 워크스페이스는 기본 체크) 선택한 **모든** 대상에 가이드 블록과 네이티브 훅이 기록됩니다. 비대화형으로는 `--profile` / `--workspace`에 **콤마로 여러 개**를 줄 수 있습니다(예: `--profile iris,mark`). 네이티브 훅은 Claude Code·Codex·Gemini에만 배선되고, OpenCode·Hermes·OpenClaw는 지침 블록만 들어갑니다(블록 전용).
 
 설정 가능한 두 축:
 
