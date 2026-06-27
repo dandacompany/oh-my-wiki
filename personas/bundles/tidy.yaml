@@ -1,0 +1,3 @@
+name: tidy
+description: Contradiction check + index ordering proposal in one pass
+roles: [consistency-checker, curator]
