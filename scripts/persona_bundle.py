@@ -36,6 +36,9 @@ def _parse_bundle_text(text: str, *, known_roles: set[str]) -> dict:
     for key in REQUIRED_KEYS:
         if key not in data:
             raise BundleError(f"missing required key in bundle: {key!r}")
+    for key in ("name", "description"):
+        if not isinstance(data[key], str) or not data[key].strip():
+            raise BundleError(f"{key} must be a non-empty string")
     roles = data["roles"]
     if not isinstance(roles, list) or not roles:
         raise BundleError("roles must be a non-empty list")
@@ -86,8 +89,12 @@ def run_bundle(name, *, db_path, vault_id, page=None, backend=None,
     results = []
     for role in roles:
         src = {"vault_relpath": page} if (page and persona_run.needs_source(role)) else None
-        rc = persona_run.run(role, db_path=db_path, vault_id=vault_id, source=src,
-                             backend=backend, override_cli_path=override_cli_path)
+        try:
+            rc = persona_run.run(role, db_path=db_path, vault_id=vault_id, source=src,
+                                 backend=backend, override_cli_path=override_cli_path)
+        except Exception as exc:  # noqa: BLE001 — one bad role must not abort the team
+            print(f"error: role {role!r} failed: {exc}", file=sys.stderr)
+            rc = 1
         results.append((role, rc))
     print(f"\n--- bundle {name!r} summary ---")
     for role, rc in results:

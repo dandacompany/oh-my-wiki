@@ -125,6 +125,35 @@ def test_run_bundle_tidy_integration_stages_index(tmp_path, monkeypatch):
     assert (index.parent / "index.md.proposed.md").exists()
 
 
+def test_run_bundle_survives_role_exception(monkeypatch):
+    calls = []
+    monkeypatch.setattr(persona_bundle, "load_bundle",
+                        lambda name: {"name": "t", "description": "d",
+                                      "roles": ["consistency-checker", "curator"]})
+
+    def fake_run(role, **kw):
+        calls.append(role)
+        if role == "consistency-checker":
+            raise RuntimeError("boom")
+        return 0
+
+    monkeypatch.setattr(_pr, "run", fake_run)
+    rc = persona_bundle.run_bundle("t", db_path="db", vault_id=1)
+    assert calls == ["consistency-checker", "curator"]  # continued past the crash
+    assert rc == 1
+
+
+def test_load_bundle_rejects_empty_name(tmp_path, monkeypatch):
+    d = tmp_path / "bundles"
+    d.mkdir()
+    (d / "badname.yaml").write_text(
+        "name: \"\"\ndescription: d\nroles: [consistency-checker]\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(persona_bundle, "BUNDLES_ROOT", d)
+    with pytest.raises(persona_bundle.BundleError, match="name must be a non-empty string"):
+        persona_bundle.load_bundle("badname")
+
+
 def test_cli_persona_bundle_list_runs():
     proc = subprocess.run(
         [_sys.executable, "-m", "scripts.omw_cli", "persona-bundle", "list"],
