@@ -59,3 +59,8 @@ uv.lock
 
 # humanize-korean transient workspace
 _workspace/
+
+# Skills CLI local install artifacts (a self-copy of the skill + lockfile —
+# `skills add` writes these; redundant with the repo source, never committed)
+.agents/
+skills-lock.json
