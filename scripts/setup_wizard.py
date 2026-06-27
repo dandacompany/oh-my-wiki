@@ -409,7 +409,9 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
                     or meta["file"] in picked_set
                     or any(m in picked_set for m in meta["members"])):
                 picked_hosts.extend(meta["members"])
-        hosts = picked_hosts or None
+        # Keep an empty pick distinct from "no argument": an interactive empty
+        # selection means "no hosts" (skip all writes), NOT the all-hosts default.
+        hosts = picked_hosts
         # Scoped host sub-prompts: ask for profile/workspace when not yet provided.
         if hosts:
             for host in hosts:
@@ -783,7 +785,9 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
         for label, meta in zip(choice_labels, choices_meta):
             if label in picked_labels:
                 picked_hosts.extend(meta["members"])
-        hosts = picked_hosts or None
+        # Keep an empty pick distinct from "no argument": an interactive empty
+        # selection means "no hosts" (skip all writes), NOT the all-hosts default.
+        hosts = picked_hosts
         # Scoped host sub-prompts.
         if hosts:
             for host in hosts:
@@ -858,7 +862,8 @@ def setup_gate(mode="enforce", hosts=None, noninteractive=False) -> int:
         print(f"error: invalid mode {mode!r}", flush=True)
         return 1
     config.set_config("gate.mode", mode)
-    hosts = hosts or list(recall.host_hook_configs().keys())
+    # None (no arg) → all hook-capable hosts; an explicit empty list → none.
+    hosts = list(recall.host_hook_configs().keys()) if hosts is None else hosts
     results = {}
     for h in hosts:
         if mode == "off":
