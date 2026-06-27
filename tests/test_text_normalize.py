@@ -41,8 +41,10 @@ def test_normalize_text_never_raises_on_weird_input():
 
 
 def test_analyzer_version_present_and_provider_tagged():
-    assert isinstance(tn.ANALYZER_VERSION, str) and tn.ANALYZER_VERSION
-    assert tn._provider() in tn.ANALYZER_VERSION  # version encodes the provider id
+    tn._reset_provider_cache()
+    v = tn.analyzer_version()
+    assert isinstance(v, str) and v
+    assert tn._provider() in v  # version encodes the provider id
 
 
 def test_analyzer_version_is_function_and_heuristic_tagged():

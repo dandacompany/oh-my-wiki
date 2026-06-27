@@ -96,7 +96,3 @@ def normalize_token(tok: str) -> str:
     if not tok:
         return ""
     return normalize_text(tok)
-
-
-#: Keep the old constant as an alias for any external code that still reads it.
-ANALYZER_VERSION = "heuristic-1"
