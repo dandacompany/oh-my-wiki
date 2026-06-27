@@ -775,7 +775,8 @@ def _cmd_setup(args) -> int:
     if args.section is None:
         interactive = (not args.noninteractive) and sys.stdin.isatty()
         if interactive:
-            return setup_wizard.run_all(noninteractive=False, base_dir=args.base_dir)
+            return setup_wizard.run_all(noninteractive=False, base_dir=args.base_dir,
+                                        dry_run=args.dry_run)
         return setup_wizard.run(
             section=None, noninteractive=args.noninteractive,
             name=args.name, mode=args.mode or "wiki", type_=args.type, location=args.location,
@@ -793,6 +794,7 @@ def _cmd_setup(args) -> int:
             base_dir=args.base_dir, noninteractive=args.noninteractive,
             profile=getattr(args, "profile", None),
             workspace=getattr(args, "workspace", None),
+            dry_run=args.dry_run,
         )
     if args.section == "search":
         return setup_wizard.setup_search(
@@ -817,7 +819,8 @@ def _cmd_setup(args) -> int:
         return setup_wizard.setup_viewer(viewer=args.viewer, noninteractive=args.noninteractive)
     if args.section == "agents":
         agents = [s.strip() for s in args.agents.split(",") if s.strip()] if args.agents else None
-        return setup_wizard.setup_agents(agents=agents, noninteractive=args.noninteractive)
+        return setup_wizard.setup_agents(agents=agents, noninteractive=args.noninteractive,
+                                         dry_run=args.dry_run)
     if args.section == "recall":
         hosts = [s.strip() for s in args.host.split(",") if s.strip()] if args.host else None
         return setup_wizard.setup_recall(
@@ -826,6 +829,7 @@ def _cmd_setup(args) -> int:
             provider=args.embed_provider, model=args.embed_model, dim=args.embed_dim,
             profile=getattr(args, "profile", None),
             workspace=getattr(args, "workspace", None),
+            dry_run=args.dry_run,
         )
     if args.section == "gate":
         hosts = [s.strip() for s in args.host.split(",") if s.strip()] if args.host else None
@@ -1544,6 +1548,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--noninteractive", action="store_true",
         help="create from flags/defaults without prompting",
     )
+    pset.add_argument("--dry-run", dest="dry_run", action="store_true",
+                      help="preview recall/persona/agent host-config writes (blocks, hooks, skills); make none")
     pset.add_argument("--name", default="default")
     pset.add_argument("--mode", default=None,
                       help="vault mode (memo|wiki) for `omw setup vault`, "

@@ -439,7 +439,10 @@ def _recall_hook_specs(host: str = "claude") -> dict:
         if not event:
             continue
         fmt = hosts.hook_event_fmt(host, abstract)
-        cmd = f'"{omw}" recall {verb} --format {fmt} --event {event}'
+        # `|| true` makes the hook fail-safe: recall is best-effort context
+        # injection and must NEVER block a host session, even if a future CLI
+        # change makes these args invalid (the command then no-ops at exit 0).
+        cmd = f'"{omw}" recall {verb} --format {fmt} --event {event} || true'
         specs[event] = (cmd, status)
     return specs
 
@@ -553,7 +556,7 @@ def wire_hermes(*, profile=None, config_path=None, allowlist_path=None) -> tuple
             profile = None
     path = Path(config_path) if config_path else _hermes_config_path(profile)
     omw = _omw_bin()
-    command = f'"{omw}" recall prompt --format hermes-json'
+    command = f'"{omw}" recall prompt --format hermes-json || true'
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
     except (OSError, yaml.YAMLError) as e:
