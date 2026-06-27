@@ -115,16 +115,37 @@ def run(
 
 def _run_interactive(name: str, mode: str, type_: str, location: str,
                      *, in_wizard: bool = False) -> int:
+    from scripts import platform_env
     name = _prompt("text", "Vault name", default=name) or name
     mode = _prompt("select", "Mode", choices=["wiki", "memo"], default=mode) or mode
     type_ = _prompt("select", "Type", choices=["obsidian", "markdown"], default=type_) or type_
-    loc_default = location if location in ("global", "project") else "custom path…"
-    loc_choice = _prompt("select", "Location",
-                         choices=["global", "project", "custom path…"], default=loc_default)
-    if loc_choice == "custom path…":
-        location = _prompt("text", "Absolute vault path", default=location) or location
-    elif loc_choice:
-        location = loc_choice
+
+    loc_resolved = False
+    if platform_env.is_wsl():
+        place = _prompt(
+            "select", "WSL detected — where should the vault live?",
+            choices=["Windows drive (open in Windows Obsidian)",
+                     "Linux filesystem (WSL-only, faster)"],
+            default="Windows drive (open in Windows Obsidian)")
+        if place and str(place).startswith("Windows drive"):
+            wp = platform_env.windows_user_profile()
+            if wp is not None:
+                location = str(wp / "omw-vaults" / name)   # absolute /mnt/c/... path
+                loc_resolved = True
+                print(f"  → Windows-drive vault: {location} "
+                      f"(open this folder as a vault in Windows Obsidian)")
+            else:
+                print("  ⚠️  Windows user folder not found — choose a Linux path instead.")
+
+    if not loc_resolved:
+        loc_default = location if location in ("global", "project") else "custom path…"
+        loc_choice = _prompt("select", "Location",
+                             choices=["global", "project", "custom path…"], default=loc_default)
+        if loc_choice == "custom path…":
+            location = _prompt("text", "Absolute vault path", default=location) or location
+        elif loc_choice:
+            location = loc_choice
+
     ensure_home()
     _ensure_vault(name, mode, type_, location)
     _write_config(name)
