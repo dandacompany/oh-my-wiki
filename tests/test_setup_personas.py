@@ -14,6 +14,34 @@ def test_setup_personas_hermes_profile_noninteractive(tmp_path, monkeypatch):
     assert (home / ".hermes" / "profiles" / "iris" / "SOUL.md").exists()
 
 
+def test_setup_personas_hermes_multi_profiles(tmp_path, monkeypatch):
+    """`profiles=[...]` fans out: every selected hermes profile gets a SOUL.md."""
+    home = tmp_path / "home"
+    for name in ("iris", "mark", "mia"):
+        (home / ".hermes" / "profiles" / name).mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    rc = setup_wizard.setup_personas(enabled=["wiki-librarian"], main="wiki-librarian",
+                                     hosts=["hermes"], profiles=["iris", "mark"],
+                                     noninteractive=True, base_dir=str(tmp_path))
+    assert rc == 0
+    assert (home / ".hermes" / "profiles" / "iris" / "SOUL.md").exists()
+    assert (home / ".hermes" / "profiles" / "mark" / "SOUL.md").exists()
+    # a profile that was NOT selected stays untouched
+    assert not (home / ".hermes" / "profiles" / "mia" / "SOUL.md").exists()
+
+
+def test_setup_personas_legacy_single_profile_still_works(tmp_path, monkeypatch):
+    """Back-compat: the legacy single `profile=` arg is normalized into the list."""
+    home = tmp_path / "home"
+    (home / ".hermes" / "profiles" / "iris").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    rc = setup_wizard.setup_personas(enabled=["wiki-librarian"], main="wiki-librarian",
+                                     hosts=["hermes"], profile="iris",
+                                     noninteractive=True, base_dir=str(tmp_path))
+    assert rc == 0
+    assert (home / ".hermes" / "profiles" / "iris" / "SOUL.md").exists()
+
+
 def test_setup_personas_unresolvable_scoped_skips_cleanly(tmp_path, monkeypatch):
     """Non-interactive hermes host with no profile should skip cleanly (return 0, no SOUL.md)."""
     home = tmp_path / "home"
