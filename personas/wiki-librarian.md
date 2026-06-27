@@ -10,6 +10,7 @@ tools: []
 model_hint: standard
 input_kinds: [text, vault_page]
 output_kind: stdout
+access: read-only
 triggers:
   [
     tidy the wiki structure,

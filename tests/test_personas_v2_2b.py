@@ -25,6 +25,7 @@ def tmp_persona_factcheck(tmp_path, monkeypatch):
         "model_hint: standard\n"
         "input_kinds: [file]\n"
         "output_kind: sibling_suffix\n"
+        "access: read-only\n"
         "---\n"
         "stub body\n",
         encoding="utf-8",
@@ -80,6 +81,7 @@ def test_sibling_suffix_cli_end_to_end(tmp_path, monkeypatch):
         "model_hint: standard\n"
         "input_kinds: [file]\n"
         "output_kind: sibling_suffix\n"
+        "access: read-only\n"
         "---\n"
         "stub body\n",
         encoding="utf-8",
