@@ -519,6 +519,28 @@ def test_cli_setup_recall_accepts_embed_flags(tmp_path, monkeypatch):
     assert config.load_config()["recall"]["embedding"]["provider"] == "openai"
 
 
+def test_cli_recall_accepts_hook_format_flags(monkeypatch, capsys):
+    from scripts import omw_cli
+    monkeypatch.setattr("scripts.recall.prompt", lambda text: "ctx")
+    rc = omw_cli.main(["recall", "prompt", "--format", "claude-json",
+                       "--event", "UserPromptSubmit", "--text", "hello wiki"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
+    assert out["hookSpecificOutput"]["additionalContext"] == "ctx"
+
+
+def test_cli_recall_pretool_accepts_hook_format_flags(monkeypatch, capsys):
+    from scripts import omw_cli
+    monkeypatch.setattr("scripts.recall.pretool", lambda payload: "ctx")
+    rc = omw_cli.main(["recall", "pretool", "--format", "claude-json",
+                       "--event", "PreToolUse"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
+    assert out["hookSpecificOutput"]["additionalContext"] == "ctx"
+
+
 def test_require_vault_row_consistent_errors(tmp_path, monkeypatch, capsys):
     from scripts import omw_cli, registry
     monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw"))

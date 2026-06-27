@@ -743,8 +743,9 @@ def _cmd_recall(args) -> int:
         out = recall.pretool(None)
     else:
         out = recall.prompt(args.text)
-    if out:
-        print(out)
+    rendered = recall._format_output(out or "", args.fmt, args.event)
+    if rendered:
+        print(rendered)
     return 0
 
 
@@ -1509,6 +1510,10 @@ def build_parser() -> argparse.ArgumentParser:
     prc = sub.add_parser("recall", help="Wiki recall for agent hooks (preamble/prompt). See setup recall.")
     prc.add_argument("action", choices=["preamble", "prompt", "pretool"])
     prc.add_argument("--text", default=None, help="prompt text (default: read stdin)")
+    prc.add_argument("--format", dest="fmt", default="plain",
+                     choices=["plain", "claude-json", "gemini-json", "hermes-json"],
+                     help="stdout shape for the calling host's hook system")
+    prc.add_argument("--event", default="", help="concrete host event name (for json formats)")
     prc.set_defaults(func=_cmd_recall)
 
     pm = sub.add_parser("maint", help="Knowledge-maintenance status (cron-friendly).")
