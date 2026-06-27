@@ -848,8 +848,9 @@ def _cmd_setup(args) -> int:
 
 
 def _cmd_persona_run(args) -> int:
+    import json as _json
     from pathlib import Path
-    from scripts import persona_run
+    from scripts import persona_run, hermes_detect
     if args.apply_path:
         try:
             out = persona_run.apply_proposal(Path(args.apply_path))
@@ -869,13 +870,55 @@ def _cmd_persona_run(args) -> int:
         source = {"file": args.file}
     elif args.text:
         source = {"text": args.text}
-    return persona_run.run(args.role, db_path=db, vault_id=vault["id"],
-                           source=source, backend=args.backend)
+    runner_name = getattr(args, "runner", "host")
+    if runner_name == "hermes-delegate":
+        source_display = (
+            (source or {}).get("vault_relpath")
+            or (source or {}).get("file")
+            or (source or {}).get("text")
+            or "(none)"
+        )
+        print("→ procedure: runner-hermes-delegate  (host calls delegate_task)")
+        print(f"  role: {args.role}")
+        print(f"  source: {source_display}")
+        print("  steps: commands/runner-hermes-delegate.md")
+        print("  hint: omw cannot call delegate_task; YOU (the Hermes host) execute the steps file.")
+        return 0
+    from scripts import runners
+    try:
+        runner = runners.resolve_runner(runner_name)
+    except runners.RunnerUnavailable as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if runner.name == "host":
+        return persona_run.run(args.role, db_path=db, vault_id=vault["id"],
+                               source=source, backend=args.backend)
+    # hermes-kanban
+    try:
+        from scripts.runners.hermes_kanban import KanbanError
+        out = runner.run_one(
+            args.role, db_path=db, vault_id=vault["id"],
+            source=source, backend=getattr(args, "backend", None),
+            apply=False, override_cli_path=None,
+            assignee=getattr(args, "assignee", None),
+        )
+    except hermes_detect.AmbiguousProfile as exc:
+        print(
+            f"error: multiple Hermes profiles; pass --assignee "
+            f"(choices: {', '.join(exc.choices)})",
+            file=sys.stderr,
+        )
+        return 2
+    except KanbanError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(_json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
 
 
 def _cmd_persona_bundle(args) -> int:
     import json
-    from scripts import persona_bundle
+    from scripts import persona_bundle, hermes_detect
     if args.bundle_cmd == "list":
         print(json.dumps(persona_bundle.list_bundles(), ensure_ascii=False, indent=2))
         return 0
@@ -888,17 +931,62 @@ def _cmd_persona_bundle(args) -> int:
         print(json.dumps(spec, ensure_ascii=False, indent=2))
         return 0
     # run
+    runner_name = getattr(args, "runner", "host")
+    if runner_name == "hermes-delegate":
+        print(
+            "error: hermes-delegate runner supports only persona-run; "
+            "use hermes-kanban for teams/fan-out",
+            file=sys.stderr,
+        )
+        return 2
     db = registry_path()
     vault = _require_vault_row(db, args.vault)
     if vault is None:
         return 1
-    return persona_bundle.run_bundle(args.name, db_path=db, vault_id=vault["id"],
-                                     page=args.page, backend=args.backend)
+    if runner_name == "host":
+        return persona_bundle.run_bundle(args.name, db_path=db, vault_id=vault["id"],
+                                         page=args.page, backend=args.backend)
+    # hermes-kanban
+    from scripts import runners
+    try:
+        runner = runners.resolve_runner(runner_name)
+    except runners.RunnerUnavailable as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    try:
+        from scripts.runners.hermes_kanban import KanbanError
+        out = runner.run_bundle(
+            args.name, db_path=db, vault_id=vault["id"],
+            page=getattr(args, "page", None),
+            backend=getattr(args, "backend", None),
+            override_cli_path=None,
+            assignee=getattr(args, "assignee", None),
+        )
+    except hermes_detect.AmbiguousProfile as exc:
+        print(
+            f"error: multiple Hermes profiles; pass --assignee "
+            f"(choices: {', '.join(exc.choices)})",
+            file=sys.stderr,
+        )
+        return 2
+    except KanbanError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
 
 
 def _cmd_persona_fanout(args) -> int:
     import json
-    from scripts import persona_fanout
+    from scripts import persona_fanout, hermes_detect
+    runner_name = getattr(args, "runner", "host")
+    if runner_name == "hermes-delegate":
+        print(
+            "error: hermes-delegate runner supports only persona-run; "
+            "use hermes-kanban for teams/fan-out",
+            file=sys.stderr,
+        )
+        return 2
     pages = [p.strip() for p in args.pages.split(",") if p.strip()] if args.pages else None
     # Only need a vault row when resolving by facet (no explicit pages list).
     db = registry_path()
@@ -908,12 +996,43 @@ def _cmd_persona_fanout(args) -> int:
         if vault is None:
             return 1
         vault_id = vault["id"]
+    if runner_name == "host":
+        try:
+            out = persona_fanout.resolve(
+                args.role, db_path=db, vault_id=vault_id, pages=pages,
+                tag=args.tag, type=args.type, status=args.status, layer=args.layer,
+                visibility=args.visibility, backend=args.backend)
+        except persona_fanout.FanoutError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        return 0
+    # hermes-kanban
+    from scripts import runners
     try:
-        out = persona_fanout.resolve(
+        runner = runners.resolve_runner(runner_name)
+    except runners.RunnerUnavailable as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    try:
+        from scripts.runners.hermes_kanban import KanbanError
+        out = runner.resolve_fanout(
             args.role, db_path=db, vault_id=vault_id, pages=pages,
-            tag=args.tag, type=args.type, status=args.status, layer=args.layer,
-            visibility=args.visibility, backend=args.backend)
-    except persona_fanout.FanoutError as exc:
+            tag=getattr(args, "tag", None), type=getattr(args, "type", None),
+            status=getattr(args, "status", None), layer=getattr(args, "layer", None),
+            visibility=getattr(args, "visibility", None),
+            backend=getattr(args, "backend", None),
+            assignee=getattr(args, "assignee", None),
+            override_cli_path=None,
+        )
+    except hermes_detect.AmbiguousProfile as exc:
+        print(
+            f"error: multiple Hermes profiles; pass --assignee "
+            f"(choices: {', '.join(exc.choices)})",
+            file=sys.stderr,
+        )
+        return 2
+    except KanbanError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     print(json.dumps(out, ensure_ascii=False, indent=2))
@@ -1628,6 +1747,11 @@ def build_parser() -> argparse.ArgumentParser:
     ppr.add_argument("--backend", choices=["claude", "codex", "gemini", "opencode"], default=None)
     ppr.add_argument("--apply", dest="apply_path", default=None,
                      help="apply a staged <target>.proposed.md")
+    ppr.add_argument("--runner", choices=["host", "hermes-kanban", "hermes-delegate"],
+                     default="host",
+                     help="where to execute (default host; hermes-* needs a Hermes session)")
+    ppr.add_argument("--assignee", default=None,
+                     help="Hermes profile to assign cards to (hermes-kanban; default = current session profile)")
     ppr.set_defaults(func=_cmd_persona_run)
 
     pb = sub.add_parser("persona-bundle", help="Run a named team of personas in sequence.")
@@ -1641,6 +1765,11 @@ def build_parser() -> argparse.ArgumentParser:
     pbr.add_argument("--vault", default=None)
     pbr.add_argument("--backend", choices=["claude", "codex", "gemini", "opencode"],
                      default=None)
+    pbr.add_argument("--runner", choices=["host", "hermes-kanban", "hermes-delegate"],
+                     default="host",
+                     help="where to execute (default host; hermes-* needs a Hermes session)")
+    pbr.add_argument("--assignee", default=None,
+                     help="Hermes profile to assign cards to (hermes-kanban; default = current session profile)")
     pb.set_defaults(func=_cmd_persona_bundle)
 
     pf = sub.add_parser("persona-fanout",
@@ -1655,6 +1784,11 @@ def build_parser() -> argparse.ArgumentParser:
     pf.add_argument("--vault", default=None)
     pf.add_argument("--backend", choices=["claude", "codex", "gemini", "opencode"],
                     default=None)
+    pf.add_argument("--runner", choices=["host", "hermes-kanban", "hermes-delegate"],
+                    default="host",
+                    help="where to execute (default host; hermes-* needs a Hermes session)")
+    pf.add_argument("--assignee", default=None,
+                    help="Hermes profile to assign cards to (hermes-kanban; default = current session profile)")
     pf.set_defaults(func=_cmd_persona_fanout)
 
     from scripts import ops_registry as _reg
