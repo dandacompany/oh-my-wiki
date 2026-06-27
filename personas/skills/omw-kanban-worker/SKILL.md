@@ -1,8 +1,6 @@
-## <!-- personas/skills/omw-kanban-worker/SKILL.md -->
-
+---
 name: omw-kanban-worker
 description: Run an omw persona as a Hermes kanban worker — read the card body as your persona spec, do read-only or proposal work via the omw CLI, stage proposals as sidecars, and terminate the run with kanban_complete or a review-required kanban_block.
-
 ---
 
 # omw kanban worker
