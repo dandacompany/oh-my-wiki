@@ -36,6 +36,26 @@ def test_dispatch_raises_on_backend_failure():
             os.environ.pop("OMW_FAKE_FAIL", None)
 
 
+def test_dispatch_closes_stdin(monkeypatch):
+    import subprocess
+    captured = {}
+
+    class _CP:
+        returncode = 0
+        stdout = "out"
+        stderr = ""
+
+    def fake_run(argv, **kwargs):
+        captured.update(kwargs)
+        return _CP()
+
+    monkeypatch.setattr(persona_run.subprocess, "run", fake_run)
+    out = persona_run._dispatch("body", "task", backend="codex", model="m",
+                                override_cli_path=None)
+    assert out == "out"
+    assert captured.get("stdin") == subprocess.DEVNULL
+
+
 # ---------------------------------------------------------------------------
 # _gather_inputs tests
 # ---------------------------------------------------------------------------

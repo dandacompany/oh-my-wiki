@@ -109,7 +109,8 @@ def _dispatch(persona_body: str, task_prompt: str, *, backend: str, model: str,
         model=model, skip_permissions=True, override_cli_path=override_cli_path,
     )
     try:
-        cp = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        cp = subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
+                            stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired as exc:
         raise RunError(f"{backend} dispatch timed out after {timeout}s") from exc
     if cp.returncode != 0:
