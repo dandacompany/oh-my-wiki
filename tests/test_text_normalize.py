@@ -1,3 +1,4 @@
+from scripts import kiwi_install
 from scripts import text_normalize as tn
 
 
@@ -73,3 +74,44 @@ def test_normalize_token_dispatches_via_provider():
     tn._reset_provider_cache()
     assert tn.normalize_token("학교에서") == "학교"   # routes through _NORMALIZERS[_provider()]
     assert "heuristic" in tn._NORMALIZERS
+
+
+def _use_fake_kiwi(monkeypatch, config_value="kiwi"):
+    monkeypatch.setattr(kiwi_install, "kiwi_available", lambda: True)
+    monkeypatch.setitem(tn._NORMALIZERS, "kiwi", lambda t: "LEMMA:" + " ".join(t.split()))
+    from scripts import config
+    monkeypatch.setattr(config, "load_config",
+                        lambda: {"recall": {"normalizer": config_value}})
+    tn._reset_provider_cache()
+
+
+def test_provider_is_kiwi_when_configured_and_available(monkeypatch):
+    _use_fake_kiwi(monkeypatch)
+    assert tn._provider() == "kiwi"
+    assert tn.normalize_text("학교에서 먹었다") == "LEMMA:학교에서 먹었다"
+
+
+def test_provider_falls_back_to_heuristic_when_kiwi_unavailable(monkeypatch):
+    from scripts import config
+    monkeypatch.setattr(kiwi_install, "kiwi_available", lambda: False)
+    monkeypatch.setattr(config, "load_config",
+                        lambda: {"recall": {"normalizer": "kiwi"}})
+    tn._reset_provider_cache()
+    assert tn._provider() == "heuristic"          # config=kiwi but unavailable
+    assert tn.analyzer_version() == "heuristic-1"  # version matches the ACTUAL provider
+    assert tn.normalize_text("학교에서") == "학교"  # heuristic still runs
+
+
+def test_kiwi_text_failure_falls_back_to_heuristic(monkeypatch):
+    # if the real _kiwi_text raises, the call must not raise — fall back
+    monkeypatch.setattr(kiwi_install, "kiwi_available", lambda: True)
+    from scripts import config
+    monkeypatch.setattr(config, "load_config",
+                        lambda: {"recall": {"normalizer": "kiwi"}})
+    def boom(_):
+        raise RuntimeError("kiwi broke")
+    monkeypatch.setitem(tn._NORMALIZERS, "kiwi", boom)
+    tn._reset_provider_cache()
+    # normalize_text must swallow and not raise
+    out = tn.normalize_text("학교에서")
+    assert isinstance(out, str)

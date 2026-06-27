@@ -31,6 +31,10 @@ def _provider() -> str:
             want = (config.load_config() or {}).get("recall", {}).get("normalizer")
             if want == "heuristic":
                 prov = want
+            elif want == "kiwi":
+                from scripts import kiwi_install
+                if kiwi_install.kiwi_available():
+                    prov = "kiwi"
         except Exception:
             prov = "heuristic"
         _PROVIDER_CACHE = prov
@@ -77,9 +81,33 @@ def _heuristic_text(text: str) -> str:
     return " ".join(_heuristic_token(t) for t in text.split())
 
 
-#: provider id → text-level normalizer (str) -> str. 'kiwi' is added by the
-#: kiwi-provider task. dispatch falls back to heuristic for unknown providers.
-_NORMALIZERS = {"heuristic": _heuristic_text}
+_KIWI = None  # lazy singleton Kiwi() instance
+#: Sejong content tags to keep. V* (verb/adjective) emit dictionary form (stem+다).
+_KIWI_KEEP = {"NNG", "NNP", "SL", "SN", "MAG", "VV", "VA"}
+_KIWI_VERB = {"VV", "VA"}
+
+
+def _kiwi_text(text: str) -> str:
+    """Kiwi text normalizer: keep content morphemes as lemmas (nouns as-is,
+    verbs/adjectives → dictionary form stem+다), drop josa/endings/symbols.
+    Any kiwipiepy failure falls back to the heuristic for this call (never raises)."""
+    global _KIWI
+    try:
+        if _KIWI is None:
+            from kiwipiepy import Kiwi
+            _KIWI = Kiwi()
+        out = []
+        for tok in _KIWI.tokenize(text):
+            if tok.tag in _KIWI_KEEP:
+                out.append(tok.form + "다" if tok.tag in _KIWI_VERB else tok.form)
+        return " ".join(out)
+    except Exception:
+        return _heuristic_text(text)
+
+
+#: provider id → text-level normalizer (str) -> str. dispatch falls back to
+#: heuristic for unknown providers.
+_NORMALIZERS = {"heuristic": _heuristic_text, "kiwi": _kiwi_text}
 
 
 def normalize_text(text: str | None) -> str:
@@ -88,7 +116,10 @@ def normalize_text(text: str | None) -> str:
     Idempotent on ASCII. Never raises."""
     if not text:
         return ""
-    return _NORMALIZERS.get(_provider(), _heuristic_text)(text)
+    try:
+        return _NORMALIZERS.get(_provider(), _heuristic_text)(text)
+    except Exception:
+        return _heuristic_text(text)
 
 
 def normalize_token(tok: str) -> str:
