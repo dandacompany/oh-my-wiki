@@ -1,3 +1,7 @@
+import pathlib
+import subprocess
+import sys as _sys
+
 import pytest
 
 from scripts import persona_fanout
@@ -69,3 +73,25 @@ def test_resolve_rejects_vault_wide_role():
 def test_resolve_rejects_unknown_role():
     with pytest.raises(persona_fanout.FanoutError, match="unknown"):
         persona_fanout.resolve("not-a-persona", db_path="db", vault_id=1, pages=["a.md"])
+
+
+def test_cli_persona_fanout_explicit_pages():
+    proc = subprocess.run(
+        [_sys.executable, "-m", "scripts.omw_cli", "persona-fanout",
+         "fact-checker", "--pages", "a.md,b.md"],
+        capture_output=True, text=True,
+        cwd=str(pathlib.Path(__file__).resolve().parent.parent),
+    )
+    assert proc.returncode == 0
+    assert "omw persona-run fact-checker --page a.md" in proc.stdout
+
+
+def test_cli_persona_fanout_vault_wide_role_errors():
+    proc = subprocess.run(
+        [_sys.executable, "-m", "scripts.omw_cli", "persona-fanout",
+         "curator", "--pages", "a.md"],
+        capture_output=True, text=True,
+        cwd=str(pathlib.Path(__file__).resolve().parent.parent),
+    )
+    assert proc.returncode == 1
+    assert "vault-wide" in (proc.stderr + proc.stdout)

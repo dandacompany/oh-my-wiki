@@ -165,6 +165,9 @@ OPS: tuple[OpSpec, ...] = (
     _det("persona-bundle", "Run a named team of personas in sequence (any backend).",
          "omw persona-bundle {list|show <name>|run <name> [--page P] [--backend B]}",
          triggers=("persona bundle", "run a team", "페르소나 팀", "번들 실행")),
+    _det("persona-fanout", "Resolve a page list + emit per-page persona-run commands for host-parallel fan-out.",
+         "omw persona-fanout <role> [--pages a,b,c | --tag T --type T --status S --layer L --visibility V] [--backend B]",
+         triggers=("persona fanout", "fan out", "배치 실행", "여러 페이지 페르소나")),
     # --- agentic procedures (you execute commands/<op>.md; do NOT trust a shelled result) ---
     _proc("ingest", "Pull a source (path/URL) into raw/ and reindex.",
           args=(ArgSpec("source", True, "file path or URL"),), uses=("fetch", "reindex"),
@@ -217,7 +220,7 @@ _PHASE = {
     # maintain — keep the wiki healthy
     "lint": "maintain", "review": "maintain", "supersede": "maintain", "merge": "maintain",
     "visibility": "maintain", "gate": "maintain", "maint": "maintain", "next": "maintain",
-    "recall": "maintain", "persona-run": "maintain", "persona-bundle": "maintain", "persona-factcheck": "maintain",
+    "recall": "maintain", "persona-run": "maintain", "persona-bundle": "maintain", "persona-fanout": "maintain", "persona-factcheck": "maintain",
     "persona-consistency": "maintain", "persona-terminology": "maintain",
     # use — pull knowledge back out
     "view": "use", "list": "use", "export": "use",

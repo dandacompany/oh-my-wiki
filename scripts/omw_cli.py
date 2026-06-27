@@ -891,6 +891,30 @@ def _cmd_persona_bundle(args) -> int:
                                      page=args.page, backend=args.backend)
 
 
+def _cmd_persona_fanout(args) -> int:
+    import json
+    from scripts import persona_fanout
+    pages = [p.strip() for p in args.pages.split(",") if p.strip()] if args.pages else None
+    # Only need a vault row when resolving by facet (no explicit pages list).
+    db = registry_path()
+    vault_id = None
+    if not pages:
+        vault = _require_vault_row(db, args.vault)
+        if vault is None:
+            return 1
+        vault_id = vault["id"]
+    try:
+        out = persona_fanout.resolve(
+            args.role, db_path=db, vault_id=vault_id, pages=pages,
+            tag=args.tag, type=args.type, status=args.status, layer=args.layer,
+            visibility=args.visibility, backend=args.backend)
+    except persona_fanout.FanoutError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _cmd_merge(args) -> int:
     import json
     from scripts import merge, registry, links, frontmatter
@@ -1607,6 +1631,20 @@ def build_parser() -> argparse.ArgumentParser:
     pbr.add_argument("--backend", choices=["claude", "codex", "gemini", "opencode"],
                      default=None)
     pb.set_defaults(func=_cmd_persona_bundle)
+
+    pf = sub.add_parser("persona-fanout",
+                        help="Resolve a page list + emit per-page persona-run commands.")
+    pf.add_argument("role")
+    pf.add_argument("--pages", default=None, help="comma-separated relpaths")
+    pf.add_argument("--tag", default=None)
+    pf.add_argument("--type", default=None)
+    pf.add_argument("--status", default=None)
+    pf.add_argument("--layer", default=None)
+    pf.add_argument("--visibility", default=None)
+    pf.add_argument("--vault", default=None)
+    pf.add_argument("--backend", choices=["claude", "codex", "gemini", "opencode"],
+                    default=None)
+    pf.set_defaults(func=_cmd_persona_fanout)
 
     from scripts import ops_registry as _reg
     for _name in _reg.PROCEDURE_NAMES:
