@@ -21,9 +21,12 @@ PERSONAS_ROOT = paths.bundled_dir("personas")
 
 VALID_OUTPUT_KINDS = {"sibling_file", "sibling_suffix", "inplace", "new_page", "stdout"}
 VALID_MODEL_HINTS = {"fast", "standard", "most_capable"}
+VALID_ACCESS = {"read-only", "propose", "write"}
+# read-only personas produce analysis artifacts only — never a content page.
+_READONLY_OUTPUT_KINDS = {"stdout", "sibling_suffix", "sibling_file"}
 REQUIRED_FRONTMATTER_KEYS = (
     "name", "description", "capabilities", "tools",
-    "model_hint", "input_kinds", "output_kind",
+    "model_hint", "input_kinds", "output_kind", "access",
 )
 
 
@@ -49,6 +52,16 @@ def _parse_persona_text(text: str) -> dict:
         raise PersonaError(
             f"invalid model_hint: {meta['model_hint']!r} "
             f"(valid: {sorted(VALID_MODEL_HINTS)})"
+        )
+    if meta["access"] not in VALID_ACCESS:
+        raise PersonaError(
+            f"invalid access: {meta['access']!r} "
+            f"(valid: {sorted(VALID_ACCESS)})"
+        )
+    if meta["access"] == "read-only" and meta["output_kind"] not in _READONLY_OUTPUT_KINDS:
+        raise PersonaError(
+            f"access 'read-only' requires output_kind in "
+            f"{sorted(_READONLY_OUTPUT_KINDS)}, got {meta['output_kind']!r}"
         )
     if not isinstance(meta["capabilities"], list):
         raise PersonaError("capabilities must be a list")

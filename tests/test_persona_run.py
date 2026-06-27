@@ -2,6 +2,7 @@ import os
 import pathlib
 import pytest
 from scripts import persona_run
+from scripts import personas
 
 FAKES = str(pathlib.Path(__file__).resolve().parent / "fakes")
 
@@ -100,3 +101,43 @@ def test_cli_persona_run_files_report(tmp_path, monkeypatch):
     rc = omw_cli.main(["persona-run", "fact-checker", "--page", "p.md", "--backend", "codex"])
     assert rc == 0
     assert list(tmp_path.rglob("*.factcheck.md")), "CLI persona-run should file the sibling report"
+
+
+def test_curator_propose_still_stages(tmp_path, monkeypatch):
+    """Regression: curator (access=propose) stages index.md, never overwrites it."""
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"a.md": "# A\n"})
+    from scripts import registry
+    index = registry.get_vault_root(db, vid) / "wiki" / "index.md"
+    index.parent.mkdir(parents=True, exist_ok=True)
+    index.write_text("ORIGINAL INDEX", encoding="utf-8")
+    monkeypatch.setenv("OMW_BACKEND_OVERRIDE_PATH", FAKES)
+    rc = persona_run.run("curator", db_path=db, vault_id=vid,
+                         backend="codex", override_cli_path=FAKES)
+    assert rc == 0
+    assert index.read_text() == "ORIGINAL INDEX"  # never auto-applied
+    assert (index.parent / "index.md.proposed.md").exists()
+
+
+def test_propose_access_generalizes_beyond_curator(tmp_path, monkeypatch):
+    """A non-curator persona with access=propose + inplace stages onto its source page."""
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"p.md": "# P\n\nbody"})
+    from scripts import registry
+    page = registry.get_vault_root(db, vid) / "p.md"
+    synthetic = {
+        "name": "shaper", "description": "x", "capabilities": [], "tools": [],
+        "model_hint": "standard", "input_kinds": ["vault_page"],
+        "output_kind": "inplace", "access": "propose", "body": "You reshape pages.",
+    }
+    monkeypatch.setattr(personas, "load_persona", lambda name: synthetic)
+    monkeypatch.setenv("OMW_BACKEND_OVERRIDE_PATH", FAKES)
+    rc = persona_run.run("shaper", db_path=db, vault_id=vid,
+                         source={"vault_relpath": "p.md"}, backend="codex",
+                         override_cli_path=FAKES)
+    assert rc == 0
+    assert page.read_text() == "# P\n\nbody"  # source untouched
+    assert (page.parent / "p.md.proposed.md").exists()  # staged, not written inplace
+
+
+def test_mutation_roles_symbol_removed():
+    """The hardcoded mutation set is gone — access drives staging now."""
+    assert not hasattr(persona_run, "_MUTATION_ROLES")

@@ -45,6 +45,7 @@ tools: []
 model_hint: standard
 input_kinds: [text]
 output_kind: nonsense
+access: read-only
 ---
 body
 """
@@ -446,3 +447,73 @@ def test_resolve_output_path_new_page_invalid_vault_id_raises_persona_error(tmp_
         pytest.fail("VaultError leaked past PersonaError boundary in resolve_output_path")
     except personas.PersonaError:
         pass  # expected
+
+
+def test_load_persona_validates_access():
+    """A persona with an invalid access raises PersonaError."""
+    bad_text = """---
+name: bad-access
+description: x
+capabilities: []
+tools: []
+model_hint: standard
+input_kinds: [text]
+output_kind: stdout
+access: nonsense
+---
+body
+"""
+    with pytest.raises(personas.PersonaError, match="access"):
+        personas._parse_persona_text(bad_text)
+
+
+def test_load_persona_requires_access_key():
+    """Missing access raises PersonaError (required key)."""
+    no_access = """---
+name: no-access
+description: x
+capabilities: []
+tools: []
+model_hint: standard
+input_kinds: [text]
+output_kind: stdout
+---
+body
+"""
+    with pytest.raises(personas.PersonaError, match="access"):
+        personas._parse_persona_text(no_access)
+
+
+def test_readonly_access_rejects_content_output_kind():
+    """access read-only with a content-targeting output_kind is a definition error."""
+    bad_text = """---
+name: bad-readonly
+description: x
+capabilities: []
+tools: []
+model_hint: standard
+input_kinds: [text]
+output_kind: inplace
+access: read-only
+---
+body
+"""
+    with pytest.raises(personas.PersonaError, match="read-only"):
+        personas._parse_persona_text(bad_text)
+
+
+def test_bundled_personas_declare_valid_access():
+    """Every bundled persona declares a valid access; the known roster matches."""
+    by_name = {p["name"]: p["access"] for p in personas.list_personas()}
+    assert set(by_name) == {
+        "wiki-librarian", "wiki-auditor", "curator", "fact-checker",
+        "consistency-checker", "terminology-manager",
+    }
+    for name, access in by_name.items():
+        assert access in personas.VALID_ACCESS, f"{name} has invalid access {access!r}"
+    assert by_name["curator"] == "propose"
+    assert by_name["consistency-checker"] == "read-only"
+    assert by_name["fact-checker"] == "read-only"
+    assert by_name["terminology-manager"] == "read-only"
+    assert by_name["wiki-auditor"] == "read-only"
+    assert by_name["wiki-librarian"] == "read-only"

@@ -10,6 +10,7 @@ tools: []
 model_hint: standard
 input_kinds: [text, vault_page]
 output_kind: stdout
+access: propose
 triggers:
   [sync the index, fix the index, reorder the index, 색인 정리, 인덱스 동기화]
 ---

@@ -9,6 +9,7 @@ tools: []
 model_hint: standard
 input_kinds: [text, file, vault_page]
 output_kind: stdout
+access: read-only
 triggers: [build a glossary, check terminology, 용어집, 용어 통일]
 ---
 
