@@ -86,6 +86,13 @@ def test_cli_persona_fanout_explicit_pages():
     assert "omw persona-run fact-checker --page a.md" in proc.stdout
 
 
+def test_resolve_quotes_relpaths_with_spaces():
+    out = persona_fanout.resolve(
+        "fact-checker", db_path="db", vault_id=1, pages=["My Notes/Page One.md"])
+    # the emitted command must be safe to paste into a shell
+    assert out["commands"] == ["omw persona-run fact-checker --page 'My Notes/Page One.md'"]
+
+
 def test_cli_persona_fanout_vault_wide_role_errors():
     proc = subprocess.run(
         [_sys.executable, "-m", "scripts.omw_cli", "persona-fanout",

@@ -7,6 +7,8 @@ the emitted commands in parallel (see commands/persona-fanout.md).
 """
 from __future__ import annotations
 
+import shlex
+
 from scripts import personas, persona_run, registry
 
 
@@ -56,6 +58,6 @@ def resolve(role, *, db_path, vault_id, pages=None, tag=None, type=None,
         relpaths = [r["relpath"] for r in rows]
 
     suffix = f" --backend {backend}" if backend else ""
-    commands = [f"omw persona-run {role} --page {rp}{suffix}" for rp in relpaths]
+    commands = [f"omw persona-run {role} --page {shlex.quote(rp)}{suffix}" for rp in relpaths]
     return {"role": role, "backend": backend, "count": len(relpaths),
             "pages": relpaths, "commands": commands}
