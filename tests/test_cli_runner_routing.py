@@ -197,3 +197,47 @@ class TestPersonaRunRouting:
         assert rc == 2
         err = capsys.readouterr().err
         assert "hermes-delegate" in err or "persona-run" in err
+
+
+# ---------------------------------------------------------------------------
+# Regression: explicit --pages with hermes-kanban must resolve vault_id
+# ---------------------------------------------------------------------------
+
+class TestFanoutHermesKanbanExplicitPages:
+    def test_fanout_hermes_kanban_explicit_pages_resolves_vault(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """Regression test: explicit --pages must not pass vault_id=None to hermes-kanban runner."""
+        import json
+        from unittest.mock import patch, MagicMock
+
+        monkeypatch.setenv("HERMES_PROFILE", "test-profile")
+
+        role = "wiki-librarian"
+        ns = _parse(["persona-fanout", role, "--pages", "a.md,b.md",
+                     "--runner", "hermes-kanban"])
+
+        fake_vault = {"id": 7, "name": "v", "path": str(tmp_path)}
+
+        received_vault_ids = []
+
+        def stub_resolve_fanout(r, db_path, vault_id, pages, **kwargs):
+            received_vault_ids.append(vault_id)
+            return {"role": r, "count": len(pages), "cards": ["t-001", "t-002"]}
+
+        mock_runner = MagicMock()
+        mock_runner.resolve_fanout.side_effect = stub_resolve_fanout
+
+        with patch("scripts.omw_cli.registry_path", return_value="/fake/db"):
+            with patch("scripts.omw_cli._require_vault_row", return_value=fake_vault):
+                with patch("scripts.runners.resolve_runner", return_value=mock_runner):
+                    with patch("scripts.runners.hermes_kanban.KanbanError", Exception):
+                        rc = ns.func(ns)
+
+        assert rc == 0, capsys.readouterr().err
+        assert received_vault_ids == [7], (
+            f"Expected vault_id=7, got {received_vault_ids}"
+        )
+        out = capsys.readouterr().out
+        data = json.loads(out)
+        assert data["cards"] == ["t-001", "t-002"]

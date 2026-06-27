@@ -1008,12 +1008,19 @@ def _cmd_persona_fanout(args) -> int:
         print(json.dumps(out, ensure_ascii=False, indent=2))
         return 0
     # hermes-kanban
-    from scripts import runners
+    from scripts import runners, personas, persona_run
     try:
         runner = runners.resolve_runner(runner_name)
     except runners.RunnerUnavailable as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    # For explicit --pages, no vault row was resolved above; resolve it now so
+    # hermes_kanban.build_card_body can call personas.resolve_input with a real vault_id.
+    if vault_id is None:
+        vault = _require_vault_row(db, args.vault)
+        if vault is None:
+            return 1
+        vault_id = vault["id"]
     try:
         from scripts.runners.hermes_kanban import KanbanError
         out = runner.resolve_fanout(
@@ -1033,6 +1040,9 @@ def _cmd_persona_fanout(args) -> int:
         )
         return 2
     except KanbanError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except (personas.PersonaError, persona_run.RunError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     print(json.dumps(out, ensure_ascii=False, indent=2))
