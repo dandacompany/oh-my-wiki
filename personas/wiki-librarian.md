@@ -10,6 +10,14 @@ tools: []
 model_hint: standard
 input_kinds: [text, vault_page]
 output_kind: stdout
+triggers:
+  [
+    tidy the wiki structure,
+    what's orphaned,
+    suggest cross-links,
+    위키 구조 정리,
+    고아 페이지,
+  ]
 ---
 
 # Wiki-librarian persona

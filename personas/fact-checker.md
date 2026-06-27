@@ -9,6 +9,7 @@ model_hint: most_capable
 input_kinds: [text, file, vault_page]
 output_kind: sibling_suffix
 output_suffix: factcheck
+triggers: [fact-check this, verify these claims, 팩트체크, 사실 확인]
 ---
 
 # Fact-checker persona

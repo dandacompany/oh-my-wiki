@@ -73,6 +73,9 @@ def list_personas() -> list[dict]:
         except PersonaError:
             continue
         entry = {k: spec[k] for k in REQUIRED_FRONTMATTER_KEYS}
+        # optional routing keywords (used by persona_export's dispatch table)
+        triggers = spec.get("triggers")
+        entry["triggers"] = list(triggers) if isinstance(triggers, list) else []
         out.append(entry)
     return out
 

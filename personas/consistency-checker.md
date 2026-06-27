@@ -8,6 +8,7 @@ tools: []
 model_hint: standard
 input_kinds: [text, file, vault_page]
 output_kind: stdout
+triggers: [find contradictions, is this consistent, 모순 찾아, 일관성 점검]
 ---
 
 # Consistency-checker persona

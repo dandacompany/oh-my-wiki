@@ -373,6 +373,7 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
     specs = personas.list_personas()
     all_names = [p["name"] for p in specs]
     descriptions = {p["name"]: p.get("description", "") for p in specs}
+    routes = {p["name"]: p.get("triggers", []) for p in specs}
     interactive = (not noninteractive) and sys.stdin.isatty()
     # Load persisted config to use as fallback (preserve on re-run).
     cur_cfg = config.load_config().get("personas") or {}
@@ -464,6 +465,7 @@ def setup_personas(*, enabled: list[str] | None = None, main: str | None = None,
     written = persona_export.export_personas(
         enabled=enabled, main=main, descriptions=descriptions,
         base_dir=base, hosts=resolvable, profile=profile, workspace=workspace,
+        routes={n: routes.get(n, []) for n in enabled},
     )
     from scripts import commandmap
     commandmap.export(base, resolvable, profile=profile, workspace=workspace)

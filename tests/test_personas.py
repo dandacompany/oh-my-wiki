@@ -6,10 +6,10 @@ import pytest
 from scripts import personas
 
 
-def test_list_personas_returns_all_five():
+def test_list_personas_returns_full_roster():
     names = {p["name"] for p in personas.list_personas()}
     assert names == {
-        "wiki-librarian", "curator", "fact-checker",
+        "wiki-librarian", "wiki-auditor", "curator", "fact-checker",
         "consistency-checker", "terminology-manager",
     }
 
@@ -279,7 +279,7 @@ import sys
 import json as _json
 
 
-def test_cli_list_returns_5_personas():
+def test_cli_list_returns_full_roster():
     REPO_ROOT = Path(__file__).resolve().parents[1]
     proc = subprocess.run(
         [sys.executable, "-m", "scripts.personas", "list"],
@@ -289,7 +289,7 @@ def test_cli_list_returns_5_personas():
     data = _json.loads(proc.stdout)
     names = {p["name"] for p in data}
     assert names == {
-        "wiki-librarian", "curator", "fact-checker",
+        "wiki-librarian", "wiki-auditor", "curator", "fact-checker",
         "consistency-checker", "terminology-manager",
     }
 
@@ -390,7 +390,7 @@ def test_curator_persona_loads():
 
 def test_all_kept_personas_present():
     names = {p["name"] for p in personas.list_personas()}
-    assert names == {"wiki-librarian", "curator", "fact-checker",
+    assert names == {"wiki-librarian", "wiki-auditor", "curator", "fact-checker",
                      "consistency-checker", "terminology-manager"}
 
 
