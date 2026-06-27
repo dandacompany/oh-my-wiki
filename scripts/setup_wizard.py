@@ -961,7 +961,7 @@ def configure_recall(*, strategy="fts", provider="none", model="text-embedding-3
         print(warn)
 
 
-def run_all(*, noninteractive: bool = False, base_dir=None) -> int:
+def run_all(*, noninteractive: bool = False, base_dir=None, dry_run: bool = False) -> int:
     """Top-level interactive wizard: walk every section in order with per-step skip.
 
     Returns the first non-zero section result (continuing through the rest), else 0.
@@ -974,11 +974,13 @@ def run_all(*, noninteractive: bool = False, base_dir=None) -> int:
         ("search", lambda: setup_search(noninteractive=noninteractive)),
         ("fetch", lambda: setup_fetch(noninteractive=noninteractive)),
         ("serve", lambda: setup_serve(noninteractive=noninteractive)),
-        ("personas", lambda: setup_personas(noninteractive=noninteractive, base_dir=base_dir)),
+        ("personas", lambda: setup_personas(noninteractive=noninteractive, base_dir=base_dir,
+                                            dry_run=dry_run)),
         ("import", lambda: setup_import(noninteractive=noninteractive)),
         ("viewer", lambda: setup_viewer(noninteractive=noninteractive)),
-        ("agents", lambda: setup_agents(noninteractive=noninteractive)),
-        ("recall", lambda: setup_recall(noninteractive=noninteractive, base_dir=base_dir)),
+        ("agents", lambda: setup_agents(noninteractive=noninteractive, dry_run=dry_run)),
+        ("recall", lambda: setup_recall(noninteractive=noninteractive, base_dir=base_dir,
+                                        dry_run=dry_run)),
     ]
     for name, fn in steps:
         try:
