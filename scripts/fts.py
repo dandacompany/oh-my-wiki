@@ -43,7 +43,7 @@ def _write_analyzer_ver(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE TABLE IF NOT EXISTS fts_meta (analyzer_ver TEXT)")
     conn.execute("DELETE FROM fts_meta")
     conn.execute("INSERT INTO fts_meta(analyzer_ver) VALUES (?)",
-                 (text_normalize.ANALYZER_VERSION,))
+                 (text_normalize.analyzer_version(),))
 
 
 def ensure_fts(conn: sqlite3.Connection) -> bool:
@@ -57,7 +57,7 @@ def ensure_fts(conn: sqlite3.Connection) -> bool:
     if existing:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(notes_fts)")}
         stale_shape = "visibility" not in cols
-        stale_analyzer = _read_analyzer_ver(conn) != text_normalize.ANALYZER_VERSION
+        stale_analyzer = _read_analyzer_ver(conn) != text_normalize.analyzer_version()
         if not stale_shape and not stale_analyzer:
             return False
         conn.execute("DROP TABLE notes_fts")  # FTS5 has no ALTER ADD COLUMN

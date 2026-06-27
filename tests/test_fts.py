@@ -89,7 +89,7 @@ def test_ensure_fts_records_analyzer_version(tmp_path):
     conn.commit()
     ver = conn.execute("SELECT analyzer_ver FROM fts_meta").fetchone()[0]
     conn.close()
-    assert ver == text_normalize.ANALYZER_VERSION
+    assert ver == text_normalize.analyzer_version()
 
 
 def test_ensure_fts_rebuilds_on_version_change(tmp_path, monkeypatch):
@@ -98,15 +98,14 @@ def test_ensure_fts_rebuilds_on_version_change(tmp_path, monkeypatch):
     fts.index_note(conn, vault_id=1, relpath="wiki/a.md", title="t",
                    summary="", tags=[], body="alpha")
     conn.commit()
-    # simulate a normalizer/provider change
-    monkeypatch.setattr(fts.text_normalize, "ANALYZER_VERSION", "heuristic-99")
+    monkeypatch.setattr(fts.text_normalize, "analyzer_version", lambda: "heuristic-99")
     migrated = fts.ensure_fts(conn)
     conn.commit()
     rows = conn.execute("SELECT count(*) FROM notes_fts").fetchone()[0]
     new_ver = conn.execute("SELECT analyzer_ver FROM fts_meta").fetchone()[0]
     conn.close()
-    assert migrated is True          # signals caller to full-reindex
-    assert rows == 0                 # old rows dropped (await repopulation)
+    assert migrated is True
+    assert rows == 0
     assert new_ver == "heuristic-99"
 
 

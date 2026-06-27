@@ -3,8 +3,8 @@
 The FTS index, the token-scorer fallback, and the recall query path all route
 text through `normalize_text` so the index and queries are analyzed identically
 (the IR invariant). Today the only provider is the dependency-free josa-strip
-heuristic; a future `kiwi` provider plugs into `normalize_token` behind an
-optional import and bumps `ANALYZER_VERSION`. Pure stdlib, never raises.
+heuristic; a future `kiwi` provider plugs into `normalize_text` behind an
+optional import and bumps `analyzer_version()`. Pure stdlib, never raises.
 """
 from __future__ import annotations
 
@@ -12,40 +12,57 @@ import re
 
 from scripts.text_match import _JOSA
 
-#: Index-invalidation key. Encodes provider id + logic version: any change to
-#: normalization behavior (or the active provider) MUST bump this so stale
-#: indexes are rebuilt (see fts.ensure_fts).
-ANALYZER_VERSION = "heuristic-1"
-
 _JOSA_LONGEST_FIRST = sorted(_JOSA, key=len, reverse=True)
 _HANGUL_END = re.compile(r"[가-힣]$")
 
 _PROVIDER_CACHE: str | None = None
+_VERSION_CACHE: str | None = None
 
 
 def _provider() -> str:
-    """Resolve the active normalizer provider (cached). The seam: only
-    'heuristic' is implemented today; an unknown/unimplemented value degrades to
-    'heuristic' so behavior always matches ANALYZER_VERSION. Best-effort —
-    never raises."""
+    """Resolve the active normalizer provider (cached) — the provider that will
+    ACTUALLY run, so analyzer_version() always matches. Only 'heuristic' today
+    (the 'kiwi' branch is added in the kiwi-provider task). Never raises."""
     global _PROVIDER_CACHE
     if _PROVIDER_CACHE is None:
         prov = "heuristic"
         try:
             from scripts import config
             want = (config.load_config() or {}).get("recall", {}).get("normalizer")
-            if want == "heuristic":   # extend here when 'kiwi' lands
+            if want == "heuristic":
                 prov = want
+            elif want == "kiwi":
+                from scripts import kiwi_install
+                if kiwi_install.kiwi_available():
+                    prov = "kiwi"
         except Exception:
             prov = "heuristic"
         _PROVIDER_CACHE = prov
     return _PROVIDER_CACHE
 
 
+def analyzer_version() -> str:
+    """Index-invalidation key, DERIVED from the effective provider (cached).
+    heuristic → 'heuristic-1'; kiwi → 'kiwi-<kiwipiepy version>'. Any provider or
+    version change bumps this so the FTS gate auto-rebuilds. Never raises."""
+    global _VERSION_CACHE
+    if _VERSION_CACHE is None:
+        if _provider() == "kiwi":
+            try:
+                from importlib.metadata import version
+                _VERSION_CACHE = f"kiwi-{version('kiwipiepy')}"
+            except Exception:
+                _VERSION_CACHE = "heuristic-1"
+        else:
+            _VERSION_CACHE = "heuristic-1"
+    return _VERSION_CACHE
+
+
 def _reset_provider_cache() -> None:
-    """Test helper: drop the cached provider so config changes take effect."""
-    global _PROVIDER_CACHE
+    """Test helper: drop cached provider + version so config changes take effect."""
+    global _PROVIDER_CACHE, _VERSION_CACHE
     _PROVIDER_CACHE = None
+    _VERSION_CACHE = None
 
 
 def _heuristic_token(tok: str) -> str:
@@ -59,21 +76,55 @@ def _heuristic_token(tok: str) -> str:
     return tok
 
 
-_NORMALIZERS = {"heuristic": _heuristic_token}
+def _heuristic_text(text: str) -> str:
+    """Heuristic text normalizer: split on whitespace, josa-strip each token, rejoin."""
+    return " ".join(_heuristic_token(t) for t in text.split())
 
 
-def normalize_token(tok: str) -> str:
-    """Normalize one whitespace-delimited token under the active provider (the seam).
-    Only 'heuristic' is implemented today; a future 'kiwi' provider adds its entry
-    to _NORMALIZERS. Never raises."""
-    if not tok:
-        return ""
-    return _NORMALIZERS.get(_provider(), _heuristic_token)(tok)
+_KIWI = None  # lazy singleton Kiwi() instance
+#: Sejong content tags to keep. V* (verb/adjective) emit dictionary form (stem+다).
+_KIWI_KEEP = {"NNG", "NNP", "SL", "SN", "MAG", "VV", "VA"}
+_KIWI_VERB = {"VV", "VA"}
+
+
+def _kiwi_text(text: str) -> str:
+    """Kiwi text normalizer: keep content morphemes as lemmas (nouns as-is,
+    verbs/adjectives → dictionary form stem+다), drop josa/endings/symbols.
+    Any kiwipiepy failure falls back to the heuristic for this call (never raises)."""
+    global _KIWI
+    try:
+        if _KIWI is None:
+            from kiwipiepy import Kiwi
+            _KIWI = Kiwi()
+        out = []
+        for tok in _KIWI.tokenize(text):
+            base = tok.tag.split("-")[0]
+            if base in _KIWI_KEEP:
+                out.append(tok.form + "다" if base in _KIWI_VERB else tok.form)
+        return " ".join(out)
+    except Exception:
+        return _heuristic_text(text)
+
+
+#: provider id → text-level normalizer (str) -> str. dispatch falls back to
+#: heuristic for unknown providers.
+_NORMALIZERS = {"heuristic": _heuristic_text, "kiwi": _kiwi_text}
 
 
 def normalize_text(text: str | None) -> str:
-    """Normalize free text for indexing or querying: split on whitespace,
-    normalize each token, rejoin. Idempotent on ASCII. Never raises."""
+    """Normalize free text for indexing or querying under the active provider.
+    Index and query route through the same provider (the IR invariant).
+    Idempotent on ASCII. Never raises."""
     if not text:
         return ""
-    return " ".join(normalize_token(t) for t in text.split())
+    try:
+        return _NORMALIZERS.get(_provider(), _heuristic_text)(text)
+    except Exception:
+        return _heuristic_text(text)
+
+
+def normalize_token(tok: str) -> str:
+    """Normalize one token under the active provider. Never raises."""
+    if not tok:
+        return ""
+    return normalize_text(tok)

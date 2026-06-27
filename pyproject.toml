@@ -29,6 +29,7 @@ dev = [
 wizard = ["questionary>=2.0"]
 embedding = ["sqlite-vec>=0.1", "openai>=1.0"]
 local-embedding = ["fastembed>=0.3", "sqlite-vec>=0.1"]
+korean = ["kiwipiepy>=0.20"]
 ocr = ["pytesseract>=0.3", "Pillow>=10"]
 
 [tool.setuptools.packages.find]
