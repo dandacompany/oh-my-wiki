@@ -325,3 +325,18 @@ def test_incremental_surfaces_embedding_config_failure(tmp_path, monkeypatch, ca
     (root / "wiki" / "a.md").write_text("---\ntitle: A2\ndate: 2026-01-02\ntype: concept\ntags: [x]\n---\nchanged\n", encoding="utf-8")
     reindex.incremental(db, vault_id=vid)                    # must NOT raise
     assert "embedding refresh failed" in capsys.readouterr().err   # surfaced, not silent
+
+
+def test_refresh_embeddings_strict_reraises(monkeypatch, tmp_path):
+    from scripts import reindex
+
+    def boom(*a, **k):
+        raise RuntimeError("embed exploded")
+
+    # reindex does `from scripts import embed` so reindex.embed.get_embedder is the target
+    monkeypatch.setattr(reindex.embed, "get_embedder", boom)
+    # strict=True surfaces the failure
+    with pytest.raises(RuntimeError, match="exploded"):
+        reindex.refresh_embeddings(tmp_path / "db.sqlite", vault_id=1, strict=True)
+    # strict=False (default) swallows → returns 0
+    assert reindex.refresh_embeddings(tmp_path / "db.sqlite", vault_id=1) == 0
