@@ -321,7 +321,10 @@ def test_setup_import_interactive_stores_notion_key(monkeypatch):
 
 
 def test_prompt_password_fallback_uses_getpass(monkeypatch):
-    import builtins, getpass, scripts.setup_wizard as sw
+    import builtins
+    import getpass
+
+    import scripts.setup_wizard as sw
     real_import = builtins.__import__
     def no_questionary(name, *a, **k):
         if name == "questionary":

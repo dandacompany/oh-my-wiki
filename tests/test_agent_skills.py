@@ -63,7 +63,9 @@ def test_copy_bundle_includes_backends_excludes_dev(tmp_path):
 
 
 def test_install_hermes_uses_copy(tmp_path, monkeypatch):
-    repo = tmp_path / "repo"; (repo).mkdir(); (repo / "SKILL.md").write_text("x")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "SKILL.md").write_text("x")
     monkeypatch.setitem(ask._SKILLS_DIR, "hermes", tmp_path / "h" / "skills")
     r = ask.install("hermes", repo_root=repo)
     assert r["ok"] and r["method"] == "copy"
@@ -71,7 +73,9 @@ def test_install_hermes_uses_copy(tmp_path, monkeypatch):
 
 
 def test_install_codex_prefers_skills_cli(tmp_path, monkeypatch):
-    repo = tmp_path / "repo"; repo.mkdir(); (repo / "SKILL.md").write_text("x")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "SKILL.md").write_text("x")
     monkeypatch.setattr(shutil, "which", lambda b: "/bin/skills" if b == "skills" else None)
     seen = {}
     class P:
@@ -87,7 +91,9 @@ def test_install_codex_prefers_skills_cli(tmp_path, monkeypatch):
 
 
 def test_install_codex_falls_back_to_copy_on_failure(tmp_path, monkeypatch):
-    repo = tmp_path / "repo"; repo.mkdir(); (repo / "SKILL.md").write_text("x")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "SKILL.md").write_text("x")
     monkeypatch.setitem(ask._SKILLS_DIR, "codex", tmp_path / "c" / "skills")
     monkeypatch.setattr(shutil, "which", lambda b: "/bin/skills" if b == "skills" else None)
     class P:
@@ -99,7 +105,9 @@ def test_install_codex_falls_back_to_copy_on_failure(tmp_path, monkeypatch):
 
 
 def test_install_many_isolates_failures(tmp_path, monkeypatch):
-    repo = tmp_path / "repo"; repo.mkdir(); (repo / "SKILL.md").write_text("x")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "SKILL.md").write_text("x")
     def fake_install(agent, **k):
         if agent == "codex":
             raise RuntimeError("boom")
@@ -111,7 +119,9 @@ def test_install_many_isolates_failures(tmp_path, monkeypatch):
 
 
 def test_install_many_forwards_use_skills_cli(tmp_path, monkeypatch):
-    repo = tmp_path / "repo"; repo.mkdir(); (repo / "SKILL.md").write_text("x")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "SKILL.md").write_text("x")
     monkeypatch.setitem(ask._SKILLS_DIR, "codex", tmp_path / "c" / "skills")
     monkeypatch.setattr(shutil, "which", lambda b: "/bin/skills" if b == "skills" else None)
     def boom(*a, **k):
