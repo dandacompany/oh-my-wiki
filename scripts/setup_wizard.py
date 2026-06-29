@@ -842,10 +842,16 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                              noninteractive=True)
     if strategy in {"embedding", "hybrid"}:
         if interactive and provider is None:
+            from scripts import embed as _embed
             provider = _prompt("select", "Embedding provider",
-                               choices=["none", "openai", "fake"],
-                               default=cur_emb.get("provider", "none")) or "none"
-            if provider not in ("none", ""):
+                               choices=["fastembed", "openai", "fake", "none"],
+                               default=cur_emb.get("provider", "fastembed")) or "fastembed"
+            if provider == "fastembed":
+                # Local ONNX embedder — model picks the dim, switch_model fills it.
+                model = model or (_prompt("text", "Embedding model (local)",
+                                          default=cur_emb.get("model", _embed.DEFAULT_LOCAL_MODEL))
+                                  or cur_emb.get("model", _embed.DEFAULT_LOCAL_MODEL))
+            elif provider not in ("none", ""):
                 model = model or (_prompt("text", "Embedding model",
                                           default=cur_emb.get("model", "text-embedding-3-small"))
                                   or cur_emb.get("model", "text-embedding-3-small"))
