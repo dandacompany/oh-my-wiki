@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from scripts import backends
+from scripts import host_detect
 from scripts import links as _links
 from scripts import personas
 from scripts import registry
@@ -23,6 +24,22 @@ from scripts import wiki_lint as _wiki_lint
 
 class RunError(Exception):
     pass
+
+
+# Deterministic manual fallback per role — surfaced when no usable backend can
+# run the persona, so the user gets a concrete next step instead of a dead end.
+_FALLBACK_HINT: dict[str, str] = {
+    "wiki-librarian": "omw links suggest / omw connections / omw lint",
+    "wiki-auditor": "omw lint / omw report / omw maint status",
+    "curator": "omw lint / omw connections",
+    "consistency-checker": "omw lint (contradiction_candidates)",
+    "terminology-manager": "omw fields <page> / omw list --type entity",
+    "fact-checker": "omw search <claim> / omw context <claim>",
+}
+
+
+def _fallback_hint(role: str) -> str:
+    return _FALLBACK_HINT.get(role, "omw lint / omw status")
 
 
 # Roles that compute their own deterministic input (lint/drift reports) and need
@@ -157,6 +174,12 @@ def _dispatch(persona_body: str, task_prompt: str, *, backend: str, model: str,
     if cp.returncode != 0:
         raise RunError(f"{backend} dispatch failed (rc={cp.returncode}): "
                        f"{(cp.stderr or '').strip()[:200]}")
+    # rc==0 but no usable output is a *failure*, not a silent success — some
+    # backends (e.g. a fire-and-forget codex exec) can exit 0 having produced
+    # nothing. Catch it here so the caller never files/echoes an empty result.
+    if not (cp.stdout or "").strip():
+        raise RunError(f"{backend} dispatch returned empty output "
+                       f"(rc=0); the backend ran but produced nothing")
     return cp.stdout
 
 
@@ -221,6 +244,16 @@ def run(
         chosen = _pick_backend(
             backends.detect_available(override_path=override_cli_path), backend
         )
+        # If omw is running *inside* a known host but that host's CLI isn't usable
+        # as an external backend, dispatch silently slides to a sibling CLI — the
+        # root cause of "personas look broken in <host>". Surface it loudly.
+        host = host_detect.current_host()
+        if backend is None and host and host != chosen and host in backends.BACKENDS:
+            print(f"warning: running inside the '{host}' host, but its CLI isn't usable "
+                  f"as an external backend (not installed/authed) — falling back to "
+                  f"'{chosen}'. Host-native dispatch is not implemented yet; if the "
+                  f"result looks empty, run deterministically: {_fallback_hint(role)}",
+                  file=sys.stderr)
         model = _resolve_model(persona.get("model_hint", ""), chosen)
         out = _dispatch(
             persona["body"], task,
@@ -228,7 +261,8 @@ def run(
             override_cli_path=override_cli_path,
         )
     except RunError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(f"error: {exc}\n  fallback (run deterministically): {_fallback_hint(role)}",
+              file=sys.stderr)
         return 1
 
     if persona["access"] == "propose":
@@ -266,8 +300,20 @@ def run(
         content=out,
         source_meta=meta,
     )
-    print(json.dumps(
-        {"role": role, "backend": chosen, "filed": str(written) if written else None},
-        ensure_ascii=False,
-    ))
+    if output_kind == "stdout":
+        # A read-only/stdout persona's *result is its stdout* (e.g. wiki-librarian
+        # "proposes on stdout"). Emit the body so it isn't silently dropped, and
+        # keep the machine-readable receipt on stderr — `filed:null` here means
+        # "stdout persona, body printed", no longer ambiguous with "nothing ran"
+        # (empty output already failed loud in _dispatch).
+        sys.stdout.write(out if out.endswith("\n") else out + "\n")
+        print(json.dumps(
+            {"role": role, "backend": chosen, "filed": None, "kind": "stdout"},
+            ensure_ascii=False,
+        ), file=sys.stderr)
+    else:
+        print(json.dumps(
+            {"role": role, "backend": chosen, "filed": str(written) if written else None},
+            ensure_ascii=False,
+        ))
     return 0

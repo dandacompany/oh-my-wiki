@@ -251,3 +251,62 @@ def test_dispatch_no_model_fallback_for_non_codex(monkeypatch):
         persona_run._dispatch("body", "task", backend="claude", model="m",
                               override_cli_path=None)
     assert len(calls) == 1   # non-codex never retries, even on a model-unsupported message
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: empty-output is a loud failure; stdout personas emit their body
+# ---------------------------------------------------------------------------
+
+def test_dispatch_raises_on_empty_rc0_output(monkeypatch):
+    """rc==0 but blank stdout is a failure, not a silent success."""
+    class _CP:
+        returncode = 0
+        stdout = "   \n\t "
+        stderr = ""
+
+    monkeypatch.setattr(persona_run.subprocess, "run", lambda argv, **k: _CP())
+    with pytest.raises(persona_run.RunError, match="empty output"):
+        persona_run._dispatch("body", "task", backend="codex", model="m",
+                              override_cli_path=None)
+
+
+def test_run_stdout_persona_emits_body_to_stdout(tmp_path, monkeypatch, capsys):
+    """A read-only/stdout persona (wiki-librarian) prints its body to stdout
+    instead of dropping it; the machine receipt goes to stderr."""
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"a.md": "# A\n\nbody"})
+    monkeypatch.setenv("OMW_BACKEND_OVERRIDE_PATH", FAKES)
+    rc = persona_run.run("wiki-librarian", db_path=db, vault_id=vid,
+                         backend="codex", override_cli_path=FAKES)
+    assert rc == 0
+    cap = capsys.readouterr()
+    assert cap.out.strip(), "stdout persona must emit its body on stdout"
+    assert '"kind": "stdout"' in cap.err   # receipt on stderr, not stdout
+    assert '"kind"' not in cap.out         # stdout is the body, not the JSON receipt
+
+
+def test_run_warns_when_inside_host_but_slides_to_other_backend(tmp_path, monkeypatch, capsys):
+    """Inside the claude host but only codex is usable → dispatch slides to codex;
+    must warn loudly (the 'personas look broken in <host>' root cause)."""
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"a.md": "# A\n\nbody"})
+    monkeypatch.setattr(persona_run.host_detect, "current_host", lambda: "claude")
+    monkeypatch.setattr(persona_run.backends, "detect_available",
+                        lambda **k: {"codex": {"installed": True, "authed": True}})
+    monkeypatch.setenv("OMW_BACKEND_OVERRIDE_PATH", FAKES)
+    rc = persona_run.run("wiki-librarian", db_path=db, vault_id=vid,
+                         backend=None, override_cli_path=FAKES)
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "running inside the 'claude' host" in err
+    assert "omw links suggest" in err   # role-specific deterministic fallback hint
+
+
+def test_run_failure_includes_fallback_hint(tmp_path, monkeypatch, capsys):
+    """A dispatch failure surfaces the role's deterministic fallback, not a dead end."""
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"a.md": "# A\n\nbody"})
+    monkeypatch.setattr(persona_run, "_dispatch",
+                        lambda *a, **k: (_ for _ in ()).throw(persona_run.RunError("boom")))
+    monkeypatch.setenv("OMW_BACKEND_OVERRIDE_PATH", FAKES)
+    rc = persona_run.run("wiki-librarian", db_path=db, vault_id=vid,
+                         backend="codex", override_cli_path=FAKES)
+    assert rc == 1
+    assert "fallback" in capsys.readouterr().err
