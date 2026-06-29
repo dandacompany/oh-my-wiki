@@ -1,11 +1,20 @@
-"""Host runner — thin passthrough to omw's existing in-session dispatch.
+"""Host runner — the universal default.
 
-This is the universal default: every non-Hermes platform uses its own
-subagent system through the host AI agent, which calls these directly.
+Two modes, chosen automatically:
+  - **host-native** (preferred): when omw is running *inside* a known host agent
+    (Claude Code / Codex / Gemini / OpenCode / Hermes) and no explicit `--backend`
+    was given, emit a procedure card telling the calling host to run the persona
+    as its OWN subagent — no external CLI spawn. This is the fix for "personas
+    look broken in <host>": the host's own Task/Agent tool does the work.
+  - **external dispatch**: when no host is detected, or the user pinned a
+    `--backend`, fall back to omw's one-shot external-CLI dispatch (prior
+    behavior).
 """
 from __future__ import annotations
 
-from scripts import persona_bundle, persona_fanout, persona_run
+import sys
+
+from scripts import host_detect, persona_bundle, persona_fanout, persona_run
 
 
 class HostRunner:
@@ -13,6 +22,22 @@ class HostRunner:
 
     def run_one(self, role, *, db_path, vault_id, source, backend=None,
                 apply=False, override_cli_path=None) -> int:
+        # Host-native: inside a known host, with no pinned backend and not an
+        # --apply call, hand the task to the host's own subagent via a card.
+        if backend is None and not apply:
+            host = host_detect.current_host()
+            if host:
+                try:
+                    card = persona_run.build_host_card(
+                        role, host=host, db_path=db_path, vault_id=vault_id,
+                        source=source,
+                    )
+                except persona_run.RunError as exc:
+                    print(f"error: {exc}\n  fallback (run deterministically): "
+                          f"{persona_run._fallback_hint(role)}", file=sys.stderr)
+                    return 1
+                print(card)
+                return 0
         return persona_run.run(
             role, db_path=db_path, vault_id=vault_id, source=source,
             backend=backend, apply=apply, override_cli_path=override_cli_path,

@@ -897,8 +897,10 @@ def _cmd_persona_run(args) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     if runner.name == "host":
-        return persona_run.run(args.role, db_path=db, vault_id=vault["id"],
-                               source=source, backend=args.backend)
+        # Go through run_one (not persona_run.run directly) so host-native
+        # dispatch can emit a procedure card when omw runs inside a known host.
+        return runner.run_one(args.role, db_path=db, vault_id=vault["id"],
+                              source=source, backend=args.backend)
     # hermes-kanban
     try:
         from scripts.runners.hermes_kanban import KanbanError

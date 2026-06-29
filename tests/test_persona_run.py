@@ -310,3 +310,37 @@ def test_run_failure_includes_fallback_hint(tmp_path, monkeypatch, capsys):
                          backend="codex", override_cli_path=FAKES)
     assert rc == 1
     assert "fallback" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: host-native procedure card
+# ---------------------------------------------------------------------------
+
+def test_build_host_card_contains_spec_task_and_filing(tmp_path, monkeypatch):
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"a.md": "# A\n\nbody"})
+    card = persona_run.build_host_card("wiki-librarian", host="claude",
+                                       db_path=db, vault_id=vid)
+    assert 'host="claude"' in card and 'role="wiki-librarian"' in card
+    assert "Persona spec" in card and "Deterministic input" in card
+    assert "read-only" in card                # filing rule for a stdout persona
+    assert "omw links suggest" in card        # deterministic fallback hint
+
+
+def test_build_host_card_propose_persona_says_stage(tmp_path, monkeypatch):
+    """A propose persona's card must instruct staging, not direct writes."""
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"a.md": "# A\n"})
+    card = persona_run.build_host_card("curator", host="claude",
+                                       db_path=db, vault_id=vid)
+    assert "propose" in card and "--apply" in card
+
+
+def test_cli_persona_run_emits_host_card_inside_host(tmp_path, monkeypatch, capsys):
+    """Acceptance: inside a host, `omw persona-run <role>` (no --backend) returns a
+    host-native procedure card instead of silently resolving to an external CLI."""
+    db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"a.md": "# A\n\nbody"})
+    monkeypatch.setattr("scripts.host_detect.current_host", lambda: "claude")
+    from scripts import omw_cli
+    rc = omw_cli.main(["persona-run", "wiki-librarian"])   # no --backend
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "omw-persona-card" in out and 'role="wiki-librarian"' in out

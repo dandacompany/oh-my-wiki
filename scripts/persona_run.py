@@ -54,6 +54,56 @@ def needs_source(role: str) -> bool:
     return role not in _SELF_GATHERING_ROLES
 
 
+def _filing_instructions(persona: dict, role: str) -> str:
+    """How the host agent should handle the subagent's output, per the persona's
+    access/output contract."""
+    access = persona.get("access", "write")
+    output_kind = persona.get("output_kind", "stdout")
+    if access == "propose":
+        return (f"This persona has access=**propose** — do NOT write its output into "
+                f"any vault page directly. Stage it as a `.proposed.md` next to the "
+                f"target, show the user the diff, and only on their confirmation run "
+                f"`omw persona-run {role} --apply <proposal>`.")
+    if output_kind == "stdout":
+        return ("This persona is **read-only / stdout** — present the subagent's "
+                "output to the user as the answer; do not write any vault files.")
+    return (f"output_kind=**{output_kind}** — file the subagent's output per the "
+            f"persona's contract (sibling report / in-place as configured), never "
+            f"overwriting a page silently.")
+
+
+def build_host_card(role: str, *, host: str, db_path, vault_id, source=None) -> str:
+    """Host-native dispatch procedure card.
+
+    When omw runs *inside* a known host agent, instead of shelling out to an
+    external CLI it returns this card telling the calling host to run the persona
+    as its OWN subagent (its Task/Agent tool) with the persona body as the system
+    prompt and the deterministic `_gather_inputs` payload as the task. The caller
+    prints it; the host reads + executes it. Mirrors the hermes-kanban runner's
+    card pattern, generalized to any host."""
+    persona = personas.load_persona(role)
+    task, _meta = _gather_inputs(role, db_path=db_path, vault_id=vault_id, source=source)
+    access = persona.get("access", "write")
+    output_kind = persona.get("output_kind", "stdout")
+    return (
+        f'<omw-persona-card host="{host}" role="{role}" '
+        f'access="{access}" output="{output_kind}">\n\n'
+        f"# Host-native persona dispatch — {role}\n\n"
+        f"omw detected it is running **inside the `{host}` host**, so it is handing "
+        f"this persona to *your own* subagent mechanism (e.g. your Task/Agent tool) "
+        f"rather than shelling out to a sibling agent CLI.\n\n"
+        f"**Do this now:** spawn one subagent with the *Persona spec* below as its "
+        f"system prompt and the *Deterministic input* as its task, then handle its "
+        f"result per *Filing*.\n\n"
+        f"## Persona spec (system prompt)\n\n{persona['body']}\n\n"
+        f"---\n\n## Deterministic input (task)\n\n{task}\n\n"
+        f"---\n\n## Filing\n\n{_filing_instructions(persona, role)}\n\n"
+        f"## If you cannot dispatch a subagent\n\n"
+        f"Run the deterministic fallback instead: {_fallback_hint(role)}\n"
+        f"</omw-persona-card>\n"
+    )
+
+
 def _override_path() -> str | None:
     return os.environ.get("OMW_BACKEND_OVERRIDE_PATH") or None
 

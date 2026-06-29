@@ -49,3 +49,55 @@ def test_host_runner_run_one_delegates(monkeypatch):
     assert rc == 0
     assert calls["role"] == "fact-checker"
     assert calls["backend"] == "codex"
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: host-native dispatch — emit a procedure card instead of external spawn
+# ---------------------------------------------------------------------------
+
+def test_host_runner_emits_card_when_inside_host(monkeypatch, capsys):
+    """No --backend + a detected host → emit a card; NO external dispatch."""
+    monkeypatch.setattr("scripts.host_detect.current_host", lambda: "claude")
+    monkeypatch.setattr("scripts.persona_run.build_host_card",
+                        lambda role, **kw: "<omw-persona-card>CARD</omw-persona-card>")
+    ran = {"external": False}
+    monkeypatch.setattr("scripts.persona_run.run",
+                        lambda *a, **k: ran.update(external=True) or 0)
+    rc = runners.resolve_runner("host").run_one(
+        "wiki-librarian", db_path="db", vault_id=1, source=None, backend=None)
+    assert rc == 0
+    assert "omw-persona-card" in capsys.readouterr().out
+    assert ran["external"] is False   # host-native, no sibling-CLI spawn
+
+
+def test_host_runner_external_when_backend_pinned(monkeypatch):
+    """An explicit --backend keeps the external path even inside a host."""
+    monkeypatch.setattr("scripts.host_detect.current_host", lambda: "claude")
+    ran = {"external": False}
+    monkeypatch.setattr("scripts.persona_run.run",
+                        lambda *a, **k: ran.update(external=True) or 0)
+    rc = runners.resolve_runner("host").run_one(
+        "fact-checker", db_path="db", vault_id=1, source=None, backend="codex")
+    assert rc == 0 and ran["external"] is True
+
+
+def test_host_runner_external_when_no_host(monkeypatch):
+    """No host detected → fall back to external dispatch."""
+    monkeypatch.setattr("scripts.host_detect.current_host", lambda: None)
+    ran = {"external": False}
+    monkeypatch.setattr("scripts.persona_run.run",
+                        lambda *a, **k: ran.update(external=True) or 0)
+    runners.resolve_runner("host").run_one(
+        "fact-checker", db_path="db", vault_id=1, source=None, backend=None)
+    assert ran["external"] is True
+
+
+def test_host_runner_apply_skips_card(monkeypatch):
+    """--apply is a filing op, not a dispatch — never a host-native card."""
+    monkeypatch.setattr("scripts.host_detect.current_host", lambda: "claude")
+    ran = {"external": False}
+    monkeypatch.setattr("scripts.persona_run.run",
+                        lambda *a, **k: ran.update(external=True) or 0)
+    runners.resolve_runner("host").run_one(
+        "curator", db_path="db", vault_id=1, source=None, backend=None, apply=True)
+    assert ran["external"] is True

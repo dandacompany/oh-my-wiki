@@ -139,6 +139,9 @@ class TestPersonaRunRouting:
     def test_host_default_calls_persona_run(self, monkeypatch):
         monkeypatch.delenv("HERMES_SESSION_ID", raising=False)
         monkeypatch.delenv("HERMES_PROFILE", raising=False)
+        # No detected host → external dispatch path (delegates to persona_run.run).
+        # (Host-native card path is covered in test_runners_seam.py.)
+        monkeypatch.setattr("scripts.host_detect.current_host", lambda: None)
         from unittest.mock import patch, MagicMock
         mock_run = MagicMock(return_value=0)
         with patch("scripts.omw_cli.registry_path", return_value="/fake/db"):
