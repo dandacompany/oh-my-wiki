@@ -22,6 +22,31 @@ def test_copy_bundle_includes_skill_md_excludes_tests(tmp_path):
     assert not (out / "tests").exists()
 
 
+def test_copy_bundle_replaces_dangling_symlink(tmp_path):
+    """A stale symlink left by a prior install (target moved away) must not abort
+    the copy with FileExistsError — it should be cleared and replaced."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "SKILL.md").write_text("---\nname: oh-my-wiki\n---\n")
+    skills = tmp_path / "skills"
+    skills.mkdir()
+    # Dangling symlink at <skills>/oh-my-wiki pointing at a now-missing target.
+    (skills / "oh-my-wiki").symlink_to(tmp_path / "gone")
+    out = ask._copy_bundle(skills, repo_root=repo)
+    assert not out.is_symlink()
+    assert (out / "SKILL.md").is_file()
+
+
+def test_install_alias_replaces_dangling_symlink(tmp_path):
+    """The short-alias install must survive a stale symlink at <skills>/omw."""
+    skills = tmp_path / "skills"
+    skills.mkdir()
+    (skills / "omw").symlink_to(tmp_path / "gone")  # dangling
+    dest = ask.install_alias_into_dir(skills)
+    assert not dest.is_symlink()
+    assert (dest / "SKILL.md").is_file()
+
+
 def test_copy_bundle_includes_backends_excludes_dev(tmp_path):
     repo = tmp_path / "repo"
     (repo / "backends").mkdir(parents=True)

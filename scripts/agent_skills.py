@@ -49,6 +49,7 @@ def install_alias_into_dir(skills_dir, *, name: str = _ALIAS_NAME) -> Path:
     """Write the short-alias skill to <skills_dir>/<name>/SKILL.md. Idempotent
     (overwrites in place). Returns the alias skill dir."""
     dest = Path(skills_dir) / name
+    _clear_stale(dest)
     dest.mkdir(parents=True, exist_ok=True)
     (dest / "SKILL.md").write_text(_ALIAS_SKILL_MD, encoding="utf-8")
     return dest
@@ -80,12 +81,26 @@ _EXCLUDE = {
 }
 
 
+def _clear_stale(dest: Path) -> None:
+    """Remove whatever sits at `dest` so a fresh mkdir/copy can take its place.
+
+    A symlink (even a *dangling* one left by an earlier install whose target
+    moved) makes `mkdir(exist_ok=True)` raise FileExistsError because it is not a
+    real directory — `is_symlink()` is True even when the target is gone, so unlink
+    it. A regular file is likewise removed; a real directory is rmtree'd."""
+    if dest.is_symlink():
+        dest.unlink()
+    elif dest.is_dir():
+        shutil.rmtree(dest)
+    elif dest.exists():
+        dest.unlink()
+
+
 def _copy_bundle(dest_skills_dir, *, repo_root=REPO_ROOT) -> Path:
     """Copy the OMW skill (all repo entries except dev/VCS cruft) into
     <dest_skills_dir>/oh-my-wiki/. Idempotent (rmtree then copy)."""
     dest = Path(dest_skills_dir) / "oh-my-wiki"
-    if dest.exists():
-        shutil.rmtree(dest)
+    _clear_stale(dest)
     dest.mkdir(parents=True, exist_ok=True)
     ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info")
     for src in sorted(Path(repo_root).iterdir()):
