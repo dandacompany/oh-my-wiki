@@ -334,11 +334,21 @@ def _setup_provider_section(*, section: str, label: str, allowed: list[str],
     all_present = True
     for field, env_var in _PROVIDER_SECRETS[provider]:
         val = supplied.get(field)
+        # Same provider already configured (e.g. search) stored this secret under the
+        # shared env var — reuse it instead of asking for the same key twice. An
+        # explicit --api-key/--zone (val already set) still overrides; switching
+        # providers changes env_var so `existing` is None and we prompt afresh.
+        existing = config.read_secret(env_var)
         # brightdata's zone is resolved via the Account Management API, not a plain prompt.
         if provider == "brightdata" and field == "zone":
             key = supplied.get("api_key")
-            val = _resolve_brightdata_zone(key, zone=val, interactive=interactive,
-                                           create_zone=create_zone) if key else None
+            if not val and existing:
+                val = existing  # zone already resolved for this api_key — don't re-resolve
+            else:
+                val = _resolve_brightdata_zone(key, zone=val, interactive=interactive,
+                                               create_zone=create_zone) if key else None
+        elif not val and existing:
+            val = existing  # shared secret already on disk — skip the prompt
         elif interactive and not val:
             val = _prompt("password", f"{field} (blank to defer)") or None
         if val:

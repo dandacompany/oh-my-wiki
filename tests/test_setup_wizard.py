@@ -84,6 +84,69 @@ def test_setup_search_brightdata_autodetects_zone_from_key(monkeypatch):
     assert config.read_secret("BRIGHTDATA_ZONE") == "auto_serp"
 
 
+def test_setup_fetch_reuses_same_provider_key_from_search(monkeypatch):
+    """fetch on the same provider as search must reuse the stored key, not re-prompt."""
+    from scripts import config, setup_wizard
+    from scripts.search.providers import brightdata
+    monkeypatch.delenv("BRIGHTDATA_API_KEY", raising=False)
+    monkeypatch.delenv("BRIGHTDATA_ZONE", raising=False)
+    monkeypatch.setattr(brightdata, "list_zones",
+                        lambda key: [{"name": "auto_serp", "type": "serp"}])
+    # 1) search stores the shared brightdata secret + zone.
+    setup_wizard.setup_search(noninteractive=True, provider="brightdata", api_key="K")
+    assert config.read_secret("BRIGHTDATA_API_KEY") == "K"
+    assert config.read_secret("BRIGHTDATA_ZONE") == "auto_serp"
+
+    # 2) fetch on brightdata, interactively — must NOT prompt for a key already on disk,
+    #    and must NOT re-resolve the zone (list_zones would assert if consulted).
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(brightdata, "list_zones",
+                        lambda key: (_ for _ in ()).throw(AssertionError("should not re-resolve zone")))
+
+    class _FakeSelect:
+        def ask(self):
+            return "brightdata"
+
+    fake_q = type("Q", (), {"select": staticmethod(lambda *a, **k: _FakeSelect())})
+    monkeypatch.setitem(sys.modules, "questionary", fake_q)
+    monkeypatch.setattr(setup_wizard, "_prompt",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError(f"should not prompt: {a}")))
+
+    rc = setup_wizard.setup_fetch()  # interactive (noninteractive=False)
+    assert rc == 0
+    cfg = config.load_config()
+    assert cfg["fetch"]["provider"] == "brightdata" and cfg["fetch"]["enabled"] is True
+    assert config.read_secret("BRIGHTDATA_API_KEY") == "K"
+
+
+def test_setup_fetch_prompts_when_switching_provider(monkeypatch):
+    """Switching to a provider with no stored secret still prompts for its key."""
+    from scripts import config, setup_wizard
+    monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
+    # search on brightdata; fetch on firecrawl (different env var → no reuse).
+    from scripts.search.providers import brightdata
+    monkeypatch.setattr(brightdata, "list_zones",
+                        lambda key: [{"name": "auto_serp", "type": "serp"}])
+    setup_wizard.setup_search(noninteractive=True, provider="brightdata", api_key="K")
+
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+    class _FakeSelect:
+        def ask(self):
+            return "firecrawl"
+
+    fake_q = type("Q", (), {"select": staticmethod(lambda *a, **k: _FakeSelect())})
+    monkeypatch.setitem(sys.modules, "questionary", fake_q)
+    prompted = []
+    monkeypatch.setattr(setup_wizard, "_prompt",
+                        lambda kind, msg, **k: prompted.append(msg) or "FC")
+
+    rc = setup_wizard.setup_fetch()
+    assert rc == 0
+    assert prompted, "expected a prompt for the new provider's api_key"
+    assert config.read_secret("FIRECRAWL_API_KEY") == "FC"
+
+
 def test_vault_setup_preserves_search_config(monkeypatch):
     from scripts import config, omw_cli
     omw_cli.main(["setup", "search", "--noninteractive", "--provider", "brave", "--api-key", "k"])
