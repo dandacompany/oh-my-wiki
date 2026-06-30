@@ -933,17 +933,16 @@ invoke it explicitly.
 
 ### Q. How does autoresearch work?
 
-`autoresearch <your question>` runs up to 3 rounds (configurable; hard cap 5)
-of:
+`autoresearch <your question>` runs up to 3 rounds (configurable; hard cap 5):
+decompose into claims, search with `omw search` (Bright Data MCP is an optional
+fallback), fetch useful sources into `raw/` with `omw fetch`, record confidence
+and gaps, then **ask whether to leave the result in raw or synthesize it** into
+`wiki/syntheses/<slug>.md`.
 
-1. Decompose the question into claims.
-2. Search the web via Bright Data MCP per claim.
-3. Tag each claim with high / medium / low confidence based on source quality.
-4. Identify gaps and run another round if any remain.
-
-When there are no remaining gaps (or the round budget is hit), the skill drafts
-a synthesis and asks before filing it to `wiki/syntheses/<slug>.md`. The full
-session — claims, sources, gaps per round — is preserved under
+Use `--no-synthesis` when you only want to fill the raw layer for later
+graph/connection work — it stops after collecting sources and never drafts or
+files a synthesis. Either way the full session — claims, normalized sources
+(each with its `raw_relpath`), gaps per round — is preserved under
 `<vault>/.oh-my-wiki/sessions/<ts>-<slug>/` for audit and replay.
 
 ### Q. How do I roll back a vault import?

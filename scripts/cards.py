@@ -24,6 +24,9 @@ def _bound_lines(spec: OpSpec, bound: dict) -> list[str]:
 def render_card(spec: OpSpec, bound: dict) -> str:
     out = [f"→ procedure: {spec.name}  (needs omw skill)"]
     out += _bound_lines(spec, bound)
+    if spec.name == "autoresearch" and bound.get("no_synthesis") is True:
+        out.append("  mode: collect raw only")
+        out.append("  guard: do not call file-back; stop after recording fetched raw sources")
     if spec.uses:
         out.append(f"  uses: {' → '.join(spec.uses)}")
     out.append(f"  steps: {spec.procedure_file}")

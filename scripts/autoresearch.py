@@ -75,6 +75,61 @@ def init_session(
     }
 
 
+VALID_CONFIDENCE = {"high", "medium", "low"}
+SOURCE_FIELDS = ("label", "url", "title", "raw_relpath")
+
+
+def _normalize_source(source) -> dict:
+    """A source is either a legacy string (→ {label}) or an object carrying any of
+    label/url/title/raw_relpath. Keeps round JSON backward-compatible."""
+    if isinstance(source, str):
+        return {"label": source, "url": None, "title": None, "raw_relpath": None}
+    if not isinstance(source, dict):
+        raise ValueError("source must be a string or object")
+    out = {k: source.get(k) for k in SOURCE_FIELDS}
+    if not any(out.values()):
+        raise ValueError(
+            "source object must include at least one of label/url/title/raw_relpath")
+    return out
+
+
+def normalize_claims(claims: list[dict]) -> list[dict]:
+    """Validate + normalize round claims: confidence ∈ {high,medium,low}, claim text
+    required, sources normalized to the {label,url,title,raw_relpath} shape."""
+    normalized = []
+    for claim in claims:
+        if not isinstance(claim, dict):
+            raise ValueError("claim must be an object")
+        text = claim.get("claim")
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("claim text is required")
+        confidence = claim.get("confidence")
+        if confidence not in VALID_CONFIDENCE:
+            raise ValueError("confidence must be one of high, medium, low")
+        sources = claim.get("sources", [])
+        if not isinstance(sources, list):
+            raise ValueError("sources must be a list")
+        normalized.append({
+            "claim": text,
+            "confidence": confidence,
+            "sources": [_normalize_source(s) for s in sources],
+        })
+    return normalized
+
+
+def raw_relpaths(session_dir: Path) -> list[str]:
+    """Distinct raw/ files collected across all rounds (sorted) — what a
+    --no-synthesis run actually filed into the vault."""
+    found = set()
+    for path in sorted(Path(session_dir).glob("round-*.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for claim in data.get("claims", []):
+            for source in claim.get("sources", []):
+                if isinstance(source, dict) and source.get("raw_relpath"):
+                    found.add(source["raw_relpath"])
+    return sorted(found)
+
+
 def record_round(
     session_dir: Path,
     *,
@@ -96,7 +151,7 @@ def record_round(
         )
     payload = {
         "round_num": round_num,
-        "claims": list(claims),
+        "claims": normalize_claims(claims),
         "gaps_remaining": list(gaps_remaining),
         "notes": notes,
         "recorded_at": datetime.now().isoformat(timespec="seconds"),
@@ -212,6 +267,7 @@ def session_status(session_dir: Path) -> dict:
         "max_rounds": mission["max_rounds"],
         "last_gaps": last_gaps,
         "filed": filed,
+        "raw_relpaths": raw_relpaths(session_dir),
     }
 
 

@@ -28,3 +28,12 @@ def test_missing_optional_positional_still_cards(capsys):
     rc, out = _run(["persona-consistency"], capsys)
     assert rc == 0
     assert "procedure: persona-consistency" in out
+
+
+def test_autoresearch_no_synthesis_card_names_collect_only_mode(capsys):
+    rc, out = _run(["autoresearch", "국내 중년 남성 패션", "--no-synthesis"], capsys)
+    assert rc == 0
+    assert "procedure: autoresearch" in out
+    assert "no-synthesis: True" in out
+    assert "mode: collect raw only" in out
+    assert "do not call file-back" in out

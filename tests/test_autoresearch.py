@@ -411,3 +411,79 @@ def test_full_autoresearch_loop_3_rounds_then_file_back(wiki_vault):
     }
     actual_files = {p.name for p in session_dir.iterdir()}
     assert expected_files.issubset(actual_files)
+
+
+# ---------------------------------------------------------------------------
+# Contract realignment: claim/source validation + raw-relpath status
+# ---------------------------------------------------------------------------
+
+def test_record_round_rejects_invalid_confidence(wiki_vault):
+    db, vault, root = wiki_vault
+    info = autoresearch.init_session(db, vault_id=vault["id"], query="q")
+    with pytest.raises(ValueError, match="confidence"):
+        autoresearch.record_round(
+            Path(info["session_dir"]),
+            round_num=1,
+            claims=[{"claim": "x", "confidence": "certain", "sources": []}],
+            gaps_remaining=[],
+        )
+
+
+def test_record_round_normalizes_legacy_and_raw_sources(wiki_vault):
+    db, vault, root = wiki_vault
+    info = autoresearch.init_session(db, vault_id=vault["id"], query="q")
+    session_dir = Path(info["session_dir"])
+    autoresearch.record_round(
+        session_dir,
+        round_num=1,
+        claims=[{
+            "claim": "x",
+            "confidence": "high",
+            "sources": [
+                "https://example.com/a",
+                {"url": "https://example.com/b", "title": "B", "raw_relpath": "raw/2026-06-29-b.md"},
+            ],
+        }],
+        gaps_remaining=[],
+    )
+    import json
+    data = json.loads((session_dir / "round-1.json").read_text(encoding="utf-8"))
+    sources = data["claims"][0]["sources"]
+    assert sources[0] == {
+        "label": "https://example.com/a",
+        "url": None,
+        "title": None,
+        "raw_relpath": None,
+    }
+    assert sources[1]["url"] == "https://example.com/b"
+    assert sources[1]["raw_relpath"] == "raw/2026-06-29-b.md"
+
+
+def test_session_status_reports_raw_relpaths(wiki_vault):
+    db, vault, root = wiki_vault
+    info = autoresearch.init_session(db, vault_id=vault["id"], query="q")
+    session_dir = Path(info["session_dir"])
+    autoresearch.record_round(
+        session_dir,
+        round_num=1,
+        claims=[{
+            "claim": "x",
+            "confidence": "high",
+            "sources": [
+                {"url": "https://example.com/a", "raw_relpath": "raw/a.md"},
+                {"url": "https://example.com/b", "raw_relpath": "raw/b.md"},
+            ],
+        }],
+        gaps_remaining=["more"],
+    )
+    autoresearch.record_round(
+        session_dir,
+        round_num=2,
+        claims=[{
+            "claim": "y",
+            "confidence": "medium",
+            "sources": [{"url": "https://example.com/a", "raw_relpath": "raw/a.md"}],
+        }],
+        gaps_remaining=[],
+    )
+    assert autoresearch.session_status(session_dir)["raw_relpaths"] == ["raw/a.md", "raw/b.md"]

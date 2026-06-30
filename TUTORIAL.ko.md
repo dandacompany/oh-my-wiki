@@ -897,17 +897,15 @@ export OMW_HOME=~/personal/.omw   omw vault create journal --mode wiki
 
 ### Q. autoresearch는 어떻게 작동하나요?
 
-`autoresearch <질문>`은 최대 3라운드(설정 가능; 하드 상한 5)를 실행합니다:
+`autoresearch <질문>`은 최대 3라운드(설정 가능; 하드 상한 5)를 실행합니다: 질문을 주장
+단위로 분해하고, `omw search`로 검색(Bright Data MCP는 선택적 폴백)한 뒤, 유용한 출처를
+`omw fetch`로 `raw/`에 모으고, confidence와 공백을 기록한 다음 **결과를 raw에 둘지
+synthesis로 만들지** 묻습니다(`wiki/syntheses/<slug>.md`).
 
-1. 질문을 주장 단위로 분해.
-2. 주장별로 Bright Data MCP를 통해 웹 검색.
-3. 출처 품질에 따라 high / medium / low confidence 태그 부여.
-4. 남은 공백을 식별하고 공백이 있으면 다음 라운드 실행.
-
-남은 공백이 없거나 라운드 예산이 소진되면 스킬이 synthesis 초안을 작성하고 저장 전에
-확인을 요청합니다. `wiki/syntheses/<slug>.md`에 저장됩니다. 전체 세션 — 라운드별
-주장, 출처, 공백 — 은 감사 및 재실행을 위해 `<vault>/.oh-my-wiki/sessions/<ts>-<slug>/`
-아래에 보존됩니다.
+`--no-synthesis`를 붙이면 자료를 `raw/`에 모으는 데서 멈춥니다. 종합 페이지는 만들지
+않습니다. 그래프와 연결점을 본 뒤 나중에 synthesis를 만들고 싶을 때 이 모드를 씁니다.
+어느 쪽이든 전체 세션 — 라운드별 주장, 정규화된 출처(각 `raw_relpath` 포함), 공백 — 은
+감사 및 재실행을 위해 `<vault>/.oh-my-wiki/sessions/<ts>-<slug>/` 아래에 보존됩니다.
 
 ### Q. vault import를 되돌리려면 어떻게 하나요?
 
