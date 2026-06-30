@@ -647,11 +647,17 @@ def _cmd_reindex(args) -> int:
     vault = _require_vault_row(db, args.vault)
     if vault is None:
         return 1
-    mode = "full" if args.full else "incremental"
-    fn = reindex.full if args.full else reindex.incremental
-    indexed = fn(db, vault_id=vault["id"])
-    print(json.dumps({"vault": vault["name"], "mode": mode, "indexed": indexed},
-                     ensure_ascii=False))
+    if args.full:
+        res = reindex.full(db, vault_id=vault["id"])
+        out = {"vault": vault["name"], "mode": "full", "indexed": res["indexed"],
+               "pruned": res["pruned"]}
+        if res["pruned"]:
+            print(f"pruned {len(res['pruned'])} orphan row(s) (file deleted on disk): "
+                  + ", ".join(res["pruned"]), file=sys.stderr)
+    else:
+        out = {"vault": vault["name"], "mode": "incremental",
+               "indexed": reindex.incremental(db, vault_id=vault["id"])}
+    print(json.dumps(out, ensure_ascii=False))
     return 0
 
 

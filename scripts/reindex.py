@@ -9,10 +9,14 @@ from pathlib import Path
 from scripts import embed, frontmatter, fts, links, registry, schema, vector_index
 
 
-def full(db_path: Path, *, vault_id: int) -> int:
-    """Rescan everything. Returns number of notes indexed."""
+def full(db_path: Path, *, vault_id: int) -> dict:
+    """Rescan everything; disk is authoritative. Prunes registry rows whose file
+    was deleted on disk. Returns {"indexed": N, "pruned": [relpaths], ...}.
+
+    (Was previously an int of indexed count; callers that only need the count
+    read ["indexed"].)"""
     vault_path = registry.get_vault_root(db_path, vault_id)
-    return _scan(db_path, vault_id, vault_path, incremental=False)["indexed"]
+    return _scan(db_path, vault_id, vault_path, incremental=False)
 
 
 def incremental(db_path: Path, *, vault_id: int) -> int:
@@ -111,6 +115,7 @@ def _scan(
     schema_issues: list[dict] = []
     changed: list[str] = []
     fts_errors: list[str] = []
+    seen: set[str] = set()
     count = 0
     fts_conn = None
     if fts.fts5_available():
@@ -128,6 +133,7 @@ def _scan(
         if path.name.endswith(".proposed.md"):
             continue
         rel = str(path.relative_to(vault_path)).replace("\\", "/")
+        seen.add(rel)  # every on-disk .md (even mtime-skipped) — basis for prune
         mtime = path.stat().st_mtime
         if incremental and rel in known and known[rel] >= mtime:
             continue
@@ -186,8 +192,21 @@ def _scan(
     if fts_conn is not None:
         fts_conn.commit()
         fts_conn.close()
+    # On a FULL rescan, disk is authoritative: drop registry rows whose file no
+    # longer exists (orphans from a hand-deleted raw/page). FTS was already
+    # cleared+repopulated above, so notes is the only place orphans linger. An
+    # incremental scan only sees changed files, so its `seen` is partial — never
+    # prune there. Files are never touched; this is index-integrity repair, not a
+    # page mutation.
+    pruned: list[str] = []
+    if not incremental:
+        for row in registry.list_notes(db_path, vault_id=vault_id):
+            if row["relpath"] not in seen:
+                registry.delete_note(db_path, vault_id=vault_id, relpath=row["relpath"])
+                pruned.append(row["relpath"])
     links.resolve(db_path, vault_id)
-    return {"indexed": count, "schema_issues": schema_issues, "changed": changed, "fts_errors": fts_errors}
+    return {"indexed": count, "schema_issues": schema_issues, "changed": changed,
+            "fts_errors": fts_errors, "pruned": pruned}
 
 
 def main(argv: list[str] | None = None) -> int:

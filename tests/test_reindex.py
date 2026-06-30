@@ -18,7 +18,7 @@ def registered_markdown(tmp_db, markdown_vault_path):
 
 def test_full_reindex_discovers_all_markdown_files(registered_markdown):
     db, vid = registered_markdown
-    n_indexed = reindex.full(db, vault_id=vid)
+    n_indexed = reindex.full(db, vault_id=vid)["indexed"]
     assert n_indexed == 6  # 5 with frontmatter + 1 without
     notes = registry.list_notes(db, vault_id=vid)
     titles = {n["title"] for n in notes if n["title"]}
@@ -142,8 +142,43 @@ def test_full_returns_int_count(tmp_path, monkeypatch):
         "---\ntitle: T\ndate: 2026-01-01\ntype: entity\ntags: [a]\n---\n## Summary\nx\n",
         encoding="utf-8",
     )
-    count = reindex.full(db, vault_id=vid)
+    count = reindex.full(db, vault_id=vid)["indexed"]
     assert isinstance(count, int) and count == 1
+
+
+def _entity(root, name):
+    (root / "wiki" / "entities" / f"{name}.md").write_text(
+        f"---\ntitle: {name}\ndate: 2026-01-01\ntype: entity\ntags: [x]\n---\n## Summary\nx\n",
+        encoding="utf-8")
+
+
+def test_full_prunes_orphan_rows_for_hand_deleted_files(tmp_path, monkeypatch):
+    """A hand-deleted file's registry row is pruned on the next full reindex —
+    closes the gap where lint.drift.missing_files lingered with no CLI fix."""
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    _entity(root, "a")
+    _entity(root, "b")
+    res = reindex.full(db, vault_id=vid)
+    assert res["indexed"] == 2 and res["pruned"] == []
+
+    (root / "wiki" / "entities" / "b.md").unlink()       # hand-delete one file
+    res2 = reindex.full(db, vault_id=vid)
+    assert res2["indexed"] == 1
+    assert res2["pruned"] == ["wiki/entities/b.md"]
+    relpaths = {n["relpath"] for n in registry.list_notes(db, vault_id=vid)}
+    assert "wiki/entities/b.md" not in relpaths           # orphan row gone
+    assert "wiki/entities/a.md" in relpaths               # survivor untouched
+
+
+def test_incremental_never_prunes(tmp_path, monkeypatch):
+    """Incremental sees only changed files, so its `seen` is partial — must not prune."""
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    _entity(root, "a")
+    reindex.full(db, vault_id=vid)
+    (root / "wiki" / "entities" / "a.md").unlink()
+    reindex.incremental(db, vault_id=vid)
+    relpaths = {n["relpath"] for n in registry.list_notes(db, vault_id=vid)}
+    assert "wiki/entities/a.md" in relpaths               # left for a full reindex to prune
 
 
 def test_scan_reports_schema_issues_but_still_ingests(tmp_path, monkeypatch):
@@ -206,7 +241,7 @@ def test_reindex_works_without_fts5(tmp_path, monkeypatch):
     (root / "wiki" / "entities" / "a.md").write_text(
         "---\ntitle: A\ndate: 2026-01-01\ntype: entity\ntags: [x]\n---\n## Summary\nx\n",
         encoding="utf-8")
-    count = reindex.full(db, vault_id=vid)  # must not raise
+    count = reindex.full(db, vault_id=vid)["indexed"]  # must not raise
     assert count == 1
 
 
