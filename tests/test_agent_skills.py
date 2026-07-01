@@ -22,6 +22,26 @@ def test_copy_bundle_includes_skill_md_excludes_tests(tmp_path):
     assert not (out / "tests").exists()
 
 
+def test_copy_bundle_excludes_dev_cruft_and_nested_claude(tmp_path):
+    """The bundle must not ship .claude (nests a duplicate skill tree → scan
+    storms), dev caches, or the per-user runtime data/ (leaks registry.db)."""
+    repo = tmp_path / "repo"
+    (repo / ".claude" / "skills" / "oh-my-wiki").mkdir(parents=True)
+    (repo / ".claude" / "skills" / "oh-my-wiki" / "SKILL.md").write_text("nested")
+    (repo / ".superpowers").mkdir()
+    (repo / ".ruff_cache").mkdir()
+    (repo / "data").mkdir()
+    (repo / "data" / "registry.db").write_text("USERDB")
+    (repo / "commands").mkdir()
+    (repo / "commands" / "ingest.md").write_text("x")
+    (repo / "SKILL.md").write_text("---\nname: oh-my-wiki\n---\n")
+    out = ask._copy_bundle(tmp_path / "skills", repo_root=repo)
+    assert (out / "SKILL.md").is_file()
+    assert (out / "commands" / "ingest.md").is_file()   # real content kept
+    for gone in (".claude", ".superpowers", ".ruff_cache", "data"):
+        assert not (out / gone).exists(), f"{gone} must be excluded from the bundle"
+
+
 def test_copy_bundle_replaces_dangling_symlink(tmp_path):
     """A stale symlink left by a prior install (target moved away) must not abort
     the copy with FileExistsError — it should be cleared and replaced."""

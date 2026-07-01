@@ -78,6 +78,13 @@ def detect_agents() -> list[str]:
 _EXCLUDE = {
     "tests", "docs", "docker", ".git", ".github", "node_modules",
     "__pycache__", ".pytest_cache", ".agents", "skills-lock.json", ".DS_Store",
+    # Dev cruft that must never ship in the skill bundle. Critically, ".claude"
+    # holds the repo's own project-local skill install + worktrees — copying it in
+    # nests <bundle>/.claude/skills/oh-my-wiki/… so the host's skill scanner
+    # recurses over a duplicate tree (770 files / 8.9M → hundreds of stat() storms).
+    # "data" is the per-user runtime registry.db — shipping it leaks one user's DB.
+    ".claude", ".superpowers", ".ruff_cache", ".mypy_cache", ".venv",
+    "data", "dist", "build", ".idea", ".vscode", "uv.lock",
 }
 
 
