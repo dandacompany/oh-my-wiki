@@ -85,9 +85,9 @@ def query(db_path, *, vault_id: int, embedder, text: str, limit: int = 5) -> lis
     Returns [] (fail-closed) when the stored model/dim differs from the embedder."""
     if not available() or embedder is None or not (text or "").strip():
         return []
-    import sqlite_vec
     conn = None
     try:
+        import sqlite_vec  # inside try: an import failure here also falls back to FTS
         conn = _connect(db_path)
         _ensure_table(conn, embedder.dim)
         # Fail-closed: reject if dim or model differs from stored meta
