@@ -10,7 +10,7 @@ import re
 import urllib.error
 import urllib.request
 
-from scripts import fetch_chromium, fetch_youtube, search, urls
+from scripts import fetch_chromium, fetch_youtube, net_hints, search, urls
 from scripts.fetch_errors import FetchError, SSRFBlocked
 
 _MIN_TEXT = 200  # chars; below this an HTML page is treated as JS-thin → escalate
@@ -54,7 +54,7 @@ def _http_get_text(url: str) -> tuple[str, str, str]:
     except urllib.error.HTTPError as exc:
         raise FetchError(f"HTTP {exc.code} from {url}") from exc
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-        raise FetchError(f"network error to {url}: {exc}") from exc
+        raise FetchError(f"network error to {url}: {exc}{net_hints.hint_for(exc)}") from exc
     if "pdf" in ctype:
         return ctype, "", _pdf_text(raw)
     body = raw.decode("utf-8", errors="replace")

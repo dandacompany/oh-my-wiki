@@ -1199,4 +1199,18 @@ def doctor() -> int:
     print(f"fetch yt-dlp:  {yt}")
     print(f"fetch chromium: {chromium}")
     print(f"wizard UI:     {wiz}")
+
+    from scripts import net_hints
+    tls = net_hints.tls_env_status()
+    ca = "SSL_CERT_FILE" if tls["SSL_CERT_FILE"] != "not set" \
+        else ("REQUESTS_CA_BUNDLE" if tls["REQUESTS_CA_BUNDLE"] != "not set" else None)
+    proxy = tls["HTTPS_PROXY"] if tls["HTTPS_PROXY"] != "not set" else "not set"
+    if ca:
+        print(f"TLS trust:     custom CA via {ca}={tls[ca]}")
+    else:
+        print("TLS trust:     system default (no SSL_CERT_FILE / REQUESTS_CA_BUNDLE)")
+    print(f"HTTPS proxy:   {proxy}")
+    if not ca:
+        print("  hint: behind a corporate proxy that inspects HTTPS? if fetch/search "
+              "fail with a certificate error, export SSL_CERT_FILE=/path/to/corporate-ca.pem")
     return 0

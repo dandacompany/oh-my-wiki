@@ -8,7 +8,7 @@ import subprocess
 import sys
 import urllib.request
 
-from scripts import banner, platform_env
+from scripts import banner, net_hints, platform_env
 
 _PYPI = "https://pypi.org/pypi/{pkg}/json"
 
@@ -17,7 +17,11 @@ def latest_version(pkg: str, *, timeout: int = 5) -> str | None:
     try:
         with urllib.request.urlopen(_PYPI.format(pkg=pkg), timeout=timeout) as r:
             return (json.loads(r.read()).get("info") or {}).get("version")
-    except Exception:
+    except Exception as exc:
+        # Otherwise-silent path: a corporate-proxy cert failure would look like
+        # "update check just doesn't work". Surface the hint once, stay non-blocking.
+        if net_hints.is_cert_error(exc):
+            print(f"omw: update check skipped —{net_hints.hint_for(exc)}", file=sys.stderr)
         return None
 
 

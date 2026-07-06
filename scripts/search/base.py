@@ -6,6 +6,8 @@ import urllib.error
 import urllib.request
 from typing import Protocol
 
+from scripts import net_hints
+
 
 class SearchError(Exception):
     pass
@@ -24,7 +26,7 @@ def _http_json(url, *, method="GET", headers=None, body=None, timeout=15):
     except urllib.error.HTTPError as exc:
         raise SearchError(f"HTTP {exc.code} from {url}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
-        raise SearchError(f"network error to {url}: {exc}") from exc
+        raise SearchError(f"network error to {url}: {exc}{net_hints.hint_for(exc)}") from exc
     except json.JSONDecodeError as exc:
         raise SearchError(f"non-JSON response from {url}") from exc
 
@@ -40,4 +42,4 @@ def _http_text(url, *, method="GET", headers=None, body=None, timeout=15):
     except urllib.error.HTTPError as exc:
         raise SearchError(f"HTTP {exc.code} from {url}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
-        raise SearchError(f"network error to {url}: {exc}") from exc
+        raise SearchError(f"network error to {url}: {exc}{net_hints.hint_for(exc)}") from exc

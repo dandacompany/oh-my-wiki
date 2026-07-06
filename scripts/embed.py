@@ -73,7 +73,17 @@ class FastEmbedEmbedder(Embedder):
         # quality tests show a meaningful improvement.
         if self._te is None:
             from fastembed import TextEmbedding  # optional dep; lazy
-            self._te = TextEmbedding(model_name=self.model)
+            try:
+                self._te = TextEmbedding(model_name=self.model)
+            except Exception as exc:
+                # First use downloads model files over HTTPS; a corporate proxy
+                # cert failure is opaque here — rewrite only that case with a hint.
+                from scripts import net_hints
+                if net_hints.is_cert_error(exc):
+                    raise RuntimeError(
+                        f"fastembed model download failed: {exc}{net_hints.hint_for(exc)}"
+                    ) from exc
+                raise
         return [list(map(float, v)) for v in self._te.embed(list(texts))]
 
 

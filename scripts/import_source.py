@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from scripts import registry, reindex, slugify
+from scripts import net_hints, registry, reindex, slugify
 
 _SKIP_DIRS = {".obsidian", ".git", ".trash"}
 _TEXT_EXTS = {".md", ".txt"}
@@ -80,7 +80,7 @@ def _http_get(url, *, headers=None):
     except urllib.error.HTTPError as exc:
         raise ImportError_(f"HTTP {exc.code} from {url}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
-        raise ImportError_(f"network error to {url}: {exc}") from exc
+        raise ImportError_(f"network error to {url}: {exc}{net_hints.hint_for(exc)}") from exc
     except json.JSONDecodeError as exc:
         raise ImportError_(f"non-JSON response from {url}") from exc
 
@@ -94,7 +94,7 @@ def _http_post(url, *, headers, json_body):
     except urllib.error.HTTPError as exc:
         raise ImportError_(f"HTTP {exc.code} from {url}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
-        raise ImportError_(f"network error to {url}: {exc}") from exc
+        raise ImportError_(f"network error to {url}: {exc}{net_hints.hint_for(exc)}") from exc
     except json.JSONDecodeError as exc:
         raise ImportError_(f"non-JSON response from {url}") from exc
 

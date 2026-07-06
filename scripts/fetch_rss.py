@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 from xml.etree import ElementTree as ET
 
-from scripts import fetch, urls
+from scripts import fetch, net_hints, urls
 
 MAX_FEED_BYTES = 5_000_000
 
@@ -70,7 +70,7 @@ def fetch_feed(url: str) -> list[dict]:
     except fetch.SSRFBlocked as exc:
         raise FeedError(f"blocked feed URL (SSRF guard): {url}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
-        raise FeedError(f"could not fetch feed {url}: {exc}") from exc
+        raise FeedError(f"could not fetch feed {url}: {exc}{net_hints.hint_for(exc)}") from exc
     if len(body) > MAX_FEED_BYTES:
         raise FeedError(f"feed too large (> {MAX_FEED_BYTES} bytes): {url}")
     return parse_feed(body.decode("utf-8", "replace"))
