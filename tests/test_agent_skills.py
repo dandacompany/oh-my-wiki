@@ -92,7 +92,8 @@ def test_install_hermes_uses_copy(tmp_path, monkeypatch):
     assert (tmp_path / "h" / "skills" / "oh-my-wiki" / "SKILL.md").is_file()
 
 
-def test_install_codex_prefers_skills_cli(tmp_path, monkeypatch):
+def test_install_codex_skills_cli_when_opted_in(tmp_path, monkeypatch):
+    """Marketplace CLI path is opt-in (use_skills_cli=True), not the default."""
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "SKILL.md").write_text("x")
@@ -104,10 +105,42 @@ def test_install_codex_prefers_skills_cli(tmp_path, monkeypatch):
         seen["cmd"] = cmd
         return P()
     monkeypatch.setattr(ask.subprocess, "run", fake_run)
-    r = ask.install("codex", repo_root=repo)
+    r = ask.install("codex", repo_root=repo, use_skills_cli=True)
     assert r["ok"] and r["method"] == "skills-cli"
     assert seen["cmd"][:2] == ["skills", "add"]
     assert "-a" in seen["cmd"] and "codex" in seen["cmd"]
+
+
+def test_install_default_direct_copies_even_with_skills_on_path(tmp_path, monkeypatch):
+    """The FIX: default (no OMW_USE_SKILLS_CLI) must direct-copy from the local
+    bundle to the ABSOLUTE skills dir and never shell the cwd-sensitive skills CLI,
+    even when the `skills` binary is present."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "SKILL.md").write_text("x")
+    monkeypatch.delenv("OMW_USE_SKILLS_CLI", raising=False)
+    monkeypatch.setitem(ask._SKILLS_DIR, "codex", tmp_path / "c" / "skills")
+    monkeypatch.setattr(shutil, "which", lambda b: "/bin/skills" if b == "skills" else None)
+    def boom(*a, **k):
+        raise AssertionError("skills CLI must not run by default")
+    monkeypatch.setattr(ask.subprocess, "run", boom)
+    r = ask.install("codex", repo_root=repo)
+    assert r["ok"] and r["method"] == "copy"
+    assert (tmp_path / "c" / "skills" / "oh-my-wiki" / "SKILL.md").is_file()
+
+
+def test_install_env_opt_in_uses_skills_cli(tmp_path, monkeypatch):
+    """OMW_USE_SKILLS_CLI=1 re-enables the marketplace path without an explicit flag."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "SKILL.md").write_text("x")
+    monkeypatch.setenv("OMW_USE_SKILLS_CLI", "1")
+    monkeypatch.setattr(shutil, "which", lambda b: "/bin/skills" if b == "skills" else None)
+    class P:
+        returncode = 0
+    monkeypatch.setattr(ask.subprocess, "run", lambda cmd, **k: P())
+    r = ask.install("codex", repo_root=repo)
+    assert r["ok"] and r["method"] == "skills-cli"
 
 
 def test_install_codex_falls_back_to_copy_on_failure(tmp_path, monkeypatch):
@@ -119,7 +152,7 @@ def test_install_codex_falls_back_to_copy_on_failure(tmp_path, monkeypatch):
     class P:
         returncode = 1
     monkeypatch.setattr(ask.subprocess, "run", lambda cmd, **k: P())
-    r = ask.install("codex", repo_root=repo)
+    r = ask.install("codex", repo_root=repo, use_skills_cli=True)
     assert r["ok"] and r["method"] == "copy"
     assert (tmp_path / "c" / "skills" / "oh-my-wiki" / "SKILL.md").is_file()
 

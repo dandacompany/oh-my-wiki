@@ -80,7 +80,7 @@ def test_install_skills_cli_agent_still_installs_alias(tmp_path, monkeypatch):
         returncode = 0
         stdout = ""
     monkeypatch.setattr(ask.subprocess, "run", lambda cmd, **k: P())
-    r = ask.install("codex", repo_root=repo)
+    r = ask.install("codex", repo_root=repo, use_skills_cli=True)
     assert r["ok"] and r["method"] == "skills-cli"
     # even when the main skill went via skills-cli, the alias lands in the agent's skills dir
     assert (tmp_path / "c" / "skills" / "omw" / "SKILL.md").is_file()

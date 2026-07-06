@@ -1,13 +1,22 @@
 """Install the OMW skill bundle into agent skill systems (claude/codex/gemini/opencode/hermes/openclaw).
 
-Hybrid: claude/codex/gemini delegate to the `skills` CLI (skills.sh) — global `skills`
-if on PATH, else `npx -y skills`; on any failure, fall back to a direct copy of the
-local bundle into the agent's skills dir. hermes/opencode/openclaw always direct-copy
-because their installers do not support the skills.sh protocol.
+**Default: deterministic direct copy** of the local bundle (`paths.bundled_root()` —
+the exact skill that ships with THIS omw, wheel or checkout) into the agent's
+*absolute* skills dir. This is cwd-independent and always version-matched to the
+installed CLI.
+
+The marketplace `skills` CLI path (skills.sh) is **opt-in only** via
+`OMW_USE_SKILLS_CLI=1`. It is off by default because it (a) is cwd-sensitive —
+run inside a repo that has a local `.agents/skills`, it installs there instead of
+the global dir; (b) pulls the *published* skill, which can drift from the local
+CLI's version; and (c) registers the skill with an external tracker whose
+reconcile/prune step can later delete the install. hermes/opencode/openclaw always
+direct-copy regardless (their installers do not speak the skills.sh protocol).
 Pure stdlib.
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -192,8 +201,19 @@ def _install_via_skills_cli(agent, *, timeout=300) -> tuple[bool, str | None]:
     return True, _parse_skills_cli_dest(getattr(proc, "stdout", "") or "")
 
 
-def install(agent, *, repo_root=REPO_ROOT, use_skills_cli=True) -> dict:
-    """Install OMW into one agent's skill system. Returns a result dict."""
+def _skills_cli_opt_in() -> bool:
+    """Marketplace `skills` CLI is off unless OMW_USE_SKILLS_CLI=1 (see module docstring)."""
+    return os.environ.get("OMW_USE_SKILLS_CLI") == "1"
+
+
+def install(agent, *, repo_root=REPO_ROOT, use_skills_cli=None) -> dict:
+    """Install OMW into one agent's skill system. Returns a result dict.
+
+    `use_skills_cli` defaults to None → resolved from OMW_USE_SKILLS_CLI (off).
+    Pass True/False to force either path (tests + explicit callers).
+    """
+    if use_skills_cli is None:
+        use_skills_cli = _skills_cli_opt_in()
     if agent not in _AGENT_BINS:
         return {"agent": agent, "ok": False, "method": None, "dest": None, "detail": "unknown agent"}
     # The short-alias `omw` skill rides along into the same skills dir, regardless
@@ -213,8 +233,12 @@ def install(agent, *, repo_root=REPO_ROOT, use_skills_cli=True) -> dict:
             "alias_dest": alias}
 
 
-def install_many(agents, *, repo_root=REPO_ROOT, use_skills_cli=True) -> list[dict]:
-    """Install into each agent, isolating per-agent failures."""
+def install_many(agents, *, repo_root=REPO_ROOT, use_skills_cli=None) -> list[dict]:
+    """Install into each agent, isolating per-agent failures.
+
+    `use_skills_cli=None` (default) lets each install() resolve it from the
+    OMW_USE_SKILLS_CLI env (off) — so `omw setup agents` direct-copies by default.
+    """
     results = []
     for a in agents:
         try:
