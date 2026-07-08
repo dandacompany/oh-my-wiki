@@ -133,8 +133,9 @@ def _detect_hooks() -> list:
 
 def _detect_skills() -> list:
     from scripts import agent_skills
-    # the main bundle + the short-alias skill dir installed beside it
-    names = ("oh-my-wiki", agent_skills._ALIAS_NAME)
+    # the main bundle + the short-alias skill + the omw-<op> procedure family,
+    # all installed beside each other by agent_skills.install*.
+    names = ("oh-my-wiki", agent_skills._ALIAS_NAME, *agent_skills.op_skill_names())
     out = []
     for agent, skills_dir in agent_skills._SKILLS_DIR.items():
         for nm in names:

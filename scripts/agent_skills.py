@@ -63,6 +63,76 @@ def install_alias_into_dir(skills_dir, *, name: str = _ALIAS_NAME) -> Path:
     (dest / "SKILL.md").write_text(_ALIAS_SKILL_MD, encoding="utf-8")
     return dest
 
+
+# ── per-op procedure slash-command family (omw-<op>) ─────────────────────────
+# Like the `omw` alias, these are GENERATED from ops_registry (not repo files) so
+# every install path carries them with zero bundling config and zero drift — a new
+# procedure op automatically gets a `/omw-<op>` skill. Each is a thin forwarder:
+# it loads the canonical oh-my-wiki rules, then jumps straight to commands/<op>.md
+# with the user's args (the op is already named, so the "which op?" step is skipped).
+# Only procedure ops get a skill; deterministic ops stay on `/omw <op>` / the CLI.
+def _arg_hint(op) -> str:
+    """Render an OpSpec's args as a slash-command argument hint: required → <name>,
+    optional / flags → [name]."""
+    return " ".join(f"<{a.name}>" if a.required else f"[{a.name}]" for a in op.args)
+
+
+def _op_skill_md(op) -> str:
+    """Generate the SKILL.md text for the omw-<op> forwarder from its OpSpec.
+
+    The description is kept a single YAML-safe line (no ': ', no leading '[') per
+    the skill-authoring convention; triggers come from the registry for routing.
+    """
+    from scripts import ops_registry
+    trigs = ", ".join(ops_registry.triggers_for(op.name))
+    # em-dash separators, never ": " — a colon+space would break the YAML plain scalar.
+    desc = (f"{op.summary} Direct shortcut for omw {op.name} — /omw-{op.name}. "
+            f"Triggers — {trigs}.")
+    # Strip angle brackets from the description (some summaries carry <role> etc.):
+    # the skill-authoring convention forbids < / > in `description`. The argument-hint
+    # field below intentionally keeps <name> — that is its standard notation.
+    desc = desc.replace("<", "").replace(">", "")
+    hint = _arg_hint(op)
+    return f"""\
+---
+name: omw-{op.name}
+description: {desc}
+argument-hint: "{hint}"
+---
+
+# omw-{op.name} — direct shortcut for omw's `{op.name}`
+
+You invoked the **{op.name}** shortcut. This is omw's `{op.name}` operation.
+
+1. Load the **oh-my-wiki** skill's rules (HARD RULES, conventions, propose→confirm→execute).
+2. Then run the procedure in `{op.procedure_file}` **directly** with the user's
+   arguments — the op is already `{op.name}`, so skip the "which op?" inference.
+
+Do not restate the rules or improvise the procedure here — they live in the
+`oh-my-wiki` skill and `{op.procedure_file}` (single source of truth).
+"""
+
+
+def op_skill_names() -> tuple[str, ...]:
+    """The omw-<op> skill dir names, one per procedure op (registry-derived)."""
+    from scripts import ops_registry
+    return tuple(f"omw-{name}" for name in ops_registry.procedures())
+
+
+def install_op_skills_into_dir(skills_dir) -> list[Path]:
+    """Write every omw-<op> forwarder into <skills_dir>. Idempotent (clears stale
+    then writes). Returns the list of skill dirs."""
+    from scripts import ops_registry
+    out: list[Path] = []
+    for name in ops_registry.procedures():
+        op = ops_registry.get(name)
+        dest = Path(skills_dir) / f"omw-{name}"
+        _clear_stale(dest)
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / "SKILL.md").write_text(_op_skill_md(op), encoding="utf-8")
+        out.append(dest)
+    return out
+
 _AGENT_BINS = {"claude": "claude", "codex": "codex", "hermes": "hermes",
                "gemini": "gemini", "opencode": "opencode", "openclaw": "openclaw"}
 _SKILLS_AGENT = {"claude": "claude-code", "codex": "codex", "gemini": "gemini"}
@@ -158,8 +228,9 @@ def install_into_dir(skills_dir, *, repo_root=REPO_ROOT) -> dict:
     try:
         dest = _copy_bundle(skills_dir, repo_root=repo_root)
         alias = install_alias_into_dir(skills_dir)
+        op_dests = install_op_skills_into_dir(skills_dir)
         return {"ok": True, "method": "copy", "dest": str(dest),
-                "alias_dest": str(alias), "detail": None}
+                "alias_dest": str(alias), "op_skills": len(op_dests), "detail": None}
     except OSError as exc:
         return {"ok": False, "method": "copy", "dest": None, "detail": str(exc)}
 
@@ -216,21 +287,23 @@ def install(agent, *, repo_root=REPO_ROOT, use_skills_cli=None) -> dict:
         use_skills_cli = _skills_cli_opt_in()
     if agent not in _AGENT_BINS:
         return {"agent": agent, "ok": False, "method": None, "dest": None, "detail": "unknown agent"}
-    # The short-alias `omw` skill rides along into the same skills dir, regardless
-    # of whether the main skill goes via the skills CLI or a direct copy.
+    # The short-alias `omw` skill and the omw-<op> procedure family ride along into
+    # the same skills dir, regardless of whether the main skill goes via the skills
+    # CLI or a direct copy.
     alias = str(install_alias_into_dir(_SKILLS_DIR[agent]))
+    op_skills = len(install_op_skills_into_dir(_SKILLS_DIR[agent]))
     if agent not in _SKILLS_AGENT:
         dest = _copy_bundle(_SKILLS_DIR[agent], repo_root=repo_root)
         return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest),
-                "alias_dest": alias}
+                "alias_dest": alias, "op_skills": op_skills}
     if use_skills_cli:
         ok, dest = _install_via_skills_cli(agent)
         if ok:
             return {"agent": agent, "ok": True, "method": "skills-cli", "dest": dest,
-                    "alias_dest": alias}
+                    "alias_dest": alias, "op_skills": op_skills}
     dest = _copy_bundle(_SKILLS_DIR[agent], repo_root=repo_root)
     return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest),
-            "alias_dest": alias}
+            "alias_dest": alias, "op_skills": op_skills}
 
 
 def install_many(agents, *, repo_root=REPO_ROOT, use_skills_cli=None) -> list[dict]:
