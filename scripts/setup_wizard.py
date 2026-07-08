@@ -1057,6 +1057,11 @@ def configure_recall(*, strategy="fts", provider="none", model="text-embedding-3
         config.set_config("recall.llm.submode", submode)
     if capture is not None:
         config.set_config("recall.capture", "on" if capture else "off")
+    # Disclose the effective capture (write-side cue) state — it is ON by default.
+    effective_capture = capture if capture is not None else recall._DEFAULTS.get("capture", True)
+    print(f"capture(넣기 큐): {'on' if effective_capture else 'off'} — 사용자가 지속성 있는 "
+          "새 사실을 진술하면 위키 저장을 제안합니다 (기본 on, 활성 vault가 있을 때만 발동). "
+          "끄려면 recall.capture=off.")
     warn = recall.cost_warning(mode or "auto", strategy)
     if warn:
         print(warn)

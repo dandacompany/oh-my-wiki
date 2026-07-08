@@ -33,7 +33,7 @@ _IMPLEMENTED_STRATEGIES = {"fts", "embedding", "hybrid", "llm"}
 # not body — so ~1.0 means at least one meaningful token hit. Pages with a good
 # `summary` rank higher; bump min_score if recall feels noisy.
 _DEFAULTS = {"mode": "auto", "strategy": "fts", "llm_submode": "route",
-             "min_score": 1.0, "top_k": 3, "snippet_chars": 280, "capture": False}
+             "min_score": 1.0, "top_k": 3, "snippet_chars": 280, "capture": True}
 
 
 def effective_strategy(strategy: str, *, quiet: bool = False) -> str:
@@ -102,6 +102,18 @@ def is_trivial(text: str) -> bool:
 def _active(db):
     from scripts import registry
     return registry.get_active(db)
+
+
+def _has_active_vault() -> bool:
+    """True if there's an active vault to capture into. Best-effort; never raises.
+    Gates the (default-on) capture cue so a vault-less install isn't nudged to ingest
+    into a wiki that doesn't exist yet."""
+    try:
+        from scripts.paths import registry_path
+        db = registry_path()
+        return db.exists() and bool(_active(db))
+    except Exception:
+        return False
 
 
 def _strip_josa(token: str) -> str:
@@ -227,10 +239,11 @@ def _recall_body(cfg: dict, text: str) -> str:
 def prompt(text: str | None) -> str:
     """Per-prompt recall + optional capture cue. Returns injectable context (maybe empty).
 
-    is_trivial gates BOTH sides. The `capture` toggle is independent of recall.mode:
-    when on, the write-side cue is appended (or emitted alone if the recall body is empty),
-    so a durable fact the user just stated still gets a save nudge even on an FTS miss or
-    with recall.mode=off. When capture is off, behavior is byte-identical to before."""
+    is_trivial gates BOTH sides. The `capture` toggle (ON by default) is independent of
+    recall.mode: when on AND an active vault exists, the write-side cue is appended (or
+    emitted alone if the recall body is empty), so a durable fact the user just stated
+    still gets a save nudge even on an FTS miss or with recall.mode=off. When capture is
+    off, behavior is byte-identical to the pre-capture recall."""
     cfg = _cfg()
     # Capture-off fast path: preserve the pre-capture behavior exactly, including NOT
     # reading stdin when recall is fully off (mode=off short-circuited before stdin).
@@ -243,6 +256,11 @@ def prompt(text: str | None) -> str:
         return ""
     body = _recall_body(cfg, text)
     if not cfg.get("capture"):
+        return body
+    if not _has_active_vault():
+        # Capture is on by default, but only nudge to ingest when there's actually a
+        # wiki to capture into — a brand-new/vault-less install shouldn't be told to
+        # save into a wiki that doesn't exist yet (symmetric with preamble's guard).
         return body
     cue = render_capture_cue()
     return f"{body}\n{cue}" if body else cue

@@ -211,8 +211,11 @@ recall이 지식을 **읽어 오는** 축이라면, 이 큐는 지식을 **넣�
 (mem0의 "user is stating new info → write trigger" 대응).
 
 - 구현: `scripts/recall.py::render_capture_cue()` (마커 `omw-capture`), `prompt()`에서 조건부 append.
-- 게이트: `recall.capture`(`on|off`, 기본 off, opt-in). `recall.mode`와 **독립** — mode=off여도
-  capture=on이면 큐 발사. `is_trivial`은 둘 다 침묵시킴.
+- 게이트: `recall.capture`(`on|off`, **기본 on**). `recall.mode`와 **독립** — mode=off여도
+  capture면 큐 발사. `is_trivial`은 둘 다 침묵시킴. 끄려면 `recall.capture=off`.
+- **활성 vault 가드**: 기본 on이므로, 넣을 위키가 없는(vault-less) 갓 설치 환경에서는 큐를
+  내보내지 않는다(`_has_active_vault()` — preamble의 vault 가드와 대칭). capture off면 이 가드
+  이전에 빠져나가 pre-capture recall과 바이트 동일.
 - 지침 문구만(탐지 코드 없음). 기존 `omw ingest`/`omw gate note ingest` + `duplicate-ingest`
   확인 클래스로 연결 — **바로 넣지 않고 "넣을까요?"라고 확인**.
 - recall 읽기 축은 이미 mem0식이다: `advisory`+`llm`이 매 프롬프트 에이전트 위임 가이드를 낸다.

@@ -1,5 +1,15 @@
 """Unit tests for the mem0-like per-prompt capture cue in scripts.recall."""
+import pytest
+
 from scripts import recall
+
+
+@pytest.fixture(autouse=True)
+def _assume_active_vault(monkeypatch):
+    # Capture is ON by default and gated on an active vault existing. These unit tests
+    # run without a real registry, so assume a vault exists; the no-vault case has its
+    # own test that overrides this.
+    monkeypatch.setattr(recall, "_has_active_vault", lambda: True)
 
 
 def test_render_capture_cue_shape():
@@ -34,8 +44,8 @@ def test_cfg_reads_capture_toggle(monkeypatch):
                         lambda: {"recall": {"capture": "off"}})
     assert recall._cfg()["capture"] is False
     monkeypatch.setattr(cfgmod, "load_config", lambda: {"recall": {}})
-    assert recall._cfg()["capture"] is False     # absent = off
-    # hand-edited garbage must not raise and must be off
+    assert recall._cfg()["capture"] is True      # absent = on (default)
+    # hand-edited garbage must not raise and must be off (invalid value, not the default)
     monkeypatch.setattr(cfgmod, "load_config",
                         lambda: {"recall": {"capture": ["nonsense"]}})
     assert recall._cfg()["capture"] is False
@@ -100,6 +110,14 @@ def test_capture_off_mode_off_does_not_read_stdin(monkeypatch):
 
     monkeypatch.setattr(recall.sys, "stdin", _Boom())
     assert recall.prompt(None) == ""
+
+
+def test_capture_on_no_active_vault_suppresses_cue(monkeypatch):
+    # Default-on capture must NOT nudge to ingest when there is no wiki to capture into.
+    monkeypatch.setattr(recall, "_cfg", lambda: _cfg(capture=True))
+    monkeypatch.setattr(recall, "_hits", lambda *a, **k: [])          # recall body empty
+    monkeypatch.setattr(recall, "_has_active_vault", lambda: False)   # no vault yet
+    assert recall.prompt("우리 팀은 파이썬 3.10 stdlib만 쓴다") == ""
 
 
 def test_capture_on_prepends_strong_hits(monkeypatch):
