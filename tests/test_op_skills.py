@@ -1,8 +1,14 @@
-"""omw-<op> procedure slash-command family: generated 1:1 from ops_registry."""
+"""omw-<op> op family + omw-<role> persona family: generated from the registries.
+
+- op family  = non-persona procedures (ingest/query/open/edit/move/delete/autoresearch)
+- role family = every persona in the roster (omw-<role>, e.g. omw-fact-checker)
+Persona procedures do NOT get an omw-<op> skill — the omw-<role> family covers them.
+"""
 import re
 
 import scripts.agent_skills as ask
 from scripts import ops_registry as reg
+from scripts import personas
 
 
 def _frontmatter(text: str) -> dict:
@@ -16,61 +22,95 @@ def _frontmatter(text: str) -> dict:
     return fm
 
 
-def test_op_skill_names_track_procedures():
-    # The family is exactly one skill per procedure op — auto-follows the registry.
-    assert set(ask.op_skill_names()) == {f"omw-{p}" for p in reg.procedures()}
-    assert len(ask.op_skill_names()) == len(reg.procedures())
+def _non_persona_procs():
+    return [p for p in reg.procedures() if not p.startswith("persona-")]
 
 
-def test_op_skill_md_wellformed_for_every_procedure():
-    for name in reg.procedures():
+# ── op family ────────────────────────────────────────────────────────────────
+
+def test_op_skill_names_track_non_persona_procedures():
+    assert set(ask.op_skill_names()) == {f"omw-{p}" for p in _non_persona_procs()}
+    # persona procedures are excluded — covered by the role family instead
+    assert not any(n.startswith("omw-persona-") for n in ask.op_skill_names())
+
+
+def test_op_skill_md_wellformed():
+    for name in _non_persona_procs():
         op = reg.get(name)
-        md = ask._op_skill_md(op)
-        fm = _frontmatter(md)
-        # name matches the dir the family installs into
+        fm = _frontmatter(ask._op_skill_md(op))
         assert fm["name"] == f"omw-{name}"
-        # description: non-empty, single line, YAML-safe (no ": ", no leading "[")
         desc = fm["description"]
         assert desc and "\n" not in desc
-        assert ": " not in desc, f"colon-space breaks YAML plain scalar in {name}"
-        assert not desc.startswith("["), f"leading [ parses as YAML list in {name}"
-        assert "<" not in desc and ">" not in desc, f"angle bracket in description of {name}"
+        assert ": " not in desc and not desc.startswith("[")
+        assert "<" not in desc and ">" not in desc
         assert "argument-hint" in fm
-        # body forwards to the canonical command card (single source of truth)
-        assert op.procedure_file in md
-        assert "oh-my-wiki" in md  # loads the canonical skill's rules
+        assert op.procedure_file in ask._op_skill_md(op)
+        assert "oh-my-wiki" in ask._op_skill_md(op)
 
 
 def test_arg_hint_marks_required_vs_optional():
-    # required → <name>, optional/flags → [name]
-    hint = ask._arg_hint(reg.get("move"))       # src (req), dst (req)
-    assert hint == "<src> <dst>"
-    hint2 = ask._arg_hint(reg.get("autoresearch"))  # topic (req) + 2 optional flags
-    assert hint2.startswith("<topic>")
-    assert "[--rounds]" in hint2 and "[--no-synthesis]" in hint2
+    assert ask._arg_hint(reg.get("move")) == "<src> <dst>"
+    h = ask._arg_hint(reg.get("autoresearch"))
+    assert h.startswith("<topic>") and "[--rounds]" in h and "[--no-synthesis]" in h
 
 
-def test_install_op_skills_into_dir_writes_family(tmp_path):
+def test_install_op_skills_excludes_persona(tmp_path):
     dests = ask.install_op_skills_into_dir(tmp_path)
-    assert len(dests) == len(reg.procedures())
-    for name in reg.procedures():
-        skill = tmp_path / f"omw-{name}" / "SKILL.md"
-        assert skill.is_file(), f"omw-{name} not written"
-        assert f"omw-{name}" in skill.read_text()
+    assert len(dests) == len(_non_persona_procs())
+    assert (tmp_path / "omw-ingest" / "SKILL.md").is_file()
+    assert not (tmp_path / "omw-persona-factcheck").exists()
 
 
-def test_install_into_dir_includes_op_family(tmp_path):
+# ── role (persona) family ────────────────────────────────────────────────────
+
+def test_role_skill_names_track_roster():
+    assert set(ask.role_skill_names()) == {f"omw-{p['name']}" for p in personas.list_personas()}
+
+
+def test_role_skill_md_wellformed():
+    for p in personas.list_personas():
+        role = p["name"]
+        md = ask._role_skill_md(p)
+        fm = _frontmatter(md)
+        assert fm["name"] == f"omw-{role}"
+        desc = fm["description"]
+        assert desc and "\n" not in desc
+        assert ": " not in desc and not desc.startswith("[")
+        assert "<" not in desc and ">" not in desc
+        assert "argument-hint" in fm
+        assert f"omw persona-run {role}" in md  # dispatches via persona-run
+        assert "oh-my-wiki" in md
+
+
+def test_install_role_skills_writes_family(tmp_path):
+    dests = ask.install_role_skills_into_dir(tmp_path)
+    assert len(dests) == len(personas.list_personas())
+    assert (tmp_path / "omw-fact-checker" / "SKILL.md").is_file()
+    assert (tmp_path / "omw-wiki-librarian" / "SKILL.md").is_file()
+
+
+# ── install / legacy cleanup ─────────────────────────────────────────────────
+
+def test_install_into_dir_includes_both_families_and_cleans_legacy(tmp_path):
+    # a leftover 2.40.0 persona skill must be removed on install
+    legacy = tmp_path / "omw-persona-factcheck"
+    legacy.mkdir(parents=True)
+    (legacy / "SKILL.md").write_text("stale")
+
     res = ask.install_into_dir(tmp_path)
     assert res["ok"] is True
-    assert res.get("op_skills") == len(reg.procedures())
-    # canonical + alias + family all coexist
+    assert res.get("op_skills") == len(_non_persona_procs())
+    assert res.get("role_skills") == len(personas.list_personas())
+    # canonical + alias + op + role coexist; legacy gone
     assert (tmp_path / "oh-my-wiki" / "SKILL.md").is_file()
     assert (tmp_path / "omw" / "SKILL.md").is_file()
     assert (tmp_path / "omw-ingest" / "SKILL.md").is_file()
+    assert (tmp_path / "omw-curator" / "SKILL.md").is_file()
+    assert not (tmp_path / "omw-persona-factcheck").exists()
 
 
-def test_op_skill_replaces_dangling_symlink(tmp_path):
-    (tmp_path / "omw-ingest").symlink_to(tmp_path / "gone")  # dangling
-    ask.install_op_skills_into_dir(tmp_path)
-    dest = tmp_path / "omw-ingest"
+def test_role_skill_replaces_dangling_symlink(tmp_path):
+    (tmp_path / "omw-curator").symlink_to(tmp_path / "gone")  # dangling
+    ask.install_role_skills_into_dir(tmp_path)
+    dest = tmp_path / "omw-curator"
     assert not dest.is_symlink() and (dest / "SKILL.md").is_file()

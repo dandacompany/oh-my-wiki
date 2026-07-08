@@ -113,10 +113,17 @@ Do not restate the rules or improvise the procedure here — they live in the
 """
 
 
-def op_skill_names() -> tuple[str, ...]:
-    """The omw-<op> skill dir names, one per procedure op (registry-derived)."""
+# The persona procedures (persona-factcheck/consistency/terminology) are NOT given
+# an omw-<op> skill — personas are covered uniformly by the omw-<role> family below
+# (single, role-named namespace). Only these non-persona procedures get an op skill.
+def _op_skill_procedures() -> tuple[str, ...]:
     from scripts import ops_registry
-    return tuple(f"omw-{name}" for name in ops_registry.procedures())
+    return tuple(n for n in ops_registry.procedures() if not n.startswith("persona-"))
+
+
+def op_skill_names() -> tuple[str, ...]:
+    """The omw-<op> skill dir names, one per non-persona procedure op."""
+    return tuple(f"omw-{name}" for name in _op_skill_procedures())
 
 
 def install_op_skills_into_dir(skills_dir) -> list[Path]:
@@ -124,7 +131,7 @@ def install_op_skills_into_dir(skills_dir) -> list[Path]:
     then writes). Returns the list of skill dirs."""
     from scripts import ops_registry
     out: list[Path] = []
-    for name in ops_registry.procedures():
+    for name in _op_skill_procedures():
         op = ops_registry.get(name)
         dest = Path(skills_dir) / f"omw-{name}"
         _clear_stale(dest)
@@ -132,6 +139,72 @@ def install_op_skills_into_dir(skills_dir) -> list[Path]:
         (dest / "SKILL.md").write_text(_op_skill_md(op), encoding="utf-8")
         out.append(dest)
     return out
+
+
+# ── per-persona agent family (omw-<role>) ────────────────────────────────────
+# One /omw-<role> skill per persona in the roster (personas.list_personas() = the
+# single source), e.g. /omw-fact-checker, /omw-wiki-librarian. Same generate-at-
+# install model as the op family: no static files, zero drift (a new persona auto-
+# gets a skill). Each forwards to `omw persona-run <role>` and loads the oh-my-wiki
+# rules (propose→confirm→execute); it does not restate the persona's own prompt.
+def _role_skill_md(persona: dict) -> str:
+    role = persona["name"]
+    trigs = ", ".join(persona.get("triggers") or ())
+    summary = (persona.get("description") or "").strip().replace("\n", " ")
+    desc = (f"{summary} Direct shortcut for the omw {role} persona — /omw-{role}. "
+            f"Triggers — {trigs}.")
+    desc = desc.replace("<", "").replace(">", "")  # convention: no < / > in description
+    return f"""\
+---
+name: omw-{role}
+description: {desc}
+argument-hint: "[--page P | --file F | --text T] [--backend B]"
+---
+
+# omw-{role} — direct shortcut for the omw `{role}` persona
+
+You invoked the **{role}** persona shortcut. This dispatches omw's `{role}` agent.
+
+1. Load the **oh-my-wiki** skill's rules (HARD RULES, conventions, propose→confirm→execute).
+2. Then dispatch the persona with `omw persona-run {role}` on the user's target
+   (page / file / text) — the role is already `{role}`, so skip role selection.
+
+Do not restate the persona's own instructions here — they live in
+`personas/{role}.md` and are loaded by `omw persona-run` (single source of truth).
+"""
+
+
+def role_skill_names() -> tuple[str, ...]:
+    """The omw-<role> skill dir names, one per persona (roster-derived)."""
+    from scripts import personas
+    return tuple(f"omw-{p['name']}" for p in personas.list_personas())
+
+
+def install_role_skills_into_dir(skills_dir) -> list[Path]:
+    """Write every omw-<role> persona forwarder into <skills_dir>. Idempotent."""
+    from scripts import personas
+    out: list[Path] = []
+    for persona in personas.list_personas():
+        dest = Path(skills_dir) / f"omw-{persona['name']}"
+        _clear_stale(dest)
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / "SKILL.md").write_text(_role_skill_md(persona), encoding="utf-8")
+        out.append(dest)
+    return out
+
+
+# Skill dirs shipped by an earlier omw that this version no longer generates.
+# Cleared on every install so an upgrade doesn't leave orphan /omw-* commands.
+# (2.40.0 shipped omw-persona-{factcheck,consistency,terminology}; superseded by the
+# omw-<role> family.)
+_LEGACY_SKILL_NAMES = (
+    "omw-persona-factcheck", "omw-persona-consistency", "omw-persona-terminology",
+)
+
+
+def _clear_legacy_skills(skills_dir) -> None:
+    for name in _LEGACY_SKILL_NAMES:
+        _clear_stale(Path(skills_dir) / name)
 
 _AGENT_BINS = {"claude": "claude", "codex": "codex", "hermes": "hermes",
                "gemini": "gemini", "opencode": "opencode", "openclaw": "openclaw"}
@@ -228,9 +301,12 @@ def install_into_dir(skills_dir, *, repo_root=REPO_ROOT) -> dict:
     try:
         dest = _copy_bundle(skills_dir, repo_root=repo_root)
         alias = install_alias_into_dir(skills_dir)
+        _clear_legacy_skills(skills_dir)
         op_dests = install_op_skills_into_dir(skills_dir)
+        role_dests = install_role_skills_into_dir(skills_dir)
         return {"ok": True, "method": "copy", "dest": str(dest),
-                "alias_dest": str(alias), "op_skills": len(op_dests), "detail": None}
+                "alias_dest": str(alias), "op_skills": len(op_dests),
+                "role_skills": len(role_dests), "detail": None}
     except OSError as exc:
         return {"ok": False, "method": "copy", "dest": None, "detail": str(exc)}
 
@@ -287,23 +363,23 @@ def install(agent, *, repo_root=REPO_ROOT, use_skills_cli=None) -> dict:
         use_skills_cli = _skills_cli_opt_in()
     if agent not in _AGENT_BINS:
         return {"agent": agent, "ok": False, "method": None, "dest": None, "detail": "unknown agent"}
-    # The short-alias `omw` skill and the omw-<op> procedure family ride along into
-    # the same skills dir, regardless of whether the main skill goes via the skills
-    # CLI or a direct copy.
+    # The short-alias `omw` skill, the omw-<op> procedure family, and the omw-<role>
+    # persona family all ride along into the same skills dir, regardless of whether
+    # the main skill goes via the skills CLI or a direct copy.
     alias = str(install_alias_into_dir(_SKILLS_DIR[agent]))
+    _clear_legacy_skills(_SKILLS_DIR[agent])
     op_skills = len(install_op_skills_into_dir(_SKILLS_DIR[agent]))
+    role_skills = len(install_role_skills_into_dir(_SKILLS_DIR[agent]))
+    extra = {"alias_dest": alias, "op_skills": op_skills, "role_skills": role_skills}
     if agent not in _SKILLS_AGENT:
         dest = _copy_bundle(_SKILLS_DIR[agent], repo_root=repo_root)
-        return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest),
-                "alias_dest": alias, "op_skills": op_skills}
+        return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest), **extra}
     if use_skills_cli:
         ok, dest = _install_via_skills_cli(agent)
         if ok:
-            return {"agent": agent, "ok": True, "method": "skills-cli", "dest": dest,
-                    "alias_dest": alias, "op_skills": op_skills}
+            return {"agent": agent, "ok": True, "method": "skills-cli", "dest": dest, **extra}
     dest = _copy_bundle(_SKILLS_DIR[agent], repo_root=repo_root)
-    return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest),
-            "alias_dest": alias, "op_skills": op_skills}
+    return {"agent": agent, "ok": True, "method": "copy", "dest": str(dest), **extra}
 
 
 def install_many(agents, *, repo_root=REPO_ROOT, use_skills_cli=None) -> list[dict]:
