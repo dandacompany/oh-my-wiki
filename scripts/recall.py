@@ -194,30 +194,18 @@ def _prompt_from_stdin(raw: str) -> str:
     return raw
 
 
-def prompt(text: str | None) -> str:
-    """Per-prompt recall. Returns injectable context (possibly empty)."""
-    cfg = _cfg()
+def _recall_body(cfg: dict, text: str) -> str:
+    """The read-side recall output (extracted verbatim from the old prompt()). Empty
+    string means 'no recall injection' (mode=off, auto-miss, or no strong hit)."""
     if cfg["mode"] == "off":
         return ""
-    if text is None:
-        text = _prompt_from_stdin(sys.stdin.read()) if not sys.stdin.isatty() else ""
-    text = text or ""
-    if is_trivial(text):
-        return ""
-
-    # Resolve the configured retrieval strategy. quiet=True: this runs on every
-    # prompt — stay silent (setup warns once).
     strat = effective_strategy(cfg.get("strategy", "fts"), quiet=True)
     if strat == "llm":
-        # llm is advisory-natured: the hook delegates to the agent and injects no
-        # hook-side grounding regardless of mode (only mode=off and is_trivial
-        # suppress recall, which are checked above). No Python search is run here.
         return render_llm_guidance(cfg.get("llm_submode", "route"))
     hits = _hits(text, int(cfg["top_k"]))
     strong = [h for h in hits if (h.get("score") or 0) >= float(cfg["min_score"])]
-
-    if strong:  # Tier 2 — concrete grounding (both auto and advisory benefit)
-        _record_use([h["relpath"] for h in strong])  # reactivate freshness (best-effort)
+    if strong:  # Tier 2 — concrete grounding
+        _record_use([h["relpath"] for h in strong])
         lines = [f"<{MARKER}> 활성 omw 위키에 관련 페이지가 있습니다 — 답변의 근거/출처로 활용하세요:"]
         for h in strong:
             tags = ",".join(h.get("tags") or [])
@@ -226,11 +214,30 @@ def prompt(text: str | None) -> str:
         lines.append("열기: `omw view <slug>` · 인용 시 페이지의 citations를 함께 제시하세요.")
         lines.append(f"</{MARKER}>")
         return "\n".join(lines)
-
     if cfg["mode"] == "advisory":  # Tier 1 nudge only when no strong hit
         return (f"<{MARKER}> 프로젝트/도메인 사실이면 답하기 전에 `omw find \"<핵심 명사>\"`로 "
                 f"활성 위키를 확인하세요. 무관하면 무시. </{MARKER}>")
-    return ""  # auto + no strong hit → stay silent (avoid per-prompt noise)
+    return ""  # auto + no strong hit → stay silent
+
+
+def prompt(text: str | None) -> str:
+    """Per-prompt recall + optional capture cue. Returns injectable context (maybe empty).
+
+    is_trivial gates BOTH sides. The `capture` toggle is independent of recall.mode:
+    when on, the write-side cue is appended (or emitted alone if the recall body is empty),
+    so a durable fact the user just stated still gets a save nudge even on an FTS miss or
+    with recall.mode=off. When capture is off, behavior is byte-identical to before."""
+    cfg = _cfg()
+    if text is None:
+        text = _prompt_from_stdin(sys.stdin.read()) if not sys.stdin.isatty() else ""
+    text = text or ""
+    if is_trivial(text):
+        return ""
+    body = _recall_body(cfg, text)
+    if not cfg.get("capture"):
+        return body
+    cue = render_capture_cue()
+    return f"{body}\n{cue}" if body else cue
 
 
 def preamble() -> str:
