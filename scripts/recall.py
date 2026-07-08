@@ -19,6 +19,7 @@ import sys
 from scripts import maint
 
 MARKER = "omw-recall"
+CAPTURE_MARKER = "omw-capture"
 
 #: retrieval strategies (축 2). All of `fts`, `embedding`, `hybrid`, `llm` are
 #: implemented; only an unknown/unconfigured strategy falls back to `fts`
@@ -272,6 +273,19 @@ def render_llm_guidance(submode: str) -> str:
                 "의미 검색에 맞는지(개념·동의어) 판단하고 `omw find \"<핵심 명사>\"`로 적절히 검색한 뒤 "
                 "그 근거로 답하세요. 무관하면 무시. 인용 시 페이지의 citations를 함께 제시.")
     return f"<{MARKER}> {body} </{MARKER}>"
+
+
+def render_capture_cue() -> str:
+    """Per-prompt write-side cue (mem0's write-trigger analog). Guidance only — the
+    in-loop agent judges whether the user *stated* durable new info. Routes into the
+    existing ingest/gate machinery and the duplicate-ingest confirm class; never
+    auto-ingests. Suppressed by is_trivial and gated by the `capture` toggle in prompt()."""
+    return (
+        f"<{CAPTURE_MARKER}> 사용자가 지속성 있는 새 사실·결정·선호를 *진술*했다면(질문이 아니라) — "
+        f"검색이 아니라 저장 신호입니다. `omw ingest <source>` 또는 `omw gate note ingest`로 "
+        f"캡처를 제안하세요. 바로 넣지 말고 duplicate-ingest 확인 클래스로 "
+        f"\"위키에 넣을까요?\"라고 먼저 확인하세요. 무관하면 무시. </{CAPTURE_MARKER}>"
+    )
 
 
 def render_recall_block(mode: str = "auto") -> str:
