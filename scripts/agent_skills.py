@@ -141,27 +141,35 @@ def install_op_skills_into_dir(skills_dir) -> list[Path]:
     return out
 
 
-# ── per-persona agent family (omw-<role>) ────────────────────────────────────
-# One /omw-<role> skill per persona in the roster (personas.list_personas() = the
-# single source), e.g. /omw-fact-checker, /omw-wiki-librarian. Same generate-at-
-# install model as the op family: no static files, zero drift (a new persona auto-
-# gets a skill). Each forwards to `omw persona-run <role>` and loads the oh-my-wiki
-# rules (propose→confirm→execute); it does not restate the persona's own prompt.
+# ── per-persona agent family (omw-<slash>) ───────────────────────────────────
+# One /omw-<slash> skill per persona in the roster (personas.list_personas() = the
+# single source), e.g. /omw-fact-checker, /omw-librarian. Same generate-at-install
+# model as the op family: no static files, zero drift (a new persona auto-gets a
+# skill). Each forwards to `omw persona-run <role>` (the FULL role name) and loads
+# the oh-my-wiki rules; it does not restate the persona's own prompt.
+#
+# The slash name drops a redundant leading "wiki-" (wiki-librarian → /omw-librarian,
+# wiki-auditor → /omw-auditor); the persona role name is unchanged everywhere else.
+def _role_slash(role: str) -> str:
+    return role[len("wiki-"):] if role.startswith("wiki-") else role
+
+
 def _role_skill_md(persona: dict) -> str:
     role = persona["name"]
+    slash = _role_slash(role)
     trigs = ", ".join(persona.get("triggers") or ())
     summary = (persona.get("description") or "").strip().replace("\n", " ")
-    desc = (f"{summary} Direct shortcut for the omw {role} persona — /omw-{role}. "
+    desc = (f"{summary} Direct shortcut for the omw {role} persona — /omw-{slash}. "
             f"Triggers — {trigs}.")
     desc = desc.replace("<", "").replace(">", "")  # convention: no < / > in description
     return f"""\
 ---
-name: omw-{role}
+name: omw-{slash}
 description: {desc}
 argument-hint: "[--page P | --file F | --text T] [--backend B]"
 ---
 
-# omw-{role} — direct shortcut for the omw `{role}` persona
+# omw-{slash} — direct shortcut for the omw `{role}` persona
 
 You invoked the **{role}** persona shortcut. This dispatches omw's `{role}` agent.
 
@@ -175,17 +183,17 @@ Do not restate the persona's own instructions here — they live in
 
 
 def role_skill_names() -> tuple[str, ...]:
-    """The omw-<role> skill dir names, one per persona (roster-derived)."""
+    """The omw-<slash> skill dir names, one per persona (roster-derived)."""
     from scripts import personas
-    return tuple(f"omw-{p['name']}" for p in personas.list_personas())
+    return tuple(f"omw-{_role_slash(p['name'])}" for p in personas.list_personas())
 
 
 def install_role_skills_into_dir(skills_dir) -> list[Path]:
-    """Write every omw-<role> persona forwarder into <skills_dir>. Idempotent."""
+    """Write every omw-<slash> persona forwarder into <skills_dir>. Idempotent."""
     from scripts import personas
     out: list[Path] = []
     for persona in personas.list_personas():
-        dest = Path(skills_dir) / f"omw-{persona['name']}"
+        dest = Path(skills_dir) / f"omw-{_role_slash(persona['name'])}"
         _clear_stale(dest)
         dest.mkdir(parents=True, exist_ok=True)
         (dest / "SKILL.md").write_text(_role_skill_md(persona), encoding="utf-8")
@@ -195,10 +203,11 @@ def install_role_skills_into_dir(skills_dir) -> list[Path]:
 
 # Skill dirs shipped by an earlier omw that this version no longer generates.
 # Cleared on every install so an upgrade doesn't leave orphan /omw-* commands.
-# (2.40.0 shipped omw-persona-{factcheck,consistency,terminology}; superseded by the
-# omw-<role> family.)
+# - 2.40.0 shipped omw-persona-{factcheck,consistency,terminology} (→ omw-<role> family)
+# - 2.41.0 shipped omw-wiki-{librarian,auditor} (→ shortened to omw-{librarian,auditor})
 _LEGACY_SKILL_NAMES = (
     "omw-persona-factcheck", "omw-persona-consistency", "omw-persona-terminology",
+    "omw-wiki-librarian", "omw-wiki-auditor",
 )
 
 

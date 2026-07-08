@@ -64,21 +64,31 @@ def test_install_op_skills_excludes_persona(tmp_path):
 # ── role (persona) family ────────────────────────────────────────────────────
 
 def test_role_skill_names_track_roster():
-    assert set(ask.role_skill_names()) == {f"omw-{p['name']}" for p in personas.list_personas()}
+    assert set(ask.role_skill_names()) == {
+        f"omw-{ask._role_slash(p['name'])}" for p in personas.list_personas()}
+
+
+def test_role_slash_drops_wiki_prefix():
+    # slash name shortens wiki-*; other roles unchanged
+    assert ask._role_slash("wiki-librarian") == "librarian"
+    assert ask._role_slash("wiki-auditor") == "auditor"
+    assert ask._role_slash("curator") == "curator"
+    assert ask._role_slash("fact-checker") == "fact-checker"
 
 
 def test_role_skill_md_wellformed():
     for p in personas.list_personas():
         role = p["name"]
+        slash = ask._role_slash(role)
         md = ask._role_skill_md(p)
         fm = _frontmatter(md)
-        assert fm["name"] == f"omw-{role}"
+        assert fm["name"] == f"omw-{slash}"          # skill/dir uses the short slash
         desc = fm["description"]
         assert desc and "\n" not in desc
         assert ": " not in desc and not desc.startswith("[")
         assert "<" not in desc and ">" not in desc
         assert "argument-hint" in fm
-        assert f"omw persona-run {role}" in md  # dispatches via persona-run
+        assert f"omw persona-run {role}" in md        # dispatch keeps the FULL role name
         assert "oh-my-wiki" in md
 
 
@@ -86,16 +96,19 @@ def test_install_role_skills_writes_family(tmp_path):
     dests = ask.install_role_skills_into_dir(tmp_path)
     assert len(dests) == len(personas.list_personas())
     assert (tmp_path / "omw-fact-checker" / "SKILL.md").is_file()
-    assert (tmp_path / "omw-wiki-librarian" / "SKILL.md").is_file()
+    assert (tmp_path / "omw-librarian" / "SKILL.md").is_file()      # shortened
+    assert (tmp_path / "omw-auditor" / "SKILL.md").is_file()
+    assert not (tmp_path / "omw-wiki-librarian").exists()           # long form not written
 
 
 # ── install / legacy cleanup ─────────────────────────────────────────────────
 
 def test_install_into_dir_includes_both_families_and_cleans_legacy(tmp_path):
-    # a leftover 2.40.0 persona skill must be removed on install
-    legacy = tmp_path / "omw-persona-factcheck"
-    legacy.mkdir(parents=True)
-    (legacy / "SKILL.md").write_text("stale")
+    # leftover skills from earlier versions must be removed on install
+    for stale in ("omw-persona-factcheck", "omw-wiki-librarian"):
+        d = tmp_path / stale
+        d.mkdir(parents=True)
+        (d / "SKILL.md").write_text("stale")
 
     res = ask.install_into_dir(tmp_path)
     assert res["ok"] is True
@@ -106,7 +119,9 @@ def test_install_into_dir_includes_both_families_and_cleans_legacy(tmp_path):
     assert (tmp_path / "omw" / "SKILL.md").is_file()
     assert (tmp_path / "omw-ingest" / "SKILL.md").is_file()
     assert (tmp_path / "omw-curator" / "SKILL.md").is_file()
+    assert (tmp_path / "omw-librarian" / "SKILL.md").is_file()
     assert not (tmp_path / "omw-persona-factcheck").exists()
+    assert not (tmp_path / "omw-wiki-librarian").exists()  # 2.41.0 long form cleaned
 
 
 def test_role_skill_replaces_dangling_symlink(tmp_path):
