@@ -33,7 +33,7 @@ _IMPLEMENTED_STRATEGIES = {"fts", "embedding", "hybrid", "llm"}
 # not body — so ~1.0 means at least one meaningful token hit. Pages with a good
 # `summary` rank higher; bump min_score if recall feels noisy.
 _DEFAULTS = {"mode": "auto", "strategy": "fts", "llm_submode": "route",
-             "min_score": 1.0, "top_k": 3, "snippet_chars": 280}
+             "min_score": 1.0, "top_k": 3, "snippet_chars": 280, "capture": False}
 
 
 def effective_strategy(strategy: str, *, quiet: bool = False) -> str:
@@ -65,6 +65,18 @@ _ACK = {
 }
 
 
+def _as_bool(v) -> bool:
+    """Normalize a hand-edited toggle. A bare non-empty string like 'off' is truthy in
+    Python, so parse explicitly instead of trusting bool(v)."""
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.strip().lower() in ("on", "true", "yes", "1")
+    if isinstance(v, (int, float)):
+        return bool(v)
+    return False
+
+
 def _cfg() -> dict:
     try:
         from scripts import config
@@ -77,6 +89,7 @@ def _cfg() -> dict:
             out[k] = raw[k]
     llm = raw.get("llm")  # harden: a hand-edited non-dict must not raise here
     out["llm_submode"] = (llm if isinstance(llm, dict) else {}).get("submode", _DEFAULTS["llm_submode"])
+    out["capture"] = _as_bool(raw.get("capture", _DEFAULTS["capture"]))
     return out
 
 
