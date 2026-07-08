@@ -88,6 +88,20 @@ def test_capture_on_coexists_with_llm_guidance(monkeypatch):
     assert recall.render_capture_cue() in out
 
 
+def test_capture_off_mode_off_does_not_read_stdin(monkeypatch):
+    monkeypatch.setattr(recall, "_cfg", lambda: _cfg(mode="off", capture=False))
+
+    class _Boom:
+        def isatty(self):
+            return False
+
+        def read(self):
+            raise AssertionError("stdin must not be read on the mode=off + capture=off fast path")
+
+    monkeypatch.setattr(recall.sys, "stdin", _Boom())
+    assert recall.prompt(None) == ""
+
+
 def test_capture_on_prepends_strong_hits(monkeypatch):
     monkeypatch.setattr(recall, "_cfg", lambda: _cfg(capture=True))
     monkeypatch.setattr(recall, "_hits",

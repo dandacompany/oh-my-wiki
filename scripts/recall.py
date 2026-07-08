@@ -199,7 +199,11 @@ def _recall_body(cfg: dict, text: str) -> str:
     string means 'no recall injection' (mode=off, auto-miss, or no strong hit)."""
     if cfg["mode"] == "off":
         return ""
+    # Resolve the configured retrieval strategy. quiet=True: this runs on every
+    # prompt — stay silent (setup warns once).
     strat = effective_strategy(cfg.get("strategy", "fts"), quiet=True)
+    # llm is advisory-natured: the hook delegates to the agent and injects no hook-side
+    # grounding regardless of mode (mode=off and is_trivial are handled by prompt()). No Python search here.
     if strat == "llm":
         return render_llm_guidance(cfg.get("llm_submode", "route"))
     hits = _hits(text, int(cfg["top_k"]))
@@ -228,6 +232,10 @@ def prompt(text: str | None) -> str:
     so a durable fact the user just stated still gets a save nudge even on an FTS miss or
     with recall.mode=off. When capture is off, behavior is byte-identical to before."""
     cfg = _cfg()
+    # Capture-off fast path: preserve the pre-capture behavior exactly, including NOT
+    # reading stdin when recall is fully off (mode=off short-circuited before stdin).
+    if cfg["mode"] == "off" and not cfg.get("capture"):
+        return ""
     if text is None:
         text = _prompt_from_stdin(sys.stdin.read()) if not sys.stdin.isatty() else ""
     text = text or ""
