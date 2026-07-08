@@ -7,7 +7,7 @@
 
 A host-universal LLM-wiki you drive from your AI coding agent (Claude Code / Codex / Gemini).
 
-oh-my-wiki exposes exactly two surfaces. The **`omw` CLI** handles deterministic ops — `omw setup`, `omw vault create`, `omw lint`, `omw schema list`, `omw supersede`, `omw review`, `omw links`, `omw fields`, `omw view`, `omw doctor` — with no LLM required. The **`omw` skill** brings natural-language reasoning inside your AI session: ingest, query, autoresearch, and a small set of wiki-maintenance personas (librarian, curator, fact-checker, consistency-checker, terminology-manager). The model is _personas propose → you confirm → deterministic ops execute_, so every file change is auditable. omw stays focused on the wiki — multi-step orchestration is left to your host AI agent (Claude Code / Codex / Gemini), not reimplemented here.
+oh-my-wiki exposes exactly two surfaces. The **`omw` CLI** handles deterministic ops — `omw setup`, `omw vault create`, `omw lint`, `omw schema list`, `omw supersede`, `omw review`, `omw links`, `omw fields`, `omw view`, `omw doctor` — with no LLM required. The **`omw` skill** brings natural-language reasoning inside your AI session: ingest, query, autoresearch, summary, synthesis, and a set of wiki-maintenance personas (wiki-librarian, wiki-auditor, curator, fact-checker, consistency-checker, terminology-manager). The model is _personas propose → you confirm → deterministic ops execute_, so every file change is auditable. After each op, omw **suggests** the state-endorsed next lifecycle step (`omw next --after <op>`, deterministic; safe default = stop) and lets you confirm or skip — full multi-step orchestration is still left to your host AI agent (Claude Code / Codex / Gemini), not reimplemented here.
 
 **Short alias:** `OMW` (lowercase `omw`). Both `oh-my-wiki` and `omw` register as skills and respond to the same trigger phrases.
 
@@ -27,6 +27,10 @@ oh-my-wiki exposes exactly two surfaces. The **`omw` CLI** handles deterministic
 - **Note viewers** — `omw view` opens the active vault, a page, or a search in Obsidian or Logseq (URI schemes, no plugin needed); `omw setup viewer` scaffolds the viewer config
 - **Visibility (secure-by-default)** — `omw visibility get/set` marks pages `public`/`private`; `omw serve` exposes only public pages
 - **URL inbox + fetch** — `omw fetch <url>` saves a web page or YouTube transcript to `raw/` (tiered urllib → chromium → cloud, SSRF-guarded); `omw inbox add/list/run/remove` queues URLs for batch fetch
+- **Slash-command family** — each op is also an explicit slash command (`/omw-ingest`, `/omw-query`, `/omw-summary`, `/omw-synthesis`, …) alongside `/omw <op>`; generated at install time from the op registry (see [Slash commands](#slash-commands))
+- **Persona slash commands** — one per persona (`/omw-fact-checker`, `/omw-librarian`, `/omw-auditor`, `/omw-curator`, `/omw-consistency-checker`, `/omw-terminology-manager`), each dispatching `omw persona-run <role>`
+- **Guided lifecycle chaining** — after a pipeline op, `omw next --after <op>` computes the state-endorsed next op (deterministic — static successor filtered by vault state); the skill offers it via your host's ask tool (safe default = stop, never auto-runs)
+- **`summary` / `synthesis` ops** — `omw summary <page>` condenses a page into a summary page; `omw synthesis <topic>` weaves a cluster's structured pages into a `wiki/syntheses/` page
 
 ---
 
@@ -190,34 +194,74 @@ SKILL.md dispatcher → commands/<op>.md (LLM procedure) → scripts/<op>.py (de
                                                        └─ adapters.py → filesystem (markdown / obsidian)
 ```
 
-The 17 CLI subcommands:
+The 18 CLI subcommands:
 
-| Subcommand   | Purpose                                                              |
-| ------------ | -------------------------------------------------------------------- |
-| `status`     | Show active vault and registry state                                 |
-| `vault`      | Create, list, use, forget vaults                                     |
-| `lint`       | Structural health check (frontmatter + links)                        |
-| `search`     | Web search via the configured external provider (brave/tavily/exa/…) |
-| `serve`      | Local retrieve-only HTTP query API (port 8765) — public pages only   |
-| `view`       | Open the vault / a page / a search in Obsidian or Logseq             |
-| `visibility` | Get / set a page's public/private visibility (`get` / `set`)         |
-| `schema`     | List / inspect page-type schemas                                     |
-| `supersede`  | Mark a page superseded by a newer one                                |
-| `review`     | Spaced-repetition review queue (due / done)                          |
-| `links`      | Suggest and insert `[[slug]]` entity links                           |
-| `fields`     | Read frontmatter + inline `key::` fields                             |
-| `import`     | Import an existing folder as a vault                                 |
-| `fetch`      | Fetch one URL (web page / YouTube transcript) into `raw/`            |
-| `inbox`      | Queue URLs and batch-fetch them into `raw/` (add/list/run/remove)    |
-| `setup`      | Interactive setup wizard                                             |
-| `doctor`     | Verify install health                                                |
+| Subcommand   | Purpose                                                                                              |
+| ------------ | ---------------------------------------------------------------------------------------------------- |
+| `status`     | Show active vault and registry state                                                                 |
+| `vault`      | Create, list, use, forget vaults                                                                     |
+| `lint`       | Structural health check (frontmatter + links)                                                        |
+| `search`     | Web search via the configured external provider (brave/tavily/exa/…)                                 |
+| `serve`      | Local retrieve-only HTTP query API (port 8765) — public pages only                                   |
+| `view`       | Open the vault / a page / a search in Obsidian or Logseq                                             |
+| `visibility` | Get / set a page's public/private visibility (`get` / `set`)                                         |
+| `schema`     | List / inspect page-type schemas                                                                     |
+| `supersede`  | Mark a page superseded by a newer one                                                                |
+| `review`     | Spaced-repetition review queue (due / done)                                                          |
+| `links`      | Suggest and insert `[[slug]]` entity links                                                           |
+| `fields`     | Read frontmatter + inline `key::` fields                                                             |
+| `import`     | Import an existing folder as a vault                                                                 |
+| `fetch`      | Fetch one URL (web page / YouTube transcript) into `raw/`                                            |
+| `inbox`      | Queue URLs and batch-fetch them into `raw/` (add/list/run/remove)                                    |
+| `next`       | Recommend the next lifecycle action; `--after <op>` gives the state-endorsed next op (deterministic) |
+| `setup`      | Interactive setup wizard                                                                             |
+| `doctor`     | Verify install health                                                                                |
 
 > **Visibility (secure-by-default):** `omw serve` returns only pages with
 > `visibility: public` in their frontmatter. Pages without the field are treated as
 > private and never served. Publish pages explicitly with
 > `omw visibility set <relpath...> public`.
 
-The skill also exposes natural-language ops via your AI session: `ingest`, `query`, `autoresearch`, `find`, `edit`, `move`, `delete`, and wiki-maintenance persona invocations (`fact-check`, `consistency-check`, `build glossary`).
+The skill also exposes natural-language ops via your AI session: `ingest`, `query`, `autoresearch`, `summary`, `synthesis`, `find`, `edit`, `move`, `delete`, and wiki-maintenance persona invocations (`fact-check`, `consistency-check`, `build glossary`). Each is also an explicit slash command — see [Slash commands](#slash-commands).
+
+---
+
+## Slash commands
+
+Every procedure op and every persona is also exposed as an explicit slash command,
+generated at install time from the op registry + persona roster (so a new op/persona
+auto-gets one, with zero drift). The `/omw <op>` alias still works — these are additive
+shortcuts that skip the "which op?" step.
+
+**Op commands** (each dispatches `commands/<op>.md`):
+
+| Command             | Op                                              |
+| ------------------- | ----------------------------------------------- |
+| `/omw-ingest`       | pull a source into `raw/` and reindex           |
+| `/omw-query`        | answer a question from the wiki (LLM synthesis) |
+| `/omw-open`         | open a page for reading                         |
+| `/omw-edit`         | edit a page following schema conventions        |
+| `/omw-move`         | move / rename a page and fix backlinks          |
+| `/omw-delete`       | delete a page (confirm first)                   |
+| `/omw-autoresearch` | multi-round web research into `raw/`            |
+| `/omw-summary`      | condense a page/source into a summary page      |
+| `/omw-synthesis`    | weave a cluster's pages into a synthesis page   |
+
+**Persona commands** (each dispatches `omw persona-run <role>`):
+
+| Command                    | Persona                                      |
+| -------------------------- | -------------------------------------------- |
+| `/omw-librarian`           | tidy structure, cross-links, orphans         |
+| `/omw-auditor`             | diagnose what's wrong with the vault         |
+| `/omw-curator`             | keep `index.md` in sync and well-ordered     |
+| `/omw-fact-checker`        | verify claims via web search, tag confidence |
+| `/omw-consistency-checker` | find contradictions within / across pages    |
+| `/omw-terminology-manager` | build / maintain the per-vault glossary      |
+
+> **Lifecycle chaining:** after a pipeline op the skill runs `omw next --after <op>`
+> and offers the state-endorsed next step (search/fetch → ingest → summary → synthesis
+> → lint → review; autoresearch → synthesis). The computation is deterministic; the
+> skill asks via your host's tool with a **safe default of stop** and never auto-runs.
 
 ---
 

@@ -37,7 +37,7 @@ oh-my-wiki는 정확히 두 가지 인터페이스를 제공합니다:
 | 인터페이스      | 설명                                 | 예시                                                                                                                                                 |
 | --------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`omw` CLI**   | 결정론적 작업 — LLM 없이도 실행 가능 | `omw status`, `omw vault create`, `omw lint`, `omw schema list`, `omw supersede`, `omw review`, `omw links`, `omw fields`, `omw setup`, `omw doctor` |
-| **`omw` skill** | 세션 내 자연어 추론                  | ingest, query, autoresearch, personas, find, edit, move, delete                                                                                      |
+| **`omw` skill** | 세션 내 자연어 추론                  | ingest, query, autoresearch, summary, synthesis, personas, find, edit, move, delete — 각각 `/omw-<op>` 슬래시 커맨드로도 제공                        |
 
 모델의 흐름은 이렇습니다. **persona가 제안 → 사용자가 확인 → 결정론적 작업이 실행**.
 Writing persona는 콘텐츠를 분석해 변경 사항을 제안하고, `omw` CLI가 결정론적 출력(링크 삽입,
@@ -718,11 +718,42 @@ omw setup recall
 | `omw list`        | CLI        | 패싯 페이지 목록(JSON): `--tag` / `--type` / `--status` / `--layer` / `--visibility` (LLM 없음)                                                                                                                                                                                                |
 | `omw export`      | CLI        | vault 슬라이스를 자족 Markdown 폴더(또는 `--zip`) + `EXPORT_MANIFEST.md`로 내보내기; 볼트 밖에만 기록                                                                                                                                                                                          |
 | `omw merge`       | CLI        | 두 유사 페이지를 하나로 통합 (frontmatter union + `## Merged from` 본문 + winner `aliases` + source tombstone); `.proposed.md` 스테이징 → `--apply`                                                                                                                                            |
+| `omw next`        | CLI        | 다음 라이프사이클 액션 추천; `--after <op>`는 파이프라인 op 완료 후 상태가 승인한 다음 op을 반환(결정론적; 안전 기본값=중단)                                                                                                                                                                   |
 
-추론 작업(`ingest`, `query`, `find`, `edit`, `autoresearch`, persona)은
-Claude / Codex / Gemini 세션이 필요합니다. 에이전트 세션에서 자연어로 사용하세요.
-oh-my-wiki는 멀티 스텝 오케스트레이션을 제공하지 않습니다. 이 작업들을 엮어 실행하는 일은
-호스트 AI 에이전트(Claude Code / Codex / Gemini)가 담당합니다.
+추론 작업(`ingest`, `query`, `summary`, `synthesis`, `find`, `edit`, `autoresearch`,
+persona)은 Claude / Codex / Gemini 세션이 필요합니다. 자연어로 말하거나, `/omw <op>`,
+또는 아래의 명시적 `/omw-<op>` 슬래시 커맨드로 실행하세요. 파이프라인 op 완료 후 omw는
+상태가 승인한 다음 단계를 **제안**하고(`omw next --after <op>`, 결정론적; 안전 기본값=중단)
+진행 여부를 물어봅니다 — **자동 실행하지 않습니다.** 그 한 번의 제안을 넘어서는 멀티 스텝
+오케스트레이션은 호스트 AI 에이전트(Claude Code / Codex / Gemini)가 담당합니다.
+
+### 슬래시 커맨드
+
+모든 procedure op과 모든 persona는 명시적 슬래시 커맨드로도 제공됩니다. 설치 시점에
+op 레지스트리 + persona 로스터에서 자동 생성돼(새 op/persona가 생기면 자동 획득, 드리프트
+0), `/omw <op>` 별칭도 그대로 유효합니다 — "어떤 op?" 단계를 건너뛰는 추가 바로가기입니다.
+
+| Op 커맨드           | Persona 커맨드                             |
+| ------------------- | ------------------------------------------ |
+| `/omw-ingest`       | `/omw-librarian` (wiki-librarian)          |
+| `/omw-query`        | `/omw-auditor` (wiki-auditor)              |
+| `/omw-open`         | `/omw-curator`                             |
+| `/omw-edit`         | `/omw-fact-checker`                        |
+| `/omw-move`         | `/omw-consistency-checker`                 |
+| `/omw-delete`       | `/omw-terminology-manager`                 |
+| `/omw-autoresearch` | _(각각 `omw persona-run <role>` 디스패치)_ |
+| `/omw-summary`      |                                            |
+| `/omw-synthesis`    |                                            |
+
+persona 슬래시 이름은 중복되는 선두 `wiki-`를 뗍니다(`/omw-librarian`, `/omw-auditor`);
+persona role 이름(`wiki-librarian`)은 `omw persona-run`에서 그대로 씁니다.
+
+**라이프사이클 체이닝.** 파이프라인 op 완료 후 스킬이 `omw next --after <op>`를 실행해
+체인의 다음 단계를 제안합니다 — `search`/`fetch` → `ingest` → `summary` → `synthesis` →
+`lint` → `review`, 그리고 `autoresearch` → `synthesis`. 다음 op은 결정론적으로 계산되며
+(정적 successor를 볼트 상태로 걸러 불필요 단계 자동 제거 — 예: `synthesis`는 clusters가 있을
+때만, `lint`는 lint 이슈가 있을 때만), 스킬은 호스트 도구로 **안전 기본값=중단**으로 물어보고
+다음 op을 스스로 실행하지 않습니다.
 
 ### Frontmatter 규약
 
@@ -761,13 +792,17 @@ contradicts:: [[old-method]]
 
 ### Persona 목록
 
-| Persona                 | 호출 문구                     | 출력                      |
-| ----------------------- | ----------------------------- | ------------------------- |
-| **Wiki-librarian**      | "open my wiki", "ingest this" | ingest / 정리 요청 라우팅 |
-| **Curator**             | "curate my wiki"              | 유지 관리 제안 (세션 내)  |
-| **Fact-checker**        | "fact-check this"             | `<page>.factcheck.md`     |
-| **Consistency-checker** | "check for contradictions"    | JSON 리포트 (세션 내)     |
-| **Terminology-manager** | "build a glossary"            | `glossary.db`             |
+| Persona                 | 슬래시 커맨드              | 호출 문구                     | 출력                           |
+| ----------------------- | -------------------------- | ----------------------------- | ------------------------------ |
+| **Wiki-librarian**      | `/omw-librarian`           | "open my wiki", "ingest this" | ingest / 정리 요청 라우팅      |
+| **Wiki-auditor**        | `/omw-auditor`             | "위키 점검", "뭐가 문제"      | "무엇이 아픈지" 진단 (세션 내) |
+| **Curator**             | `/omw-curator`             | "curate my wiki"              | 유지 관리 제안 (세션 내)       |
+| **Fact-checker**        | `/omw-fact-checker`        | "fact-check this"             | `<page>.factcheck.md`          |
+| **Consistency-checker** | `/omw-consistency-checker` | "check for contradictions"    | JSON 리포트 (세션 내)          |
+| **Terminology-manager** | `/omw-terminology-manager` | "build a glossary"            | `glossary.db`                  |
+
+각 슬래시 커맨드는 `omw persona-run <role>`을 디스패치합니다(role 이름은 전체 형태 —
+예: `wiki-librarian`; 슬래시에서만 중복 `wiki-`를 뗌).
 
 ### 스키마 위치
 

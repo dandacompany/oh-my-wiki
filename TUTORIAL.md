@@ -37,7 +37,7 @@ oh-my-wiki exposes exactly two surfaces:
 | Surface         | What it is                                  | Examples                                                                                                                                             |
 | --------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`omw` CLI**   | Deterministic ops — no LLM needed           | `omw status`, `omw vault create`, `omw lint`, `omw schema list`, `omw supersede`, `omw review`, `omw links`, `omw fields`, `omw setup`, `omw doctor` |
-| **`omw` skill** | Natural-language reasoning inside a session | ingest, query, autoresearch, personas, find, edit, move, delete                                                                                      |
+| **`omw` skill** | Natural-language reasoning inside a session | ingest, query, autoresearch, summary, synthesis, personas, find, edit, move, delete — each also a `/omw-<op>` slash command                          |
 
 The model is: **personas propose → you confirm → deterministic ops execute**.
 Writing personas analyze your content and suggest changes; the `omw` CLI writes
@@ -750,11 +750,46 @@ so its answer cites your own vetted, sourced page instead of guessing.
 | `omw list`        | CLI     | Faceted page listing (JSON): `--tag` / `--type` / `--status` / `--layer` / `--visibility` (no LLM)                                                                                                                                                                                                                                     |
 | `omw export`      | CLI     | Export a vault slice to a self-contained Markdown dir (or `--zip`) + `EXPORT_MANIFEST.md`; writes only outside the vault                                                                                                                                                                                                               |
 | `omw merge`       | CLI     | Consolidate two near-duplicate pages into one (frontmatter union + `## Merged from` body + winner `aliases` + source tombstone); staged as `.proposed.md` → `--apply`                                                                                                                                                                  |
+| `omw next`        | CLI     | Recommend the next lifecycle action; `--after <op>` returns the state-endorsed next op after a pipeline op (deterministic; safe default = stop)                                                                                                                                                                                        |
 
-Reasoning-ops (`ingest`, `query`, `find`, `edit`, `autoresearch`, personas)
-require a Claude / Codex / Gemini session — use them by speaking naturally in
-your agent session. oh-my-wiki does not ship multi-step orchestration; your host
-AI agent (Claude Code / Codex / Gemini) handles chaining these ops together.
+Reasoning-ops (`ingest`, `query`, `summary`, `synthesis`, `find`, `edit`,
+`autoresearch`, personas) require a Claude / Codex / Gemini session — invoke them by
+speaking naturally, via `/omw <op>`, or via the explicit `/omw-<op>` slash commands
+below. After a pipeline op, omw **suggests** the state-endorsed next step
+(`omw next --after <op>`, deterministic; safe default = stop) and asks before
+proceeding — it never auto-runs. Full multi-step orchestration beyond that single
+suggestion is left to your host AI agent (Claude Code / Codex / Gemini).
+
+### Slash commands
+
+Every procedure op and every persona is also an explicit slash command, generated at
+install time from the op registry + persona roster (so a new op/persona auto-gets one,
+zero drift). `/omw <op>` still works — these are additive shortcuts that skip the
+"which op?" step.
+
+| Op command          | Persona command                              |
+| ------------------- | -------------------------------------------- |
+| `/omw-ingest`       | `/omw-librarian` (wiki-librarian)            |
+| `/omw-query`        | `/omw-auditor` (wiki-auditor)                |
+| `/omw-open`         | `/omw-curator`                               |
+| `/omw-edit`         | `/omw-fact-checker`                          |
+| `/omw-move`         | `/omw-consistency-checker`                   |
+| `/omw-delete`       | `/omw-terminology-manager`                   |
+| `/omw-autoresearch` | _(each dispatches `omw persona-run <role>`)_ |
+| `/omw-summary`      |                                              |
+| `/omw-synthesis`    |                                              |
+
+The persona slash name drops a redundant leading `wiki-` (`/omw-librarian`,
+`/omw-auditor`); the persona role name (`wiki-librarian`) is unchanged in
+`omw persona-run`.
+
+**Lifecycle chaining.** After a pipeline op the skill runs `omw next --after <op>` and
+offers the next step along the chain — `search`/`fetch` → `ingest` → `summary` →
+`synthesis` → `lint` → `review`, and `autoresearch` → `synthesis`. The next op is
+computed deterministically (a static successor filtered by vault state, so pointless
+steps drop out — e.g. `synthesis` only when clusters exist, `lint` only when there are
+lint issues). The skill asks via your host's tool with a **safe default of stop** and
+never runs the next op on its own.
 
 ### Frontmatter conventions
 
@@ -793,13 +828,17 @@ contradicts:: [[old-method]]
 
 ### Persona roster
 
-| Persona                 | Invocation phrase             | Output                            |
-| ----------------------- | ----------------------------- | --------------------------------- |
-| **Wiki-librarian**      | "open my wiki", "ingest this" | Routes ingest / organize requests |
-| **Curator**             | "curate my wiki"              | Maintenance proposal (in-session) |
-| **Fact-checker**        | "fact-check this"             | `<page>.factcheck.md`             |
-| **Consistency-checker** | "check for contradictions"    | JSON report (in-session)          |
-| **Terminology-manager** | "build a glossary"            | `glossary.db`                     |
+| Persona                 | Slash command              | Invocation phrase                | Output                            |
+| ----------------------- | -------------------------- | -------------------------------- | --------------------------------- |
+| **Wiki-librarian**      | `/omw-librarian`           | "open my wiki", "ingest this"    | Routes ingest / organize requests |
+| **Wiki-auditor**        | `/omw-auditor`             | "audit the wiki", "what's wrong" | "What's sick" triage (in-session) |
+| **Curator**             | `/omw-curator`             | "curate my wiki"                 | Maintenance proposal (in-session) |
+| **Fact-checker**        | `/omw-fact-checker`        | "fact-check this"                | `<page>.factcheck.md`             |
+| **Consistency-checker** | `/omw-consistency-checker` | "check for contradictions"       | JSON report (in-session)          |
+| **Terminology-manager** | `/omw-terminology-manager` | "build a glossary"               | `glossary.db`                     |
+
+Each slash command dispatches `omw persona-run <role>` (the persona role name is the
+full form, e.g. `wiki-librarian`; the slash just drops the redundant `wiki-`).
 
 ### Schema locations
 
