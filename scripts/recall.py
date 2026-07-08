@@ -19,6 +19,7 @@ import sys
 from scripts import maint
 
 MARKER = "omw-recall"
+CAPTURE_MARKER = "omw-capture"
 
 #: retrieval strategies (축 2). All of `fts`, `embedding`, `hybrid`, `llm` are
 #: implemented; only an unknown/unconfigured strategy falls back to `fts`
@@ -32,7 +33,7 @@ _IMPLEMENTED_STRATEGIES = {"fts", "embedding", "hybrid", "llm"}
 # not body — so ~1.0 means at least one meaningful token hit. Pages with a good
 # `summary` rank higher; bump min_score if recall feels noisy.
 _DEFAULTS = {"mode": "auto", "strategy": "fts", "llm_submode": "route",
-             "min_score": 1.0, "top_k": 3, "snippet_chars": 280}
+             "min_score": 1.0, "top_k": 3, "snippet_chars": 280, "capture": False}
 
 
 def effective_strategy(strategy: str, *, quiet: bool = False) -> str:
@@ -64,6 +65,18 @@ _ACK = {
 }
 
 
+def _as_bool(v) -> bool:
+    """Normalize a hand-edited toggle. A bare non-empty string like 'off' is truthy in
+    Python, so parse explicitly instead of trusting bool(v)."""
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.strip().lower() in ("on", "true", "yes", "1")
+    if isinstance(v, (int, float)):
+        return bool(v)
+    return False
+
+
 def _cfg() -> dict:
     try:
         from scripts import config
@@ -76,6 +89,7 @@ def _cfg() -> dict:
             out[k] = raw[k]
     llm = raw.get("llm")  # harden: a hand-edited non-dict must not raise here
     out["llm_submode"] = (llm if isinstance(llm, dict) else {}).get("submode", _DEFAULTS["llm_submode"])
+    out["capture"] = _as_bool(raw.get("capture", _DEFAULTS["capture"]))
     return out
 
 
@@ -180,30 +194,22 @@ def _prompt_from_stdin(raw: str) -> str:
     return raw
 
 
-def prompt(text: str | None) -> str:
-    """Per-prompt recall. Returns injectable context (possibly empty)."""
-    cfg = _cfg()
+def _recall_body(cfg: dict, text: str) -> str:
+    """The read-side recall output (extracted verbatim from the old prompt()). Empty
+    string means 'no recall injection' (mode=off, auto-miss, or no strong hit)."""
     if cfg["mode"] == "off":
         return ""
-    if text is None:
-        text = _prompt_from_stdin(sys.stdin.read()) if not sys.stdin.isatty() else ""
-    text = text or ""
-    if is_trivial(text):
-        return ""
-
     # Resolve the configured retrieval strategy. quiet=True: this runs on every
     # prompt — stay silent (setup warns once).
     strat = effective_strategy(cfg.get("strategy", "fts"), quiet=True)
+    # llm is advisory-natured: the hook delegates to the agent and injects no hook-side
+    # grounding regardless of mode (mode=off and is_trivial are handled by prompt()). No Python search here.
     if strat == "llm":
-        # llm is advisory-natured: the hook delegates to the agent and injects no
-        # hook-side grounding regardless of mode (only mode=off and is_trivial
-        # suppress recall, which are checked above). No Python search is run here.
         return render_llm_guidance(cfg.get("llm_submode", "route"))
     hits = _hits(text, int(cfg["top_k"]))
     strong = [h for h in hits if (h.get("score") or 0) >= float(cfg["min_score"])]
-
-    if strong:  # Tier 2 — concrete grounding (both auto and advisory benefit)
-        _record_use([h["relpath"] for h in strong])  # reactivate freshness (best-effort)
+    if strong:  # Tier 2 — concrete grounding
+        _record_use([h["relpath"] for h in strong])
         lines = [f"<{MARKER}> 활성 omw 위키에 관련 페이지가 있습니다 — 답변의 근거/출처로 활용하세요:"]
         for h in strong:
             tags = ",".join(h.get("tags") or [])
@@ -212,11 +218,34 @@ def prompt(text: str | None) -> str:
         lines.append("열기: `omw view <slug>` · 인용 시 페이지의 citations를 함께 제시하세요.")
         lines.append(f"</{MARKER}>")
         return "\n".join(lines)
-
     if cfg["mode"] == "advisory":  # Tier 1 nudge only when no strong hit
         return (f"<{MARKER}> 프로젝트/도메인 사실이면 답하기 전에 `omw find \"<핵심 명사>\"`로 "
                 f"활성 위키를 확인하세요. 무관하면 무시. </{MARKER}>")
-    return ""  # auto + no strong hit → stay silent (avoid per-prompt noise)
+    return ""  # auto + no strong hit → stay silent
+
+
+def prompt(text: str | None) -> str:
+    """Per-prompt recall + optional capture cue. Returns injectable context (maybe empty).
+
+    is_trivial gates BOTH sides. The `capture` toggle is independent of recall.mode:
+    when on, the write-side cue is appended (or emitted alone if the recall body is empty),
+    so a durable fact the user just stated still gets a save nudge even on an FTS miss or
+    with recall.mode=off. When capture is off, behavior is byte-identical to before."""
+    cfg = _cfg()
+    # Capture-off fast path: preserve the pre-capture behavior exactly, including NOT
+    # reading stdin when recall is fully off (mode=off short-circuited before stdin).
+    if cfg["mode"] == "off" and not cfg.get("capture"):
+        return ""
+    if text is None:
+        text = _prompt_from_stdin(sys.stdin.read()) if not sys.stdin.isatty() else ""
+    text = text or ""
+    if is_trivial(text):
+        return ""
+    body = _recall_body(cfg, text)
+    if not cfg.get("capture"):
+        return body
+    cue = render_capture_cue()
+    return f"{body}\n{cue}" if body else cue
 
 
 def preamble() -> str:
@@ -272,6 +301,19 @@ def render_llm_guidance(submode: str) -> str:
                 "의미 검색에 맞는지(개념·동의어) 판단하고 `omw find \"<핵심 명사>\"`로 적절히 검색한 뒤 "
                 "그 근거로 답하세요. 무관하면 무시. 인용 시 페이지의 citations를 함께 제시.")
     return f"<{MARKER}> {body} </{MARKER}>"
+
+
+def render_capture_cue() -> str:
+    """Per-prompt write-side cue (mem0's write-trigger analog). Guidance only — the
+    in-loop agent judges whether the user *stated* durable new info. Routes into the
+    existing ingest/gate machinery and the duplicate-ingest confirm class; never
+    auto-ingests. Suppressed by is_trivial and gated by the `capture` toggle in prompt()."""
+    return (
+        f"<{CAPTURE_MARKER}> 사용자가 지속성 있는 새 사실·결정·선호를 *진술*했다면(질문이 아니라) — "
+        f"검색이 아니라 저장 신호입니다. `omw ingest <source>` 또는 `omw gate note ingest`로 "
+        f"캡처를 제안하세요. 바로 넣지 말고 duplicate-ingest 확인 클래스로 "
+        f"\"위키에 넣을까요?\"라고 먼저 확인하세요. 무관하면 무시. </{CAPTURE_MARKER}>"
+    )
 
 
 def render_recall_block(mode: str = "auto") -> str:

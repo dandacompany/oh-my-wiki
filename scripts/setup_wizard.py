@@ -1035,9 +1035,15 @@ def setup_gate(mode="enforce", hosts=None, noninteractive=False) -> int:
 
 def configure_recall(*, strategy="fts", provider="none", model="text-embedding-3-small",
                      dim=1536, mode=None, submode: str | None = None,
+                     capture: bool | None = None, mem0_preset: bool = False,
                      noninteractive=False) -> None:
-    """Persist recall strategy + embedding provider. Prints the scale guard note."""
+    """Persist recall strategy + embedding provider. Prints the scale guard note.
+
+    mem0_preset=True is a one-step 'bidirectional' setup: recall.mode=advisory +
+    strategy=llm + capture=on (read-side agent-delegated recall + write-side cue)."""
     from scripts import config, recall
+    if mem0_preset:
+        mode, strategy, capture = "advisory", "llm", True
     if mode:
         config.set_config("recall.mode", mode)
     config.set_config("recall.strategy", strategy)
@@ -1049,6 +1055,8 @@ def configure_recall(*, strategy="fts", provider="none", model="text-embedding-3
               "FTS 정밀도가 떨어질 때 켜는 롱테일 검색 축입니다 (opt-in).")
     if strategy == "llm" and submode:
         config.set_config("recall.llm.submode", submode)
+    if capture is not None:
+        config.set_config("recall.capture", "on" if capture else "off")
     warn = recall.cost_warning(mode or "auto", strategy)
     if warn:
         print(warn)
