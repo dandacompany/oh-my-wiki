@@ -31,6 +31,7 @@ def test_procedures_match_expected_agentic_set():
     assert set(reg.procedures()) == {
         "ingest", "query", "open", "edit", "move", "delete", "autoresearch",
         "persona-factcheck", "persona-consistency", "persona-terminology",
+        "summary", "synthesis",
     }
 
 

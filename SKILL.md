@@ -204,6 +204,14 @@ When the user has enabled the gate (`omw setup gate --enable`), help it work:
 
 After completing a unit of work, run `omw next` and propose the top next action (collect / structure / synthesize / maintain / review / recall); the user picks now / background / later.
 
+### Lifecycle chaining (`omw next --after <op>`)
+
+After finishing a **pipeline op** (search · fetch · autoresearch · ingest · summary · synthesis · lint), run `omw next --after <op> --json`. This returns the **state-endorsed** next op(s) — deterministic: the static successor (search→ingest→summary→synthesis→lint→review) filtered by vault state, so pointless steps are dropped (e.g. `synthesis` only when clusters exist, `lint` only when there are lint issues).
+
+- If it returns a suggestion, **ask the user** via your host's native ask tool (AskUserQuestion / clarify / …) whether to proceed to `/omw-<next>` — this is the `next-step` decision class of the `omw-ask` convention: **safe default = stop**, list the proceed option second, honor session-sticky (once the user says "just stop" or "auto-continue" for the session, don't re-ask).
+- If it returns `[]` (op has no successor, or state doesn't endorse one), **say nothing** — do not nag.
+- Never auto-run the next op. Chaining is user-confirmed, one step at a time.
+
 ## history — remember requests, learn preferences
 
 omw keeps a per-vault **request history** (distinct from `wiki/log.md`). After a

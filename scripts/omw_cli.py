@@ -17,7 +17,7 @@ from scripts.paths import ensure_home, registry_path, resolve_vault_root
 AGENTIC_OPS = [
     "ingest", "query", "open", "edit", "move", "delete",
     "autoresearch", "persona-factcheck", "persona-consistency",
-    "persona-terminology",
+    "persona-terminology", "summary", "synthesis",
 ]
 
 
@@ -1298,6 +1298,16 @@ def _cmd_next(args) -> int:
         return 1
     today = args.today or date.today().isoformat()
     sig = nextstep.signals(db, vault["id"], today=today)
+    if args.after:
+        # Lifecycle chaining: state-endorsed successor(s) of the just-completed op.
+        from scripts import chain
+        succ = chain.next_after(args.after, sig)
+        if args.next_json:
+            print(json.dumps(succ, ensure_ascii=False, indent=2))
+            return 0
+        for i, s in enumerate(succ, 1):
+            print(f"{i}. {s['op']} — {s['reason']}\n   → {s['command']}")
+        return 0
     ranked = nextstep.suggest(sig)
     if args.next_json:
         print(json.dumps(ranked, ensure_ascii=False, indent=2))
@@ -1627,6 +1637,8 @@ def build_parser() -> argparse.ArgumentParser:
     pnx.add_argument("--vault", default=None)
     pnx.add_argument("--json", dest="next_json", action="store_true")
     pnx.add_argument("--today", default=None, help="YYYY-MM-DD (default: today)")
+    pnx.add_argument("--after", default=None, metavar="OP",
+                     help="lifecycle chaining: state-endorsed next op(s) after OP")
     pnx.set_defaults(func=_cmd_next)
 
     prep = sub.add_parser("report", help="Aggregate vault stats + health into one report.")

@@ -204,6 +204,14 @@ OPS: tuple[OpSpec, ...] = (
     _proc("persona-terminology", "Terminology-manager persona — dispatched via `omw persona-run <role>` (isolated subagent).",
           args=(ArgSpec("page", False, "page to scan (default: whole vault)"),),
           triggers=("glossary", "용어집")),
+    _proc("summary", "Condense a page or source into a summary-type page.",
+          args=(ArgSpec("page", True, "page relpath / slug / source to summarize"),),
+          uses=("open", "edit"),
+          triggers=("summary", "summarize", "요약", "간추려")),
+    _proc("synthesis", "Weave a topic/cluster's structured pages into a wiki/syntheses page.",
+          args=(ArgSpec("topic", True, "topic or cluster to synthesize"),),
+          uses=("connections", "context", "query"),
+          triggers=("synthesis", "synthesize", "종합", "엮어")),
 )
 
 _PHASE = {
@@ -212,9 +220,10 @@ _PHASE = {
     # structure — organize into the graph
     "reindex": "structure", "links": "structure", "fields": "structure",
     "connections": "structure", "open": "structure", "edit": "structure",
-    "move": "structure", "delete": "structure",
+    "move": "structure", "delete": "structure", "summary": "structure",
     # synthesize — combine into new knowledge
     "query": "synthesize", "context": "synthesize", "autoresearch": "synthesize",
+    "synthesis": "synthesize",
     # retrieve — find what's stored
     "search": "retrieve", "find": "retrieve", "serve": "retrieve", "embed": "retrieve",
     # maintain — keep the wiki healthy
