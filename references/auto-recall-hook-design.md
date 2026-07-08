@@ -200,3 +200,20 @@ recall:
 - [x] `llm.route`(에이전트가 검색법 선택) / `llm.generative`(에이전트가 후보 read+판정). ← agent-delegated guidance (`commands/recall-llm.md`); 훅은 `<omw-recall>` 지시문만 emit하고 LLM/API를 직접 호출하지 않음. **llm은 advisory 성격 — auto 모드여도 훅이 결과를 주입하지 않고 인루프 에이전트에게 검색을 위임.**
 - [x] `omw setup recall`에 strategy/submode 선택 + `auto+llm` **동작 명료화 안내**(비용 경고가 아님 — 별도 호출이 없으므로). (`configure_recall()` 프로그래매틱 진입점 구현 완료)
 - [ ] josa 정규화는 `fts` 전략 내부 옵션으로 흡수(`embedding`/`llm`은 불필요).
+
+---
+
+## 11. 프롬프트 단위 capture 큐 (mem0 write-trigger 대응 — 2026-07-08)
+
+recall이 지식을 **읽어 오는** 축이라면, 이 큐는 지식을 **넣도록** 유도하는 프롬프트 단위 축이다.
+`gate`(scripts/gate.py)는 턴-끝 + 에이전트 작업(research/synthesis) 캡처인 반면, 이 큐는
+**사용자가 방금 프롬프트에서 지속성 있는 새 사실·결정·선호를 *진술*했을 때** 저장을 유도한다
+(mem0의 "user is stating new info → write trigger" 대응).
+
+- 구현: `scripts/recall.py::render_capture_cue()` (마커 `omw-capture`), `prompt()`에서 조건부 append.
+- 게이트: `recall.capture`(`on|off`, 기본 off, opt-in). `recall.mode`와 **독립** — mode=off여도
+  capture=on이면 큐 발사. `is_trivial`은 둘 다 침묵시킴.
+- 지침 문구만(탐지 코드 없음). 기존 `omw ingest`/`omw gate note ingest` + `duplicate-ingest`
+  확인 클래스로 연결 — **바로 넣지 않고 "넣을까요?"라고 확인**.
+- recall 읽기 축은 이미 mem0식이다: `advisory`+`llm`이 매 프롬프트 에이전트 위임 가이드를 낸다.
+  `omw setup recall`의 mem0 프리셋은 `mode=advisory, strategy=llm, capture=on`을 한 번에 켠다.
