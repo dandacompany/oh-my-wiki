@@ -168,6 +168,9 @@ OPS: tuple[OpSpec, ...] = (
     _det("persona-fanout", "Resolve a page list + emit per-page persona-run commands for host-parallel fan-out.",
          "omw persona-fanout <role> [--pages a,b,c | --tag T --type T --status S --layer L --visibility V] [--backend B] [--runner host|hermes-kanban] [--assignee P]",
          triggers=("persona fanout", "fan out", "배치 실행", "여러 페이지 페르소나")),
+    _det("star", "Show the GitHub repo to star (thanks!); --open opens it, --dismiss hides nudges.",
+         "omw star [--open] [--dismiss] [--status]",
+         triggers=("star", "github star", "별표", "스타 주기")),
     # --- agentic procedures (you execute commands/<op>.md; do NOT trust a shelled result) ---
     _proc("ingest", "Pull a source (path/URL) into raw/ and reindex.",
           args=(ArgSpec("source", True, "file path or URL"),), uses=("fetch", "reindex"),
@@ -238,6 +241,7 @@ _PHASE = {
     "update": "meta", "uninstall": "meta", "schema": "meta", "help": "meta", "version": "meta",
     "report": "meta",
     "history": "meta",
+    "star": "meta",
 }
 
 OPS = tuple(dataclasses.replace(op, phase=_PHASE.get(op.name, "meta")) for op in OPS)

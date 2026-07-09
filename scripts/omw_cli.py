@@ -30,6 +30,7 @@ def _cmd_status(args) -> int:
     if result["needs"] != "migrate" and not db.exists():
         registry.init_db(db)
     print(json.dumps(result, ensure_ascii=False, indent=2))
+    _star_install_nudge()
     return 0
 
 
@@ -755,6 +756,35 @@ def _cmd_recall(args) -> int:
     return 0
 
 
+def _cmd_star(args) -> int:
+    from scripts import star
+    if args.dismiss:
+        star.dismiss()
+        print("okay — GitHub star nudges are now off (you can still run `omw star`).")
+        return 0
+    if getattr(args, "star_status", False):
+        print(json.dumps(star.status(), ensure_ascii=False, indent=2))
+        return 0
+    print("Thanks for using oh-my-wiki! If it helps, a GitHub star means a lot:")
+    print(f"  {star.REPO_URL}")
+    if args.open:
+        star.open_repo()
+    return 0
+
+
+def _star_install_nudge() -> None:
+    """Best-effort nudge B — emitted to stderr (never pollutes stdout/JSON), TTY-gated."""
+    try:
+        import sys as _sys
+        from datetime import datetime
+        from scripts import star
+        line = star.maybe_install_nudge(now=datetime.now(), is_tty=_sys.stderr.isatty())
+        if line:
+            print(line, file=_sys.stderr)
+    except Exception:
+        pass
+
+
 def _cmd_serve(args) -> int:
     from scripts import config, paths, server
     token = config.read_secret("OMW_SERVE_TOKEN")
@@ -1138,7 +1168,9 @@ def _cmd_version(args) -> int:
 
 def _cmd_doctor(args) -> int:
     from scripts import setup_wizard
-    return setup_wizard.doctor()
+    rc = setup_wizard.doctor()
+    _star_install_nudge()
+    return rc
 
 
 def _cmd_update(args) -> int:
@@ -1287,6 +1319,7 @@ def _cmd_report(args) -> int:
         print(json.dumps(data, ensure_ascii=False, indent=2))
     else:
         print(report.render(data))
+    _star_install_nudge()
     return 0
 
 
@@ -1649,6 +1682,12 @@ def build_parser() -> argparse.ArgumentParser:
                       help="emit the structured report as JSON")
     prep.add_argument("--today", default=None, help=argparse.SUPPRESS)
     prep.set_defaults(func=_cmd_report)
+
+    pstar = sub.add_parser("star", help="Star oh-my-wiki on GitHub (thanks!). --open / --dismiss / --status")
+    pstar.add_argument("--open", action="store_true", help="open the repo in a browser")
+    pstar.add_argument("--dismiss", action="store_true", help="turn off star nudges")
+    pstar.add_argument("--status", dest="star_status", action="store_true", help="show nudge state (JSON)")
+    pstar.set_defaults(func=_cmd_star)
 
     pse = sub.add_parser("serve", help="Run the local query HTTP API (retrieve-only).")
     pse.add_argument("--host", default="127.0.0.1", help="bind host (default: localhost)")
