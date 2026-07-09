@@ -765,6 +765,19 @@ def _cmd_star(args) -> int:
     if getattr(args, "star_status", False):
         print(json.dumps(star.status(), ensure_ascii=False, indent=2))
         return 0
+    if getattr(args, "now", False):
+        # One-click star via the user's own gh auth; fall back to the link.
+        if star.gh_ready():
+            if star.star_via_gh():
+                star.dismiss()  # starred → stop nudging
+                print("★ Starred oh-my-wiki with your GitHub account — thank you! 🙏")
+                return 0
+            print("couldn't star via gh (API error) — opening the page instead.", file=sys.stderr)
+        else:
+            print("gh CLI not found or not logged in — opening the page instead.", file=sys.stderr)
+        print(f"  {star.REPO_URL}")
+        star.open_repo()
+        return 0
     print("Thanks for using oh-my-wiki! If it helps, a GitHub star means a lot:")
     print(f"  {star.REPO_URL}")
     if args.open:
@@ -1683,7 +1696,8 @@ def build_parser() -> argparse.ArgumentParser:
     prep.add_argument("--today", default=None, help=argparse.SUPPRESS)
     prep.set_defaults(func=_cmd_report)
 
-    pstar = sub.add_parser("star", help="Star oh-my-wiki on GitHub (thanks!). --open / --dismiss / --status")
+    pstar = sub.add_parser("star", help="Star oh-my-wiki on GitHub (thanks!). --now / --open / --dismiss / --status")
+    pstar.add_argument("--now", action="store_true", help="star immediately via your gh CLI login (else opens the page)")
     pstar.add_argument("--open", action="store_true", help="open the repo in a browser")
     pstar.add_argument("--dismiss", action="store_true", help="turn off star nudges")
     pstar.add_argument("--status", dest="star_status", action="store_true", help="show nudge state (JSON)")

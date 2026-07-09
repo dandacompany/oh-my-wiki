@@ -71,3 +71,42 @@ def test_load_state_survives_corrupt_file(tmp_path):
     star.state_path().parent.mkdir(parents=True, exist_ok=True)
     star.state_path().write_text("{ not json", encoding="utf-8")
     assert star.load_state() == dict(star._DEFAULT_STATE)
+
+
+class _Proc:
+    def __init__(self, rc):
+        self.returncode = rc
+
+
+def test_gh_ready_requires_gh_and_auth(monkeypatch):
+    import subprocess
+    # gh missing
+    monkeypatch.setattr("shutil.which", lambda b: None)
+    assert star.gh_ready() is False
+    # gh present but auth fails
+    monkeypatch.setattr("shutil.which", lambda b: "/usr/bin/gh")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Proc(1))
+    assert star.gh_ready() is False
+    # gh present + authed
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Proc(0))
+    assert star.gh_ready() is True
+
+
+def test_star_via_gh_put(monkeypatch):
+    import subprocess
+    seen = {}
+
+    def fake_run(cmd, **k):
+        seen["cmd"] = cmd
+        return _Proc(0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert star.star_via_gh() is True
+    assert seen["cmd"][:4] == ["gh", "api", "--method", "PUT"]
+    assert f"/user/starred/{star.REPO_SLUG}" in seen["cmd"]
+
+
+def test_star_via_gh_failure(monkeypatch):
+    import subprocess
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Proc(1))
+    assert star.star_via_gh() is False

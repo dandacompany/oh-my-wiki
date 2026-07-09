@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from scripts.paths import omw_home
 
 REPO_URL = "https://github.com/dandacompany/oh-my-wiki"
+REPO_SLUG = "dandacompany/oh-my-wiki"
 GRACE_DAYS = 3
 
 _DEFAULT_STATE = {"first_seen": None, "install_nudge_shown": False, "dismissed": False}
@@ -124,4 +125,33 @@ def open_repo() -> bool:
         import webbrowser
         return webbrowser.open(REPO_URL)
     except Exception:
+        return False
+
+
+# ── one-click star via the user's own GitHub CLI auth ────────────────────────
+# omw never handles a token: it delegates to `gh`, which stars AS the logged-in
+# user. A star can only be registered by the account that owns it, so this is the
+# only "actually register it" path short of the user clicking the web page.
+def gh_ready() -> bool:
+    """True if `gh` is installed AND authenticated."""
+    import shutil
+    import subprocess
+    if not shutil.which("gh"):
+        return False
+    try:
+        return subprocess.run(["gh", "auth", "status"], capture_output=True,
+                              timeout=10).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def star_via_gh() -> bool:
+    """Star the repo as the user's gh account (PUT /user/starred/<slug>). Success?"""
+    import subprocess
+    try:
+        r = subprocess.run(["gh", "api", "--method", "PUT",
+                            f"/user/starred/{REPO_SLUG}"],
+                           capture_output=True, timeout=20)
+        return r.returncode == 0
+    except (OSError, subprocess.SubprocessError):
         return False
