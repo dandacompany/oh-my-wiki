@@ -73,4 +73,12 @@ def run(*, check_only: bool, assume_yes: bool, refresh: bool, base_dir=None) -> 
         _refresh_blocks(base_dir)
         print("managed blocks regenerated (config preserved).")
     print("updated. Restart your agent session to load the new version.")
+    try:
+        from datetime import datetime
+        from scripts import star
+        line = star.maybe_update_nudge(now=datetime.now(), is_tty=sys.stderr.isatty())
+        if line:
+            print(line, file=sys.stderr)
+    except Exception:
+        pass
     return 0
