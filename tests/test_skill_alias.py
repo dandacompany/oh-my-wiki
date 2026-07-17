@@ -70,6 +70,25 @@ def test_install_copy_agent_installs_alias(tmp_path, monkeypatch):
     assert r.get("alias_dest")  # additive key surfaces the alias location
 
 
+def test_install_openclaw_restores_missing_alias_in_shared_catalog(tmp_path, monkeypatch):
+    """A skills-manager prune may leave OMW's generated commands in the shared
+    catalog while removing the untracked short alias. Re-running setup must
+    restore both the canonical skill and alias as real, readable directories."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "SKILL.md").write_text("---\nname: oh-my-wiki\n---\n")
+    shared = tmp_path / ".agents" / "skills"
+    (shared / "omw-ingest").mkdir(parents=True)
+    (shared / "omw-ingest" / "SKILL.md").write_text("stale")
+    monkeypatch.setitem(ask._SKILLS_DIR, "openclaw", shared)
+
+    result = ask.install("openclaw", repo_root=repo)
+
+    assert result["ok"] and result["method"] == "copy"
+    assert (shared / "oh-my-wiki" / "SKILL.md").is_file()
+    assert (shared / "omw" / "SKILL.md").is_file()
+
+
 def test_install_skills_cli_agent_still_installs_alias(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()

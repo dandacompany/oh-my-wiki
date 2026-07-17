@@ -5,7 +5,7 @@
 > **세 호스트 모두 동일한 훅 스키마**(`{"hooks": {<Event>: [{"hooks":[{"type":"command","command":...}]}]}}`)를 씀:
 >
 > - Claude Code → `~/.claude/settings.json`
-> - Codex → `~/.codex/hooks.json`
+> - Codex → `~/.codex/hooks.json` (JSON stdout required; blank output is invalid)
 > - Gemini CLI → `~/.gemini/settings.json`
 >   `wire_host`가 `SessionStart`(→`omw recall preamble`)+`UserPromptSubmit`(→`omw recall prompt`)를 멱등 병합(기존 보존, `.omw-bak` 백업). UserPromptSubmit는 stdin JSON에서 프롬프트 필드를 추출한다.
 >   교차호스트 검증 결과: 기존 `hooks/hooks.json`은 어느 호스트에도 자동 배선돼 있지 않았다(plugin.json hooks 필드 없음) — 즉 "Claude 전용"이 아니라 "미배선". recall은 호스트 중립 엔진 + 호스트별 번역으로 설계.

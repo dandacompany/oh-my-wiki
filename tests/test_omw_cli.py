@@ -530,6 +530,17 @@ def test_cli_recall_accepts_hook_format_flags(monkeypatch, capsys):
     assert out["hookSpecificOutput"]["additionalContext"] == "ctx"
 
 
+def test_cli_recall_accepts_codex_json_format(monkeypatch, capsys):
+    from scripts import omw_cli
+    monkeypatch.setattr("scripts.recall.prompt", lambda text: "ctx")
+    rc = omw_cli.main(["recall", "prompt", "--format", "codex-json",
+                       "--event", "UserPromptSubmit", "--text", "hello wiki"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
+    assert out["hookSpecificOutput"]["additionalContext"] == "ctx"
+
+
 def test_cli_recall_pretool_accepts_hook_format_flags(monkeypatch, capsys):
     from scripts import omw_cli
     monkeypatch.setattr("scripts.recall.pretool", lambda payload: "ctx")

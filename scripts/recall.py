@@ -456,20 +456,33 @@ def host_hook_configs() -> dict:
 
 
 def _omw_bin() -> str:
+    """Resolve the CLI recorded in generated hooks.
+
+    Prefer an explicit override, then the executable that launched this setup
+    process. This prevents a stale `omw` earlier on PATH from being baked into
+    a live host hook while a newer installation is running `omw setup`.
+    """
+    import os
     import shutil
+    from pathlib import Path
+    if configured := os.environ.get("OMW_BIN"):
+        return configured
+    invoked = Path(sys.argv[0]).expanduser()
+    if invoked.name == "omw" and invoked.exists():
+        return str(invoked.resolve())
     return shutil.which("omw") or "omw"
 
 
 def _format_output(out: str, fmt: str, event: str) -> str:
     """Wrap a recall body in the stdout shape the host's hook system expects.
-    Empty body → empty string (a no-op injection), never a malformed envelope."""
+    JSON hosts must receive a JSON object even when recall has no context; an empty
+    stdout stream is rejected as malformed hook output by current Claude and Codex."""
     import json
+    if not out and fmt in {"claude-json", "codex-json", "gemini-json"}:
+        return json.dumps({"continue": True})
     if not out:
         return ""
-    if fmt == "gemini-json":
-        return json.dumps({"hookSpecificOutput": {"hookEventName": event,
-                                                  "additionalContext": out}}, ensure_ascii=False)
-    if fmt == "claude-json":
+    if fmt in {"claude-json", "codex-json", "gemini-json"}:
         return json.dumps({"hookSpecificOutput": {"hookEventName": event,
                                                   "additionalContext": out}}, ensure_ascii=False)
     if fmt == "hermes-json":
@@ -484,9 +497,13 @@ _RECALL_VERBS = {
     "pretool": ("pretool", "omw wiki-first nudge"),
 }
 
+# Cold starts need more headroom than ordinary tool hooks. Prompt recall may
+# open the search index, while the session preamble and pre-tool nudge are small.
+_RECALL_TIMEOUTS = {"session": 10, "prompt": 15, "pretool": 5}
+
 
 def _recall_hook_specs(host: str = "claude") -> dict:
-    """Concrete event name -> (command, statusMessage) for a host, derived from the
+    """Concrete event -> (command, statusMessage, timeout) derived from the
     hosts.HOOK descriptor. Only the events in the host's `recall` list are wired (events
     that actually inject context). Each command bakes in the per-event `--format` and the
     host's `--event` so `omw recall` emits the right stdout shape under the right event."""
@@ -499,11 +516,22 @@ def _recall_hook_specs(host: str = "claude") -> dict:
         if not event:
             continue
         fmt = hosts.hook_event_fmt(host, abstract)
-        # `|| true` makes the hook fail-safe: recall is best-effort context
-        # injection and must NEVER block a host session, even if a future CLI
-        # change makes these args invalid (the command then no-ops at exit 0).
-        cmd = f'"{omw}" recall {verb} --format {fmt} --event {event} || true'
-        specs[event] = (cmd, status)
+        # A successful process is insufficient for JSON hooks: an empty body (or
+        # unexpected stdout) still makes the host reject the hook. Capture stdout,
+        # forward it only when it is a non-empty JSON document, and otherwise emit
+        # Codex/Claude's accepted no-op object. The final printf also guarantees a
+        # zero exit status when a future CLI argument change makes recall fail.
+        if fmt in {"claude-json", "codex-json", "gemini-json"}:
+            cmd = (
+                f'out=$("{omw}" recall {verb} --format {fmt} --event {event}); rc=$?; '
+                'if [ "$rc" -eq 0 ] && [ -n "$out" ] '
+                '&& printf \'%s\' "$out" | jq -e . >/dev/null 2>&1; then '
+                'printf \'%s\\n\' "$out"; else printf \'{\"continue\":true}\\n\'; fi'
+            )
+        else:
+            # Plain-output hosts may safely treat an empty result as no injection.
+            cmd = f'"{omw}" recall {verb} --format {fmt} --event {event} || true'
+        specs[event] = (cmd, status, _RECALL_TIMEOUTS[abstract])
     return specs
 
 
@@ -571,10 +599,10 @@ def wire_host(host: str, *, config_path=None) -> tuple[bool, str]:
     hooks = data.setdefault("hooks", {})
     _strip_omw_recall(hooks)  # migration: clear all omw-recall hooks first
     added = []
-    for event, (command, status) in _recall_hook_specs(host).items():
+    for event, (command, status, timeout) in _recall_hook_specs(host).items():
         hooks.setdefault(event, []).append(
             {"hooks": [{"type": "command", "command": command,
-                        "timeout": 5, "statusMessage": status}]})
+                        "timeout": timeout, "statusMessage": status}]})
         added.append(event)
     if not data.get("hooks"):  # don't leave an empty hooks block
         data.pop("hooks", None)

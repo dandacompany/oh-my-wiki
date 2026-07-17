@@ -1723,7 +1723,7 @@ def build_parser() -> argparse.ArgumentParser:
     prc.add_argument("action", choices=["preamble", "prompt", "pretool"])
     prc.add_argument("--text", default=None, help="prompt text (default: read stdin)")
     prc.add_argument("--format", dest="fmt", default="plain",
-                     choices=["plain", "claude-json", "gemini-json", "hermes-json"],
+                     choices=["plain", "claude-json", "codex-json", "gemini-json", "hermes-json"],
                      help="stdout shape for the calling host's hook system")
     prc.add_argument("--event", default="", help="concrete host event name (for json formats)")
     prc.set_defaults(func=_cmd_recall)
@@ -1780,7 +1780,8 @@ def build_parser() -> argparse.ArgumentParser:
     pset.add_argument("--viewer", choices=["obsidian", "logseq"], default=None,
                       help="viewer for `omw setup viewer` (default obsidian)")
     pset.add_argument("--agents", default=None,
-                      help="comma-separated agents for `omw setup agents` (claude,codex,hermes,gemini)")
+                      help="comma-separated agents for `omw setup agents` "
+                           "(claude,codex,opencode,gemini,hermes,openclaw)")
     pset.add_argument("--strategy", choices=["fts", "embedding", "hybrid", "llm"], default=None,
                       help="retrieval strategy for `omw setup recall`")
     pset.add_argument("--submode", choices=["route", "generative"], default=None,

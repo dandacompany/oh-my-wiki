@@ -1,7 +1,7 @@
 """Per-platform hook wiring — each host's event names + stdout inject format differ.
 
-Verified against official docs (2026-06):
-  claude/codex: SessionStart/UserPromptSubmit/PreToolUse/Stop, plain stdout inject.
+Verified against local Codex 0.144.5 hook behavior (2026-07):
+  claude/codex: SessionStart/UserPromptSubmit/PreToolUse/Stop require JSON stdout.
   gemini:       SessionStart/BeforeAgent/BeforeTool/AfterAgent, JSON-envelope inject.
   hermes:       on_session_start/pre_llm_call/pre_tool_call/post_llm_call (YAML), {"context"}.
 """
@@ -14,6 +14,11 @@ from scripts import gate, recall
 
 def test_format_plain_is_bare_text():
     assert recall._format_output("hello", "plain", "SessionStart") == "hello"
+
+
+def test_hook_binary_prefers_explicit_omw_bin(monkeypatch):
+    monkeypatch.setenv("OMW_BIN", "/opt/omw/current")
+    assert recall._omw_bin() == "/opt/omw/current"
 
 
 def test_format_gemini_json_wraps_envelope():
@@ -29,9 +34,11 @@ def test_format_hermes_json_uses_context_key():
 
 
 def test_format_empty_output_is_noop():
-    # empty body → no injection (empty string), never a malformed envelope
+    # JSON hosts reject blank stdout, so empty body must become a valid no-op.
     assert recall._format_output("", "plain", "SessionStart") == ""
-    assert recall._format_output("", "gemini-json", "BeforeAgent") == ""
+    assert json.loads(recall._format_output("", "claude-json", "SessionStart")) == {"continue": True}
+    assert json.loads(recall._format_output("", "codex-json", "SessionStart")) == {"continue": True}
+    assert json.loads(recall._format_output("", "gemini-json", "BeforeAgent")) == {"continue": True}
     assert recall._format_output("", "hermes-json", "pre_llm_call") == ""
 
 
@@ -50,7 +57,7 @@ def test_gemini_wire_uses_gemini_event_names_and_json_format(tmp_path):
     assert "recall prompt" in cmd and "gemini-json" in cmd
 
 
-def test_codex_wire_session_prompt_plain_no_pretool(tmp_path):
+def test_codex_wire_session_prompt_json_no_pretool(tmp_path):
     cfg = tmp_path / "hooks.json"
     recall.wire_host("codex", config_path=cfg)
     data = json.loads(cfg.read_text())
@@ -58,7 +65,20 @@ def test_codex_wire_session_prompt_plain_no_pretool(tmp_path):
     assert {"SessionStart", "UserPromptSubmit"} <= events
     assert "PreToolUse" not in events  # codex doesn't inject on pre-tool → not wired
     cmd = data["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
-    assert "recall prompt" in cmd and "plain" in cmd
+    assert "recall prompt" in cmd and "codex-json" in cmd
+    assert 'printf \'{\"continue\":true}' in cmd
+    assert data["hooks"]["SessionStart"][0]["hooks"][0]["timeout"] == 10
+    assert data["hooks"]["UserPromptSubmit"][0]["hooks"][0]["timeout"] == 15
+
+
+def test_claude_wire_session_and_prompt_use_claude_json(tmp_path):
+    cfg = tmp_path / "settings.json"
+    recall.wire_host("claude", config_path=cfg)
+    data = json.loads(cfg.read_text())
+    for event in ("SessionStart", "UserPromptSubmit"):
+        cmd = data["hooks"][event][0]["hooks"][0]["command"]
+        assert "claude-json" in cmd
+        assert 'printf \'{\"continue\":true}' in cmd
 
 
 def test_claude_wires_pretool_as_claude_json(tmp_path):
@@ -69,6 +89,7 @@ def test_claude_wires_pretool_as_claude_json(tmp_path):
     # Claude's PreToolUse injects via the JSON envelope, not plain text
     cmd = data["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
     assert "recall pretool" in cmd and "claude-json" in cmd
+    assert data["hooks"]["PreToolUse"][0]["hooks"][0]["timeout"] == 5
 
 
 def test_wire_migrates_stale_wrong_event_hooks(tmp_path):

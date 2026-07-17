@@ -36,7 +36,9 @@ _CONV_ORDER = ["claude", "agents", "gemini", "hermes", "openclaw"]
 #   pretool  → nudge before a tool reads raw/
 #   turnend  → maintenance gate at turn end (a control hook, no injection)
 # `mech` selects the writer; `fmt` selects the stdout shape `omw recall` must emit:
-#   plain        → bare text (claude, codex: plain stdout is injected as context)
+#   plain        → bare text (only hosts that explicitly allow it)
+#   claude-json  → Claude Code's hookSpecificOutput envelope
+#   codex-json   → Codex's compatible hookSpecificOutput envelope
 #   gemini-json  → {"hookSpecificOutput": {"hookEventName", "additionalContext"}}
 #   hermes-json  → {"context": "..."}
 # `recall` lists the abstract events omw auto-wires for context injection on each host —
@@ -45,16 +47,16 @@ _CONV_ORDER = ["claude", "agents", "gemini", "hermes", "openclaw"]
 # (turn-end) is handled separately and stays Claude-only — no other host injects at turn-end.
 HOOK: dict[str, dict] = {
     "claude": {
-        "mech": "json", "fmt": "plain", "path": "~/.claude/settings.json",
+        "mech": "json", "fmt": "claude-json", "path": "~/.claude/settings.json",
         "events": {"session": "SessionStart", "prompt": "UserPromptSubmit",
                    "pretool": "PreToolUse", "turnend": "Stop"},
         "recall": ["session", "prompt", "pretool"],
     },
     "codex": {
-        "mech": "json", "fmt": "plain", "path": "~/.codex/hooks.json",
+        "mech": "json", "fmt": "codex-json", "path": "~/.codex/hooks.json",
         "events": {"session": "SessionStart", "prompt": "UserPromptSubmit",
                    "pretool": "PreToolUse", "turnend": "Stop"},
-        "recall": ["session", "prompt"],  # codex injects plain stdout only on Session/Prompt
+        "recall": ["session", "prompt"],  # Codex injects only on Session/Prompt
     },
     "gemini": {
         "mech": "json", "fmt": "gemini-json", "path": "~/.gemini/settings.json",
