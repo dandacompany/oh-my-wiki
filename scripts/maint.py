@@ -42,6 +42,6 @@ def status(db_path, *, vault_id: int, today: str) -> dict:
             bits.append(f"{expired} expired")
         if lint_issues:
             bits.append(f"{lint_issues} lint issue(s)")
-        nudge = ("지식 유지보수 권장: " + ", ".join(bits)
-                 + " — `/omw lint` 또는 `omw review audit`로 점검하세요.")
+        nudge = ("Knowledge maintenance recommended: " + ", ".join(bits)
+                 + " — check with `/omw lint` or `omw review audit`.")
     return {"stale": stale, "expired": expired, "lint_issues": lint_issues, "nudge": nudge}

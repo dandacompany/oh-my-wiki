@@ -18,11 +18,12 @@ def test_render_capture_cue_shape():
     assert f"<{recall.CAPTURE_MARKER}>" in cue and f"</{recall.CAPTURE_MARKER}>" in cue
     # routes into existing machinery, not a new mechanism
     assert "omw ingest" in cue
+    assert "durable new fact, decision, or preference" in cue
     assert "gate note ingest" in cue
     assert "duplicate-ingest" in cue
     # write-signal framing, and an explicit "ignore if irrelevant" escape hatch
-    assert "저장 신호" in cue
-    assert "무관하면" in cue
+    assert "save signal" in cue
+    assert "Ignore this for unrelated requests" in cue
 
 
 def test_as_bool_normalizes_hand_edited_values():

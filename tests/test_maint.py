@@ -35,6 +35,7 @@ def test_preamble_includes_maintenance_nudge(monkeypatch):
     monkeypatch.setattr("scripts.paths.registry_path", lambda: _DB())
     monkeypatch.setattr(recall.maint, "status", lambda *a, **k: {
         "stale": 2, "expired": 0, "lint_issues": 0,
-        "nudge": "지식 유지보수 권장: 2 stale — `/omw lint`로 점검하세요."})
+        "nudge": "Knowledge maintenance recommended: 2 stale — check with `/omw lint`."})
     out = recall.preamble()
-    assert "유지보수" in out and "2 stale" in out
+    assert "Maintenance:" in out and "2 stale" in out
+    assert not any("가" <= char <= "힣" for char in out)

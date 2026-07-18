@@ -51,7 +51,7 @@ def test_preamble_surfaces_due_pages(tmp_path, monkeypatch):
     monkeypatch.setattr(review, "due_pages",
                         lambda *a, **k: [{"relpath": "wiki/old.md", "title": "Old"}])
     out = recall.preamble()
-    assert "리뷰 도래" in out and "Old" in out
+    assert "Review due:" in out and "Old" in out
 
 
 def test_preamble_no_due_line_when_empty(tmp_path, monkeypatch):
@@ -59,7 +59,7 @@ def test_preamble_no_due_line_when_empty(tmp_path, monkeypatch):
     from scripts import recall, review
     db, vid = make_vault_with_pages(tmp_path, monkeypatch, pages={"wiki/a.md": "# A\n\nx"})
     monkeypatch.setattr(review, "due_pages", lambda *a, **k: [])
-    assert "리뷰 도래" not in recall.preamble()
+    assert "Review due:" not in recall.preamble()
 
 
 def test_fetch_routes_pdf_ctype_to_pdf_text(monkeypatch):

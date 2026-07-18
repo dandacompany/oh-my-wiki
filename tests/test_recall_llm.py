@@ -11,8 +11,8 @@ def test_render_llm_guidance_route_and_generative():
     g = recall.render_llm_guidance("generative")
     assert recall.MARKER in r and recall.MARKER in g
     # route is about choosing how to search; generative is about reading+filtering
-    assert "omw find" in r and ("키워드" in r or "의미" in r)
-    assert "omw find" in g and ("읽" in g)              # read the candidates
+    assert "omw find" in r and "keyword" in r and "semantic" in r
+    assert "omw find" in g and "read the candidate pages" in g
     # unknown submode falls back to route text
     assert recall.render_llm_guidance("nonsense") == r
 

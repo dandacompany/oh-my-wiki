@@ -15,6 +15,7 @@ def test_pretool_nudges_on_raw_grep(monkeypatch):
     out = recall.pretool({"tool_name": "Grep",
                           "tool_input": {"pattern": "ARIMA", "path": "raw/"}})
     assert "omw find" in out and recall.MARKER in out
+    assert not any("가" <= char <= "힣" for char in out)
 
 
 def test_pretool_silent_without_wiki(monkeypatch):

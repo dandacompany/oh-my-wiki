@@ -53,9 +53,9 @@ def cost_warning(mode: str, strategy: str) -> str | None:
     """Note for auto+llm. Under the agent-delegated llm design the hook makes NO
     separate API call — it just emits guidance every prompt; advisory is the natural pairing."""
     if mode == "auto" and strategy == "llm":
-        return ("참고: llm 전략은 advisory 성격입니다 — auto 모드여도 훅은 결과를 주입하지 않고 "
-                "인루프 에이전트에게 검색을 위임합니다(별도 API 호출 없음). "
-                "advisory 모드를 권장합니다.")
+        return ("Note: the llm strategy is advisory. Even in auto mode, the hook delegates "
+                "retrieval to the in-loop agent instead of injecting results, and it makes "
+                "no separate API call. Advisory mode is recommended.")
     return None
 
 # Short acknowledgements / continuations that should never trigger recall.
@@ -222,17 +222,22 @@ def _recall_body(cfg: dict, text: str) -> str:
     strong = [h for h in hits if (h.get("score") or 0) >= float(cfg["min_score"])]
     if strong:  # Tier 2 — concrete grounding
         _record_use([h["relpath"] for h in strong])
-        lines = [f"<{MARKER}> 활성 omw 위키에 관련 페이지가 있습니다 — 답변의 근거/출처로 활용하세요:"]
+        lines = [
+            f"<{MARKER}> The active omw wiki has relevant pages. "
+            "Use them as evidence and sources for your answer:"
+        ]
         for h in strong:
             tags = ",".join(h.get("tags") or [])
             tag_s = f" [{tags}]" if tags else ""
             lines.append(f"- {h.get('title') or h['relpath']} — `{h['relpath']}`{tag_s} (score {h.get('score')})")
-        lines.append("열기: `omw view <slug>` · 인용 시 페이지의 citations를 함께 제시하세요.")
+        lines.append("Open: `omw view <slug>`. When citing a page, include its citations.")
         lines.append(f"</{MARKER}>")
         return "\n".join(lines)
     if cfg["mode"] == "advisory":  # Tier 1 nudge only when no strong hit
-        return (f"<{MARKER}> 프로젝트/도메인 사실이면 답하기 전에 `omw find \"<핵심 명사>\"`로 "
-                f"활성 위키를 확인하세요. 무관하면 무시. </{MARKER}>")
+        return (
+            f"<{MARKER}> For project or domain facts, check the active wiki first with "
+            f"`omw find \"<key nouns>\"`. Ignore this for unrelated requests. </{MARKER}>"
+        )
     return ""  # auto + no strong hit → stay silent
 
 
@@ -275,21 +280,23 @@ def preamble() -> str:
     v = _active(db)
     if not v:
         return ""
-    lines = [f"<omw-wiki> 활성 위키: {v['name']} ({v['mode']}/{v['type']}). "
-             f"관련 질문엔 `omw find`로 위키를 먼저 확인하세요."]
+    lines = [
+        f"<omw-wiki> Active wiki: {v['name']} ({v['mode']}/{v['type']}). "
+        "For relevant questions, check the wiki first with `omw find`."
+    ]
     try:
         from scripts import hot_cache
         recent = hot_cache._recent_notes(db, v["id"], 5)
         titles = [r.get("title") or r.get("relpath") for r in recent if r.get("title") or r.get("relpath")]
         if titles:
-            lines.append("최근 페이지: " + ", ".join(titles))
+            lines.append("Recent pages: " + ", ".join(titles))
     except Exception:
         pass
     try:
         from datetime import date
         st = maint.status(db, vault_id=v["id"], today=date.today().isoformat())
         if st.get("nudge"):
-            lines.append("유지보수: " + st["nudge"])
+            lines.append("Maintenance: " + st["nudge"])
     except Exception:
         pass
     try:
@@ -299,7 +306,7 @@ def preamble() -> str:
                                include_unscheduled=False)[:3]
         names = [d.get("title") or d.get("relpath") for d in due if d.get("title") or d.get("relpath")]
         if names:
-            lines.append("⏰ 리뷰 도래: " + ", ".join(names))
+            lines.append("Review due: " + ", ".join(names))
     except Exception:
         pass
     lines.append("</omw-wiki>")
@@ -310,14 +317,21 @@ def render_llm_guidance(submode: str) -> str:
     """Agent-delegated retrieval guidance for the `llm` strategy. The hook runs NO
     model — it tells the in-loop agent how to retrieve. Unknown submode → route."""
     if submode == "generative":
-        body = ("프로젝트/도메인 질문이면 답하기 전에 `omw find \"<핵심 명사>\"`로 후보 페이지를 "
-                "가져와 **직접 읽고 진짜 관련된 것만 선별**한 뒤 그 근거로 답하세요 "
-                "(스니펫/키워드 일치만 믿지 말 것). 위키에 근거가 없으면 모른다고 말하세요. "
-                "무관하면 무시. 인용 시 페이지의 citations를 함께 제시.")
+        body = (
+            "For project or domain questions, run `omw find \"<key nouns>\"` first, "
+            "**read the candidate pages and keep only the genuinely relevant ones**, then "
+            "answer from that evidence. Do not trust snippet or keyword matches alone. If the "
+            "wiki has no supporting evidence, say so. Ignore this for unrelated requests. "
+            "When citing a page, include its citations."
+        )
     else:  # route (default)
-        body = ("프로젝트/도메인 질문이면, 이 질문이 키워드 검색에 맞는지(고유명사·정확한 용어) "
-                "의미 검색에 맞는지(개념·동의어) 판단하고 `omw find \"<핵심 명사>\"`로 적절히 검색한 뒤 "
-                "그 근거로 답하세요. 무관하면 무시. 인용 시 페이지의 citations를 함께 제시.")
+        body = (
+            "For project or domain questions, decide whether the question calls for keyword "
+            "search (proper nouns or exact terms) or semantic search (concepts or synonyms). "
+            "Then search appropriately with `omw find \"<key nouns>\"` and answer from that "
+            "evidence. Ignore this for unrelated requests. When citing a page, include its "
+            "citations."
+        )
     return f"<{MARKER}> {body} </{MARKER}>"
 
 
@@ -327,10 +341,12 @@ def render_capture_cue() -> str:
     existing ingest/gate machinery and the duplicate-ingest confirm class; never
     auto-ingests. Suppressed by is_trivial and gated by the `capture` toggle in prompt()."""
     return (
-        f"<{CAPTURE_MARKER}> 사용자가 지속성 있는 새 사실·결정·선호를 *진술*했다면(질문이 아니라) — "
-        f"검색이 아니라 저장 신호입니다. `omw ingest <source>` 또는 `omw gate note ingest`로 "
-        f"캡처를 제안하세요. 바로 넣지 말고 duplicate-ingest 확인 클래스로 "
-        f"\"위키에 넣을까요?\"라고 먼저 확인하세요. 무관하면 무시. </{CAPTURE_MARKER}>"
+        f"<{CAPTURE_MARKER}> If the user *states* a durable new fact, decision, or preference "
+        f"(rather than asking a question), treat it as a save signal, not a search signal. "
+        f"Offer to capture it with `omw ingest <source>` or `omw gate note ingest`. Do not "
+        f"write it immediately: first ask whether to add it to the wiki using the "
+        f"duplicate-ingest confirmation class. Ignore this for unrelated requests. "
+        f"</{CAPTURE_MARKER}>"
     )
 
 
@@ -340,10 +356,10 @@ def render_recall_block(mode: str = "auto") -> str:
         f"<!-- {MARKER}:start -->",
         "## omw wiki recall (managed by `omw setup recall` — do not edit between markers)",
         "",
-        f"이 워크스페이스에는 omw 위키가 있습니다 (recall 모드: {mode}). 답하기 전에:",
-        "- **확인 WHEN**: 사용자가 과거 정리·결정·\"위키에 있던\" 것을 언급 / 도메인·프로젝트 사실 질문 / 비자명한 의사결정.",
-        "- **생략 WHEN**: 일반 상식·문법, 단순 확인/연속, 사용자가 *새 사실을 진술*(→ 오히려 ingest 후보).",
-        "- **방법**: `omw find \"<핵심 명사>\"`로 검색하고, 본문 인용 시 페이지의 citations를 함께 제시.",
+        f"This workspace has an omw wiki (recall mode: {mode}). Before answering:",
+        "- **CHECK WHEN**: the user refers to prior notes, decisions, or something \"in the wiki\"; asks about domain or project facts; or requests a non-trivial decision.",
+        "- **SKIP WHEN**: general knowledge or grammar; a simple acknowledgement or continuation; or the user *states a new fact* (which is an ingest candidate instead).",
+        "- **HOW**: search with `omw find \"<key nouns>\"`; when citing a page, include its citations.",
         f"<!-- {MARKER}:end -->",
     ])
 
@@ -360,11 +376,11 @@ def render_always_on_block() -> str:
         f"<!-- {m}:start -->",
         "## omw wiki-first (managed by `omw setup agents` — do not edit between markers)",
         "",
-        "이 워크스페이스에는 컴파일된 omw 위키가 있습니다. 도메인/프로젝트 지식 질문에서는:",
-        "- 답하기 전에 `omw find \"<핵심 명사>\"`로 위키를 **먼저** 확인합니다.",
-        "- `raw/`를 직접 grep/read 하기 전에 위키에 같은 내용이 정리돼 있는지 확인합니다 "
-        "(위키가 1차 연료, raw는 출처).",
-        "- 본문 인용 시 페이지의 citations를 함께 제시합니다.",
+        "This workspace has a compiled omw wiki. For domain or project knowledge questions:",
+        "- Check the wiki **first** with `omw find \"<key nouns>\"` before answering.",
+        "- Before grepping or reading `raw/` directly, check whether the wiki already organizes "
+        "the same material (the wiki is the primary source of context; raw files are sources).",
+        "- When citing a page, include its citations.",
         f"<!-- {m}:end -->",
     ])
 
@@ -416,8 +432,11 @@ def pretool(payload: dict | None) -> str:
         db = registry_path()
         if not db.exists() or not _active(db):
             return ""
-        return (f"<{MARKER}> raw/를 직접 보기 전에 — 같은 내용이 위키에 정리돼 있을 수 있습니다. "
-                f"`omw find \"<핵심 명사>\"`를 먼저 시도하세요 (위키가 1차 연료). </{MARKER}>")
+        return (
+            f"<{MARKER}> Before reading `raw/` directly, try "
+            f"`omw find \"<key nouns>\"` first; the wiki may already organize the same material "
+            f"and is the primary source of context. </{MARKER}>"
+        )
     except Exception:
         return ""
 
