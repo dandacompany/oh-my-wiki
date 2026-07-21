@@ -637,7 +637,8 @@ def wire_host(host: str, *, config_path=None) -> tuple[bool, str]:
 def _hermes_config_path(profile: str | None):
     """Profile config.yaml the hermes CLI/gateway reads. Verified on disk: the real file
     is `config.yaml` (docs alternate with `cli-config.yaml`, which does not exist)."""
-    root = _hook_home() / ".hermes"
+    from scripts import hermes_detect
+    root = hermes_detect.hermes_home()
     if profile:
         return root / "profiles" / profile / "config.yaml"
     return root / "config.yaml"
@@ -682,8 +683,11 @@ def wire_hermes(*, profile=None, config_path=None, allowlist_path=None) -> tuple
     except OSError as e:
         return False, f"write failed {path}: {e}"
     # Pre-seed the consent allowlist (keyed on the exact command string).
-    allow = Path(allowlist_path) if allowlist_path else (_hook_home() / ".hermes"
-                                                         / "shell-hooks-allowlist.json")
+    if allowlist_path:
+        allow = Path(allowlist_path)
+    else:
+        from scripts import hermes_detect
+        allow = hermes_detect.hermes_home() / "shell-hooks-allowlist.json"
     try:
         adata = json.loads(allow.read_text(encoding="utf-8")) if allow.exists() else {}
         approvals = adata.setdefault("approvals", []) if isinstance(adata, dict) else []

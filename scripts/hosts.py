@@ -13,6 +13,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from scripts import hermes_detect
+
 # host -> descriptor. `conv` is the convention key used to merge shared-file hosts.
 HOSTS: dict[str, dict] = {
     "claude":   {"kind": "repo",   "conv": "claude", "file": "CLAUDE.md"},
@@ -118,7 +120,7 @@ def instruction_choices() -> list[dict]:
 
 # ── hermes profiles ──────────────────────────────────────────────────────────
 def _hermes_root() -> Path:
-    return Path.home() / ".hermes"
+    return hermes_detect.hermes_home()
 
 
 def list_profiles() -> list[str]:

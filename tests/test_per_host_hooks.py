@@ -178,6 +178,20 @@ def test_wire_hermes_idempotent_and_preserves(tmp_path):
     assert len(data["hooks"]["pre_llm_call"]) == 1               # not duplicated
 
 
+def test_wire_hermes_honors_hermes_home_for_config_and_allowlist(tmp_path, monkeypatch):
+    home = tmp_path / "opt" / "data"
+    (home / "profiles" / "oliver").mkdir(parents=True)
+    monkeypatch.setenv("HERMES_HOME", str(home))
+
+    changed, _ = recall.wire_hermes(profile="oliver")
+
+    assert changed is True
+    cfg = home / "profiles" / "oliver" / "config.yaml"
+    allow = home / "shell-hooks-allowlist.json"
+    assert "pre_llm_call" in yaml.safe_load(cfg.read_text())["hooks"]
+    assert json.loads(allow.read_text())["approvals"]
+
+
 # ── P3: opencode + openclaw TS plugins ───────────────────────────────────────
 
 def test_wire_opencode_writes_plugin_file(tmp_path):

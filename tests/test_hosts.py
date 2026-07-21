@@ -36,6 +36,18 @@ def test_resolve_hermes_profile(tmp_path, monkeypatch):
         home / ".hermes" / "profiles" / "sophie" / "SOUL.md"
 
 
+def test_resolve_hermes_profile_honors_hermes_home(tmp_path, monkeypatch):
+    hermes_home = tmp_path / "opt" / "data"
+    (hermes_home / "profiles" / "oliver").mkdir(parents=True)
+    (hermes_home / "active_profile").write_text("oliver")
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+
+    assert hosts.active_profile() == "oliver"
+    assert hosts.list_profiles() == ["oliver"]
+    assert hosts.resolve_instruction_path("hermes", tmp_path) == \
+        hermes_home / "profiles" / "oliver" / "SOUL.md"
+
+
 def test_resolve_openclaw_workspace(tmp_path, monkeypatch):
     home = tmp_path / "home"
     oc = home / ".openclaw"

@@ -287,7 +287,11 @@ def hermes_profile_targets(hermes_home: Path | None = None) -> list[dict]:
     main → <hermes_home>/skills, then one per child dir of <hermes_home>/profiles
     (sorted). Each target: {"name", "skills_dir", "installed"} where installed means
     an oh-my-wiki skill dir already exists there. Degrades to [main] when absent."""
-    home = Path(hermes_home) if hermes_home is not None else Path.home() / ".hermes"
+    if hermes_home is not None:
+        home = Path(hermes_home)
+    else:
+        from scripts import hermes_detect
+        home = hermes_detect.hermes_home()
 
     def _target(name: str, skills_dir: Path) -> dict:
         return {"name": name, "skills_dir": skills_dir,

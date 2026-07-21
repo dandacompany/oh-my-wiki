@@ -77,3 +77,21 @@ def test_recall_hermes_multi_profiles_fan_out(monkeypatch, tmp_path):
     assert "iris" in upserted and "mark" in upserted
     # native hook wired once per profile
     assert sorted(wired) == ["iris", "mark"]
+
+
+def test_recall_hermes_honors_hermes_home(monkeypatch, tmp_path):
+    calls = _patch_writers(monkeypatch)
+    from scripts import recall
+    monkeypatch.setattr(recall, "wire_hermes", lambda **k: (True, "wired"))
+    hermes_home = tmp_path / "opt" / "data"
+    (hermes_home / "profiles" / "oliver").mkdir(parents=True)
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+
+    rc = setup_wizard.setup_recall(
+        mode="auto", strategy="fts", normalizer="heuristic",
+        hosts=["hermes"], profiles=["oliver"],
+        base_dir=str(tmp_path), noninteractive=True,
+    )
+
+    assert rc == 0
+    assert str(hermes_home / "profiles" / "oliver" / "SOUL.md") in calls["upsert"]

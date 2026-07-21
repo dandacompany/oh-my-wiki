@@ -237,6 +237,17 @@ def test_hermes_targets_degrades_to_main_when_absent(tmp_path):
     assert targets[0]["installed"] is False
 
 
+def test_hermes_targets_honors_hermes_home_env(tmp_path, monkeypatch):
+    home = _make_hermes(tmp_path / "opt", profiles=["oliver"])
+    monkeypatch.setenv("HERMES_HOME", str(home))
+
+    targets = ask.hermes_profile_targets()
+
+    assert [t["name"] for t in targets] == ["main", "oliver"]
+    assert targets[0]["skills_dir"] == home / "skills"
+    assert targets[1]["skills_dir"] == home / "profiles" / "oliver" / "skills"
+
+
 def test_install_into_dir_copies_bundle(tmp_path):
     dest = tmp_path / "skills"
     dest.mkdir()
