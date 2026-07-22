@@ -64,3 +64,7 @@ _workspace/
 # `skills add` writes these; redundant with the repo source, never committed)
 .agents/
 skills-lock.json
+
+# Understand-Anything analysis artifacts (local only)
+.ua/
+.understand-anything/
