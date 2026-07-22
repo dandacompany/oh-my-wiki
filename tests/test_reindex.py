@@ -375,3 +375,49 @@ def test_refresh_embeddings_strict_reraises(monkeypatch, tmp_path):
         reindex.refresh_embeddings(tmp_path / "db.sqlite", vault_id=1, strict=True)
     # strict=False (default) swallows → returns 0
     assert reindex.refresh_embeddings(tmp_path / "db.sqlite", vault_id=1) == 0
+
+
+# ---------------------------------------------------------------------------
+# Non-UTF-8 notes must not abort reindex (omw setup section 'vault' regression)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def cp949_vault(tmp_db, tmp_path):
+    """A vault holding one good UTF-8 note and one CP949 (EUC-KR) note."""
+    root = tmp_path / "vault"
+    root.mkdir()
+    (root / "good.md").write_text(
+        "---\ntitle: Good\ntype: note\ntags: [ok]\n---\n정상 UTF-8 문서\n",
+        encoding="utf-8",
+    )
+    (root / "legacy.md").write_bytes(
+        "---\ntitle: Legacy\ntype: note\ntags: [old]\n---\n이 문서는 CP949입니다\n".encode("cp949")
+    )
+    registry.init_db(tmp_db)
+    row = registry.add_vault(tmp_db, name="cp", path=root, type_="markdown", mode="memo")
+    return tmp_db, row["id"], root
+
+
+def test_full_reindex_survives_cp949_note(cp949_vault, capsys):
+    db, vid, _root = cp949_vault
+    result = reindex.full(db, vault_id=vid)          # must NOT raise
+    assert result["indexed"] == 2
+    assert result["decode_errors"] == ["legacy.md"]
+    err = capsys.readouterr().err
+    assert "legacy.md" in err and "UTF-8" in err     # offending file is named
+    relpaths = {n["relpath"] for n in registry.list_notes(db, vault_id=vid)}
+    assert {"good.md", "legacy.md"} <= relpaths
+
+
+def test_full_reindex_decodes_utf16_bom_note_losslessly(tmp_db, tmp_path, capsys):
+    root = tmp_path / "vault"
+    root.mkdir()
+    text = "---\ntitle: 노트패드\ntype: note\ntags: [win]\n---\n메모장 UTF-16 문서\n"
+    (root / "notepad.md").write_bytes(text.encode("utf-16"))   # BOM included
+    registry.init_db(tmp_db)
+    row = registry.add_vault(tmp_db, name="u16", path=root, type_="markdown", mode="memo")
+    result = reindex.full(tmp_db, vault_id=row["id"])
+    assert result["decode_errors"] == ["notepad.md"]
+    notes = registry.list_notes(tmp_db, vault_id=row["id"])
+    assert notes[0]["title"] == "노트패드"                     # lossless UTF-16 recovery
+    assert "decoded as UTF-16" in capsys.readouterr().err

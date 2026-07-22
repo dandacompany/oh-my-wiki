@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import codecs
 import json
 import sys
 from pathlib import Path
@@ -115,6 +116,7 @@ def _scan(
     schema_issues: list[dict] = []
     changed: list[str] = []
     fts_errors: list[str] = []
+    decode_errors: list[str] = []
     seen: set[str] = set()
     count = 0
     fts_conn = None
@@ -137,7 +139,18 @@ def _scan(
         mtime = path.stat().st_mtime
         if incremental and rel in known and known[rel] >= mtime:
             continue
-        raw = path.read_text(encoding="utf-8")
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            # One mis-encoded note (CP949/EUC-KR, Notepad UTF-16, …) must not
+            # abort the whole reindex — and by extension `omw setup`.
+            raw, how = _read_text_lenient(path)
+            decode_errors.append(rel)
+            print(
+                f"warning: {rel}: not valid UTF-8 ({how}) — "
+                f"convert it to UTF-8 (e.g. iconv) and reindex for a clean index",
+                file=sys.stderr,
+            )
         try:
             meta, body = frontmatter.parse(raw)
             parse_error = False
@@ -206,7 +219,21 @@ def _scan(
                 pruned.append(row["relpath"])
     links.resolve(db_path, vault_id)
     return {"indexed": count, "schema_issues": schema_issues, "changed": changed,
-            "fts_errors": fts_errors, "pruned": pruned}
+            "fts_errors": fts_errors, "decode_errors": decode_errors, "pruned": pruned}
+
+
+def _read_text_lenient(path: Path) -> tuple[str, str]:
+    """Best-effort decode for a note that is not valid UTF-8.
+
+    A UTF-16 BOM (what Windows Notepad writes) decodes losslessly; anything else
+    falls back to UTF-8 with replacement characters so the note is still indexed.
+    Returns (text, how) where how describes the recovery for the warning message.
+    The file on disk is never modified.
+    """
+    data = path.read_bytes()
+    if data.startswith(codecs.BOM_UTF16_LE) or data.startswith(codecs.BOM_UTF16_BE):
+        return data.decode("utf-16"), "decoded as UTF-16"
+    return data.decode("utf-8", errors="replace"), "indexed with replacement characters"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -233,6 +260,7 @@ def main(argv: list[str] | None = None) -> int:
         "indexed": result["indexed"],
         "schema_issues": len(result["schema_issues"]),
         "fts_errors": len(fts_errors),
+        "decode_errors": len(result.get("decode_errors") or []),
     }))
     return 0
 

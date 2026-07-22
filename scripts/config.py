@@ -25,12 +25,13 @@ def load_config() -> dict:
     p = _config_path()
     if not p.exists():
         return {}
-    return yaml.safe_load(p.read_text()) or {}
+    return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
 
 
 def save_config(data: dict) -> None:
     ensure_home()
-    _config_path().write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False))
+    _config_path().write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+                              encoding="utf-8")
 
 
 def set_config(dotted_key: str, value) -> None:
@@ -49,7 +50,7 @@ def _read_env_file() -> dict:
     if not p.exists():
         return {}
     out = {}
-    for line in p.read_text().splitlines():
+    for line in p.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -70,5 +71,5 @@ def set_secret(var: str, value: str) -> None:
     env = _read_env_file()
     env[var] = value
     p = _env_path()
-    p.write_text("".join(f"{k}={v}\n" for k, v in env.items()))
+    p.write_text("".join(f"{k}={v}\n" for k, v in env.items()), encoding="utf-8")
     p.chmod(0o600)
