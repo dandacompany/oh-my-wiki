@@ -7,7 +7,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from scripts import registry
+from scripts import embed, registry
 
 
 def available() -> bool:
@@ -27,15 +27,25 @@ def _connect(db_path: Path):
     return conn
 
 
+def _ensure_meta_table(conn) -> None:
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS vec_meta("
+        "  id INTEGER PRIMARY KEY CHECK(id=1), model TEXT, dim INTEGER, "
+        "  prefix_scheme TEXT NOT NULL DEFAULT 'none')"
+    )
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(vec_meta)")}
+    if "prefix_scheme" not in cols:
+        conn.execute(
+            "ALTER TABLE vec_meta ADD COLUMN prefix_scheme TEXT NOT NULL DEFAULT 'none'"
+        )
+
+
 def _ensure_table(conn, dim: int) -> None:
     conn.execute(
         f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_notes USING vec0("
         f"  relpath TEXT, vault_id INTEGER, embedding FLOAT[{dim}])"
     )
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS vec_meta("
-        "  id INTEGER PRIMARY KEY CHECK(id=1), model TEXT, dim INTEGER)"
-    )
+    _ensure_meta_table(conn)
 
 
 def reset(db_path) -> None:
@@ -57,7 +67,7 @@ def upsert(db_path, *, vault_id: int, embedder, rows) -> int:
     if not available() or embedder is None or not rows:
         return 0
     import sqlite_vec
-    texts = [t for _, t in rows]
+    texts = embed.passage_texts(embedder, [t for _, t in rows])
     vecs = embedder.embed(texts)
     conn = _connect(db_path)
     try:
@@ -70,10 +80,12 @@ def upsert(db_path, *, vault_id: int, embedder, rows) -> int:
                 (relpath, vault_id, sqlite_vec.serialize_float32(v)))
         # UPSERT meta row: single row tracks model + dim for the whole store
         model_val = getattr(embedder, "model", None)
+        scheme = embed.prefix_scheme(embedder)
         conn.execute(
-            "INSERT INTO vec_meta(id, model, dim) VALUES (1, ?, ?)"
-            " ON CONFLICT(id) DO UPDATE SET model=excluded.model, dim=excluded.dim",
-            (model_val, embedder.dim))
+            "INSERT INTO vec_meta(id, model, dim, prefix_scheme) VALUES (1, ?, ?, ?)"
+            " ON CONFLICT(id) DO UPDATE SET model=excluded.model, dim=excluded.dim, "
+            "prefix_scheme=excluded.prefix_scheme",
+            (model_val, embedder.dim, scheme))
         conn.commit()
     finally:
         conn.close()
@@ -91,25 +103,31 @@ def query(db_path, *, vault_id: int, embedder, text: str, limit: int = 5) -> lis
         conn = _connect(db_path)
         _ensure_table(conn, embedder.dim)
         # Fail-closed: reject if dim or model differs from stored meta
-        meta_row = conn.execute("SELECT model, dim FROM vec_meta WHERE id=1").fetchone()
+        meta_row = conn.execute(
+            "SELECT model, dim, prefix_scheme FROM vec_meta WHERE id=1"
+        ).fetchone()
         if meta_row is not None:
             stored_dim = meta_row["dim"]
             stored_model = meta_row["model"]
             query_model = getattr(embedder, "model", None)
+            stored_scheme = meta_row["prefix_scheme"] or "none"
+            query_scheme = embed.prefix_scheme(embedder)
             dim_mismatch = (stored_dim != embedder.dim)
             model_mismatch = (
                 stored_model is not None
                 and query_model is not None
                 and stored_model != query_model
             )
-            if dim_mismatch or model_mismatch:
+            scheme_mismatch = stored_scheme != query_scheme
+            if dim_mismatch or model_mismatch or scheme_mismatch:
                 print(
-                    "vector store was built with a different embedding model; "
+                    "vector store was built with a different embedding model or "
+                    "prefix scheme; "
                     "run `omw embed reindex`",
                     file=sys.stderr,
                 )
                 return []
-        qv = embedder.embed([text])[0]
+        qv = embedder.embed([embed.query_text(embedder, text)])[0]
         cur = conn.execute(
             "SELECT relpath, distance FROM vec_notes "
             "WHERE vault_id = ? AND embedding MATCH ? AND k = ? "
@@ -151,7 +169,7 @@ def count(db_path, *, vault_id: int) -> int:
 
 
 def meta(db_path) -> "dict | None":
-    """Return {"model": ..., "dim": ...} from vec_meta, or None if absent/unavailable."""
+    """Return model/dim/prefix_scheme from vec_meta, or None if unavailable."""
     if not available():
         return None
     try:
@@ -162,10 +180,14 @@ def meta(db_path) -> "dict | None":
             ).fetchone()
             if not has:
                 return None
-            row = conn.execute("SELECT model, dim FROM vec_meta WHERE id=1").fetchone()
+            _ensure_meta_table(conn)
+            row = conn.execute(
+                "SELECT model, dim, prefix_scheme FROM vec_meta WHERE id=1"
+            ).fetchone()
             if row is None:
                 return None
-            return {"model": row["model"], "dim": row["dim"]}
+            return {"model": row["model"], "dim": row["dim"],
+                    "prefix_scheme": row["prefix_scheme"] or "none"}
         finally:
             conn.close()
     except Exception:

@@ -308,6 +308,36 @@ def test_run_all_returns_first_nonzero_but_continues(monkeypatch, tmp_path):
     assert calls == ["vault", "search", "serve", "personas", "import", "viewer", "agents", "recall"]
 
 
+def test_run_all_skips_vault_dependent_sections_after_vault_failure(
+        monkeypatch, tmp_path, capsys):
+    from scripts import setup_wizard
+    calls = []
+
+    def fail_vault(**kwargs):
+        calls.append("vault")
+        raise UnicodeDecodeError("utf-8", b"\xc0", 0, 1, "invalid start byte")
+
+    monkeypatch.setattr(setup_wizard, "run", fail_vault)
+    monkeypatch.setattr(setup_wizard, "setup_search", lambda **k: calls.append("search") or 0)
+    monkeypatch.setattr(setup_wizard, "setup_fetch", lambda **k: calls.append("fetch") or 0)
+    monkeypatch.setattr(setup_wizard, "setup_serve", lambda **k: calls.append("serve") or 0)
+    monkeypatch.setattr(setup_wizard, "setup_personas", lambda **k: calls.append("personas") or 0)
+    monkeypatch.setattr(setup_wizard, "setup_import", lambda **k: calls.append("import") or 0)
+    monkeypatch.setattr(setup_wizard, "setup_viewer", lambda **k: calls.append("viewer") or 0)
+    monkeypatch.setattr(setup_wizard, "setup_agents", lambda **k: calls.append("agents") or 0)
+    monkeypatch.setattr(setup_wizard, "setup_recall", lambda **k: calls.append("recall") or 0)
+
+    rc = setup_wizard.run_all(noninteractive=False, base_dir=tmp_path)
+
+    assert rc == 1
+    assert calls == ["vault", "search", "fetch", "serve", "personas", "import", "agents"]
+    err = capsys.readouterr().err
+    assert "section 'vault' failed" in err
+    assert "skipping vault-dependent sections: viewer, recall" in err
+    assert "omw setup viewer" in err
+    assert "omw setup recall" in err
+
+
 @pytest.mark.skipif(not sys.stdin.isatty(), reason="interactive prompt requires a TTY")
 def test_setup_import_interactive_stores_notion_key(monkeypatch):
     from scripts import setup_wizard, config

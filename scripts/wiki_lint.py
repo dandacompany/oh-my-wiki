@@ -7,7 +7,7 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from scripts import registry
+from scripts import links, registry
 
 ORPHAN_GRACE_DAYS = 7
 
@@ -44,8 +44,11 @@ def check(db_path: Path, *, vault_id: int) -> dict:
     return {
         "vault_id": vault_id,
         "vault_path": str(root),
-        "orphan_pages":     _orphan_pages(pages),
-        "missing_concepts": _missing_concepts(pages, root),
+        # Reuse the indexed graph as the single definition shared by `omw lint`
+        # and maintenance personas.  Re-deriving these from selected folders was
+        # the source of cross-layer false positives.
+        "orphan_pages":     links.orphans(db_path, vault_id),
+        "missing_concepts": _missing_concepts_from_index(db_path, vault_id),
         "empty_data":       _empty_data(pages),
         "dangling_links":   _dangling_links(pages, root),
         # v2.0 additions:
@@ -109,15 +112,34 @@ def _orphan_pages(pages: list[tuple[str, str, float]]) -> list[dict]:
 
 
 def _existing_slugs(root: Path) -> set[str]:
-    """Slugs that DO have a page under wiki/entities/ or wiki/concepts/."""
+    """Slugs that have a page in any wiki content layer."""
     out: set[str] = set()
-    for sub in ("entities", "concepts"):
-        d = root / "wiki" / sub
-        if not d.is_dir():
-            continue
-        for p in d.glob("*.md"):
-            out.add(p.stem)
+    wiki = root / "wiki"
+    if not wiki.is_dir():
+        return out
+    for p in wiki.rglob("*.md"):
+        if ".trash" not in p.parts and not p.name.endswith(".proposed.md"):
+            out.add(p.stem.lower())
     return out
+
+
+def _missing_concepts_from_index(
+    db_path: Path, vault_id: int, threshold: int = 2,
+) -> list[dict]:
+    """Unresolved wikilink targets referenced from at least `threshold` pages.
+
+    `links.resolve` already understands every wiki layer and aliases, so this
+    cannot disagree with the graph-backed `omw lint` broken-link result.
+    """
+    referenced_by: dict[str, set[str]] = defaultdict(set)
+    for row in links.broken_links(db_path, vault_id):
+        if row["link_type"] == "wikilink":
+            referenced_by[row["dst_slug"]].add(row["src_relpath"])
+    return [
+        {"title": title, "referenced_by": sorted(refs)}
+        for title, refs in sorted(referenced_by.items())
+        if len(refs) >= threshold
+    ]
 
 
 def _missing_concepts(

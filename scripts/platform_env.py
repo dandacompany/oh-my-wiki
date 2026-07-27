@@ -32,11 +32,21 @@ def wsl_distro() -> str | None:
 def _userprofile_windows() -> str | None:
     """%USERPROFILE% via cmd.exe interop, e.g. 'C:\\Users\\dante'. None on failure."""
     try:
-        out = subprocess.run(["cmd.exe", "/c", "echo", "%USERPROFILE%"],
-                             capture_output=True, text=True, timeout=5)
+        # WSL inherits a UTF-8 locale, while cmd.exe normally writes in the active
+        # Windows code page.  /u gives this probe one explicit wire encoding and
+        # avoids decoding Korean usernames (or warnings) with the WSL locale.
+        out = subprocess.run(["cmd.exe", "/u", "/c", "echo", "%USERPROFILE%"],
+                             capture_output=True, timeout=5)
     except (OSError, subprocess.SubprocessError):
         return None
-    s = (out.stdout or "").strip()
+    if out.returncode != 0:
+        return None
+    try:
+        raw = out.stdout or b""
+        s = raw if isinstance(raw, str) else raw.decode("utf-16le")
+    except (UnicodeError, AttributeError):
+        return None
+    s = s.lstrip("\ufeff").strip()
     return s if s and "%" not in s else None
 
 
@@ -55,9 +65,15 @@ def windows_user_profile() -> Path | None:
             return p
     try:
         if _WIN_USERS.is_dir():
-            for d in sorted(_WIN_USERS.iterdir()):
-                if d.is_dir() and d.name not in _SKIP_USERS:
-                    return d
+            candidates = [
+                d for d in sorted(_WIN_USERS.iterdir(), key=lambda item: item.name)
+                if d.is_dir() and d.name not in _SKIP_USERS
+            ]
+            # Picking the first of several Windows accounts can silently put a
+            # vault in another user's profile.  Let setup request an explicit
+            # path when auto-detection is ambiguous.
+            if len(candidates) == 1:
+                return candidates[0]
     except OSError:
         return None
     return None

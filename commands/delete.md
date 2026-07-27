@@ -1,34 +1,37 @@
-# `delete` — soft- or hard-delete a memo
+# `delete` — soft- or hard-delete a page
 
-**Mode:** memo
-**Underlying script:** `scripts.memo_ops.delete`
+**Mode:** all vault modes
+**Underlying script:** `scripts.page_ops.delete`
 
 ## Preconditions
 
-Active vault must be memo-mode.
+An active vault and an exact page relpath are required.
 
 ## Flow
 
 1. Locate the target note. If the user did not give an exact relpath, call `search.query` (limit 5) and present matches via AskUserQuestion.
-2. Ask **soft** (default, moves to `.trash/<ts>-<stem>.md`) or **hard** (irrecoverable).
+2. Ask **soft** (default, moves to the vault's local `.trash/` or configured registry-side fallback) or **hard** (irrecoverable).
 3. If **hard**, require a second confirmation prompt that names the file explicitly. Refuse if the user does not type the slug back, or if they pick "Cancel".
-4. Call:
+4. For pages with inbound links, keep **Rewrite backlinks** selected by default.
+   The deleted links become plain display text; relation fields pointing at the
+   page are removed so deletion does not create broken graph edges.
+5. Call:
 
 ```bash
 python3 -c "
 from scripts.paths import registry_path
-from scripts import memo_ops, registry
+from scripts import page_ops, registry
 db = registry_path()
 vault = registry.get_active(db)
-result = memo_ops.delete(
+result = page_ops.delete(
     db, vault_id=vault['id'],
-    relpath='<relpath>', hard=<True|False>,
+    relpath='<relpath>', hard=<True|False>, rewrite_backlinks=True,
 )
-print(result)  # trash relpath or None
+print(result)
 "
 ```
 
-5. Report:
+6. Report:
    - Soft: "Moved to `<trash_relpath>`. Restore by moving the file back."
    - Hard: "Deleted permanently."
 

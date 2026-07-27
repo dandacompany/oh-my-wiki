@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-from scripts import frontmatter, registry, slugify
+from scripts import frontmatter, registry, slugify, urls
 
 _OCR_MAX_IMAGES = 50
 
@@ -57,6 +57,7 @@ def save_raw(
     ext: str,
     title: str,
     date_str: str,
+    source_url: str | None = None,
 ) -> str:
     """Save a raw source under raw/<date>-<slug>.<ext>. Returns relpath."""
     root = registry.get_vault_root(db_path, vault_id)
@@ -64,8 +65,28 @@ def save_raw(
     relpath = _resolve_path(root, "raw", base, ext)
     abs_path = root / relpath
     abs_path.parent.mkdir(parents=True, exist_ok=True)
+    if source_url and ext.lower() == "md":
+        content = frontmatter.dump({"source_url": source_url}, content)
     abs_path.write_text(content, encoding="utf-8")
     return relpath
+
+
+def find_raw_by_source_url(db_path: Path, *, vault_id: int, source_url: str) -> str | None:
+    """Return an existing raw Markdown relpath for the normalized source URL."""
+    root = registry.get_vault_root(db_path, vault_id)
+    wanted = urls.normalize_url(source_url)
+    raw_dir = root / "raw"
+    if not raw_dir.is_dir():
+        return None
+    for path in sorted(raw_dir.rglob("*.md")):
+        try:
+            meta, _body = frontmatter.parse(path.read_text(encoding="utf-8"))
+            existing = meta.get("source_url")
+            if existing and urls.normalize_url(str(existing)) == wanted:
+                return str(path.relative_to(root)).replace("\\", "/")
+        except (OSError, UnicodeError, frontmatter.FrontmatterError, ValueError):
+            continue
+    return None
 
 
 def save_raw_pdf(

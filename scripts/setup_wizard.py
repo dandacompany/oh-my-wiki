@@ -67,6 +67,7 @@ def ensure_wizard_ui() -> bool:
 
 
 def _ensure_vault(name: str, mode: str, type_: str, location: str) -> None:
+    import json as _json
     ensure_home()
     db = registry_path()
     if not db.exists():
@@ -75,8 +76,14 @@ def _ensure_vault(name: str, mode: str, type_: str, location: str) -> None:
     if not exists:
         root = resolve_vault_root(name, location)
         root.mkdir(parents=True, exist_ok=True)
-        adapters.get_adapter(type_, vault_name=name).init_vault(root, mode)
-        vault = registry.add_vault(db, name=name, path=root, type_=type_, mode=mode)
+        trash = adapters.get_adapter(type_, vault_name=name).init_vault(root, mode)
+        config_json = None
+        if trash != root / ".trash":
+            config_json = _json.dumps({"trash_dir": str(trash)}, ensure_ascii=False)
+        vault = registry.add_vault(
+            db, name=name, path=root, type_=type_, mode=mode,
+            config_json=config_json,
+        )
         reindex.full(db, vault_id=vault["id"])
     registry.set_active(db, name)   # always: the wizard's chosen vault becomes active
 
@@ -135,7 +142,8 @@ def _run_interactive(name: str, mode: str, type_: str, location: str,
                 print(f"  → Windows-drive vault: {location} "
                       f"(open this folder as a vault in Windows Obsidian)")
             else:
-                print("  ⚠️  Windows user folder not found — choose a Linux path instead.")
+                print("  ⚠️  Windows user folder could not be detected safely — "
+                      "choose a custom /mnt/c/... path or a Linux path.")
 
     if not loc_resolved:
         loc_default = location if location in ("global", "project") else "custom path…"
@@ -1070,7 +1078,8 @@ def configure_recall(*, strategy="fts", provider="none", model="text-embedding-3
 def run_all(*, noninteractive: bool = False, base_dir=None, dry_run: bool = False) -> int:
     """Top-level interactive wizard: walk every section in order with per-step skip.
 
-    Returns the first non-zero section result (continuing through the rest), else 0.
+    Returns the first non-zero section result (continuing through independent
+    sections), else 0.  Viewer and recall are skipped when vault setup fails.
     """
     from scripts import banner
     banner.render()   # animated when interactive TTY; static/suppressed otherwise
@@ -1088,7 +1097,11 @@ def run_all(*, noninteractive: bool = False, base_dir=None, dry_run: bool = Fals
         ("recall", lambda: setup_recall(noninteractive=noninteractive, base_dir=base_dir,
                                         dry_run=dry_run)),
     ]
+    vault_ready = True
+    vault_dependents = {"viewer", "recall"}
     for name, fn in steps:
+        if not vault_ready and name in vault_dependents:
+            continue
         try:
             rc = fn()
         except Exception as exc:  # one bad section must not abort the whole wizard
@@ -1096,7 +1109,15 @@ def run_all(*, noninteractive: bool = False, base_dir=None, dry_run: bool = Fals
             rc = 1
         if rc != 0 and first_error == 0:
             first_error = rc
-    print("omw setup complete.")
+        if name == "vault" and rc != 0:
+            vault_ready = False
+            print(
+                "error: skipping vault-dependent sections: viewer, recall. "
+                "Fix the vault error, then rerun `omw setup viewer` and "
+                "`omw setup recall`.",
+                file=sys.stderr,
+            )
+    print("omw setup complete." if first_error == 0 else "omw setup finished with errors.")
     return first_error
 
 
@@ -1149,6 +1170,7 @@ def doctor_checks() -> dict:
     from pathlib import Path as _P
     import scripts.fetch_chromium as _fc
     from scripts import platform_env as _pe
+    from scripts.paths import vault_trash_root
 
     home = omw_home()
     db = registry_path()
@@ -1159,6 +1181,20 @@ def doctor_checks() -> dict:
                   "hint": "" if db.exists() else "missing"})
 
     vaults = registry.list_vaults(db) if db.exists() else []
+    for vault in vaults:
+        trash = vault_trash_root(
+            Path(vault["path"]), vault["name"], vault["config_json"]
+        )
+        trash_ok = trash.is_dir()
+        items.append({
+            "name": f"vault trash:{vault['name']}",
+            "ok": trash_ok,
+            "detail": str(trash),
+            "hint": "" if trash_ok else (
+                "soft-delete unavailable; re-run vault setup or set "
+                "--config trash_dir=<writable-path>"
+            ),
+        })
     sandbox_warning = ""
     if vaults:
         cwd = _P.cwd()
@@ -1200,6 +1236,11 @@ def doctor() -> int:
             print(f"  {mark} {v['name']} ({v['mode']}/{v['type']}) {v['path']}")
         if d["sandbox_warning"]:
             print(f"  ! {d['sandbox_warning']}")
+        for item in d["items"]:
+            if item["name"].startswith("vault trash:"):
+                label = item["name"].split(":", 1)[1]
+                state = "ok" if item["ok"] else f"unavailable ({item['hint']})"
+                print(f"  trash {label}: {item['detail']}  {state}")
     else:
         print("  no vaults registered — run: omw setup")
 

@@ -36,4 +36,34 @@ def test_run_fetches_saves_raw_and_marks_fetched(tmp_path, monkeypatch):
     assert items["https://example.com/bad"]["status"] == "failed"
     assert "boom" in items["https://example.com/bad"]["error"]
     raw_rel = items["https://example.com/good"]["raw_relpath"]
-    assert (root / raw_rel).read_text(encoding="utf-8") == "hello body"
+    text = (root / raw_rel).read_text(encoding="utf-8")
+    from scripts import frontmatter
+    meta, body = frontmatter.parse(text)
+    assert meta["source_url"] == "https://example.com/good"
+    assert body == "hello body"
+
+
+def test_run_skips_url_already_present_in_raw(tmp_path, monkeypatch):
+    from scripts import ingest
+
+    db, root, vid = _vault(tmp_path)
+    existing = ingest.save_raw(
+        db, vault_id=vid, content="original", ext="md", title="Existing",
+        date_str="2026-06-01", source_url="https://example.com/article",
+    )
+    inbox.add(db, vault_id=vid, url="https://example.com/article")
+
+    def should_not_fetch(*args, **kwargs):
+        raise AssertionError("dedup must happen before fetch")
+
+    monkeypatch.setattr(inbox.fetch, "fetch_url", should_not_fetch)
+    result = inbox.run(db, vault_id=vid, today="2026-06-02")
+
+    assert result["fetched"] == []
+    assert result["deduped"] == [{
+        "url": "https://example.com/article", "raw_relpath": existing,
+    }]
+    assert len(list((root / "raw").glob("*.md"))) == 1
+    item = inbox.list_items(db, vault_id=vid)[0]
+    assert item["status"] == "fetched"
+    assert item["raw_relpath"] == existing

@@ -8,9 +8,9 @@ The user drops one or more URLs (articles, papers, YouTube links) to capture lat
 
 ## Flow
 
-1. **Add** each URL: `omw inbox add <url>` (dedups by normalized URL; YouTube canonicalized by video id).
+1. **Add** each URL: `omw inbox add <url>` (dedups the queue by normalized URL; YouTube canonicalized by video id).
 2. **Review** the queue: `omw inbox list`.
-3. **Run** the batch: `omw inbox run` (fetches each → saves to `raw/` → marks `fetched`/`failed`). Report the `{fetched, failed}` summary to the user.
+3. **Run** the batch: `omw inbox run` first checks `raw/` frontmatter for a matching normalized `source_url`. Existing sources are reused without a network call or `-N.md` copy; new sources are fetched, saved with URL provenance, and marked `fetched`/`failed`. Report `{fetched, deduped, failed}`.
 4. For each `failed` item, read the `error`:
    - `yt-dlp is not installed` → tell the user yt-dlp is required for YouTube; offer to install (`pip install yt-dlp` or `brew install yt-dlp`). Only install on explicit consent, then re-run.
    - `playwright/chromium is not installed` (SPA page) → recommend `omw setup playwright` (env-aware install), OR suggest `omw inbox run --backend cloud` if a Firecrawl/Bright Data key is configured (`omw setup search`).

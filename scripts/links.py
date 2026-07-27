@@ -170,7 +170,7 @@ def backlinks(db_path: Path, vault_id: int, relpath: str) -> list[dict]:
         if target is None:
             return []
         return [dict(r) for r in conn.execute(
-            "SELECT n.relpath, n.title, l.link_type, l.position FROM links l "
+            "SELECT n.relpath, n.title, l.dst_slug, l.link_type, l.position FROM links l "
             "JOIN notes n ON n.id = l.src_note_id "
             "WHERE l.vault_id = ? AND l.dst_note_id = ? ORDER BY n.relpath, l.position",
             (vault_id, target["id"]),

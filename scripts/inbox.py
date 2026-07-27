@@ -111,13 +111,26 @@ def run(db_path: Path, *, vault_id: int, today: str, html_backend: str = "auto")
     summary/entity synthesis is left to the `ingest` LLM flow. Partial failures
     are isolated (one bad URL never aborts the batch)."""
     queued = list_items(db_path, vault_id=vault_id, status="queued")
-    fetched, failed = [], []
+    fetched, deduped, failed = [], [], []
     for item in queued:
         try:
+            existing = ingest.find_raw_by_source_url(
+                db_path, vault_id=vault_id, source_url=item["url"]
+            )
+            if existing:
+                conn = registry.connect(db_path)
+                try:
+                    with conn:
+                        _set_status(conn, item["id"], "fetched", raw_relpath=existing)
+                finally:
+                    conn.close()
+                deduped.append({"url": item["url"], "raw_relpath": existing})
+                continue
             res = fetch.fetch_url(item["url"], html_backend=html_backend)
             relpath = ingest.save_raw(
                 db_path, vault_id=vault_id, content=res["text"], ext="md",
                 title=res["title"] or item["url"], date_str=today,
+                source_url=res["source_url"],
             )
             conn = registry.connect(db_path)
             try:
@@ -138,7 +151,8 @@ def run(db_path: Path, *, vault_id: int, today: str, html_backend: str = "auto")
             failed.append({"url": item["url"], "error": str(exc)[:300]})
     if fetched:
         reindex.incremental(db_path, vault_id=vault_id)
-    return {"fetched": fetched, "failed": failed, "queued_count": len(queued)}
+    return {"fetched": fetched, "deduped": deduped, "failed": failed,
+            "queued_count": len(queued)}
 
 
 def add_feed(db_path: Path, *, vault_id: int, feed_url: str) -> dict:

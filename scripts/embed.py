@@ -6,6 +6,7 @@ callers degrade to fts — embedding is opt-in (references/auto-recall-hook-desi
 from __future__ import annotations
 
 import hashlib
+import re
 import struct
 
 DEFAULT_LOCAL_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -15,6 +16,25 @@ KNOWN_MODEL_DIMS = {
     "sentence-transformers/all-MiniLM-L6-v2": 384,
     "intfloat/multilingual-e5-large": 1024,
 }
+
+_E5_MODEL_RE = re.compile(r"(?:^|[/_-])e5(?:$|[/_-])", re.IGNORECASE)
+E5_PREFIX_SCHEME = "e5-query-passage-v1"
+
+
+def prefix_scheme(embedder) -> str:
+    """Embedding text-role contract persisted in vec_meta."""
+    model = str(getattr(embedder, "model", "") or "")
+    return E5_PREFIX_SCHEME if _E5_MODEL_RE.search(model) else "none"
+
+
+def passage_texts(embedder, texts: list[str]) -> list[str]:
+    if prefix_scheme(embedder) == E5_PREFIX_SCHEME:
+        return [f"passage: {text}" for text in texts]
+    return list(texts)
+
+
+def query_text(embedder, text: str) -> str:
+    return f"query: {text}" if prefix_scheme(embedder) == E5_PREFIX_SCHEME else text
 
 
 class Embedder:
@@ -67,10 +87,6 @@ class FastEmbedEmbedder(Embedder):
         self._te = None
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        # v1 uses symmetric embedding (no "query:"/"passage:" e5 prefixes) — both
-        # index and query texts are embedded the same way. Asymmetric prefixes are
-        # intentionally omitted here; add them in a future version if retrieval
-        # quality tests show a meaningful improvement.
         if self._te is None:
             from fastembed import TextEmbedding  # optional dep; lazy
             try:

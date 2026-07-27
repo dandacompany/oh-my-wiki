@@ -44,3 +44,37 @@ def test_query_surfaces_unexpected_error(monkeypatch, capsys, tmp_path):
     out = vector_index.query(tmp_path / "db.sqlite", vault_id=1, embedder=_Emb(), text="hi")
     assert out == []  # contract preserved: still falls back
     assert "vector query failed" in capsys.readouterr().err  # no longer silent
+
+
+@pytest.mark.skipif(not vector_index.available(), reason="sqlite-vec not installed")
+def test_e5_prefix_scheme_is_stored_and_roles_are_applied(tmp_path):
+    from scripts import registry
+
+    db = tmp_path / "reg.db"
+    registry.init_db(db)
+    vault = registry.add_vault(
+        db, name="v", path=tmp_path / "v", type_="markdown", mode="wiki"
+    )
+
+    class Recorder:
+        model = "intfloat/multilingual-e5-large"
+        dim = 4
+
+        def __init__(self):
+            self.calls = []
+
+        def embed(self, texts):
+            self.calls.append(list(texts))
+            return [[1.0, 0.0, 0.0, 0.0] for _ in texts]
+
+    recorder = Recorder()
+    vector_index.upsert(
+        db, vault_id=vault["id"], embedder=recorder,
+        rows=[("wiki/a.md", "문서")],
+    )
+    vector_index.query(
+        db, vault_id=vault["id"], embedder=recorder, text="질문", limit=1
+    )
+
+    assert recorder.calls == [["passage: 문서"], ["query: 질문"]]
+    assert vector_index.meta(db)["prefix_scheme"] == embed.E5_PREFIX_SCHEME

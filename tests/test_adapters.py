@@ -48,6 +48,28 @@ def test_markdown_init_vault_wiki_mode_creates_three_layers(tmp_path):
     assert (root / "wiki" / "log.md").is_file()
 
 
+def test_markdown_init_vault_falls_back_when_local_trash_is_reserved(
+        tmp_path, monkeypatch):
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / "home"))
+    root = tmp_path / "nas" / "course"
+    original_mkdir = adapters.Path.mkdir
+
+    def smb_mkdir(path, *args, **kwargs):
+        if path == root / ".trash":
+            raise FileNotFoundError("reserved by smbfs")
+        return original_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(adapters.Path, "mkdir", smb_mkdir)
+    trash = adapters.get_adapter("markdown", vault_name="inflearn-course").init_vault(
+        root, "wiki"
+    )
+
+    assert root.is_dir()
+    assert (root / "wiki" / "index.md").is_file()
+    assert trash == tmp_path / "home" / ".trash" / "inflearn-course"
+    assert trash.is_dir()
+
+
 def test_markdown_open_invokes_os_open(tmp_path):
     a = adapters.MarkdownAdapter()
     target = tmp_path / "note.md"
@@ -72,7 +94,8 @@ def test_obsidian_link_syntax_uses_wikilink():
 def test_obsidian_is_valid_requires_dot_obsidian(obsidian_vault_path, tmp_path):
     a = adapters.ObsidianAdapter()
     assert a.is_valid(obsidian_vault_path) is True
-    plain = tmp_path / "plain"; plain.mkdir()
+    plain = tmp_path / "plain"
+    plain.mkdir()
     assert a.is_valid(plain) is False
 
 

@@ -8,6 +8,7 @@ in the one global registry, so the skill can always reach all vaults.
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 
 from scripts.slugify import slugify
@@ -49,6 +50,41 @@ def ensure_home() -> Path:
     home = omw_home()
     (home / "vaults").mkdir(parents=True, exist_ok=True)
     return home
+
+
+def fallback_trash_root(vault_name: str) -> Path:
+    """Registry-side page trash for filesystems that reject `<vault>/.trash`."""
+    return omw_home() / ".trash" / slugify(vault_name)
+
+
+def ensure_vault_trash(root: Path, vault_name: str) -> Path:
+    """Create and return a usable soft-delete directory for one vault.
+
+    macOS smbfs reserves `.trash` case-insensitively on some NAS mounts.  A
+    missing local trash must degrade to OMW_HOME, never make vault creation fail.
+    """
+    local = Path(root) / ".trash"
+    try:
+        local.mkdir(parents=True, exist_ok=True)
+        return local
+    except OSError:
+        fallback = fallback_trash_root(vault_name)
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+
+
+def vault_trash_root(root: Path, vault_name: str, config_json: str | None = None) -> Path:
+    """Resolve the current page-trash path without creating it."""
+    if config_json:
+        try:
+            configured = json.loads(config_json).get("trash_dir")
+        except (ValueError, TypeError, AttributeError):
+            configured = None
+        if configured:
+            return Path(configured).expanduser()
+    local = Path(root) / ".trash"
+    fallback = fallback_trash_root(vault_name)
+    return fallback if fallback.is_dir() and not local.is_dir() else local
 
 
 def legacy_registry_candidates() -> list[Path]:

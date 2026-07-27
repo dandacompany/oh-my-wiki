@@ -76,15 +76,20 @@ def _cmd_vault_unarchive(args) -> int:
 
 
 def _cmd_vault_create(args) -> int:
+    import json as _json
     ensure_home()
     db = registry_path()
     registry.init_db(db)
     root = resolve_vault_root(args.name, args.location)
     root.mkdir(parents=True, exist_ok=True)
-    adapters.get_adapter(args.type, vault_name=args.name).init_vault(root, args.mode)
+    trash = adapters.get_adapter(args.type, vault_name=args.name).init_vault(root, args.mode)
+    config_json = None
+    if trash != root / ".trash":
+        config_json = _json.dumps({"trash_dir": str(trash)}, ensure_ascii=False)
     try:
         vault = registry.add_vault(
-            db, name=args.name, path=root, type_=args.type, mode=args.mode
+            db, name=args.name, path=root, type_=args.type, mode=args.mode,
+            config_json=config_json,
         )
     except registry.VaultError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -472,7 +477,8 @@ def _cmd_fetch(args) -> int:
     try:
         relpath = ingest.save_raw(db, vault_id=vault["id"], content=res["text"], ext="md",
                                   title=res["title"] or args.url,
-                                  date_str=args.today or date.today().isoformat())
+                                  date_str=args.today or date.today().isoformat(),
+                                  source_url=res["source_url"])
         reindex.incremental(db, vault_id=vault["id"])
     except (OSError, sqlite3.Error) as exc:
         print(f"error: saving fetched content failed: {exc}", file=sys.stderr)

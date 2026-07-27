@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts import frontmatter, links, registry, schema, entity_link
+from scripts import frontmatter, links, registry, schema, entity_link, wiki_lint
 from scripts.paths import registry_path
 
 # Files whose frontmatter is intentionally minimal (no schema check).
@@ -78,6 +78,7 @@ def check(db_path: Path, *, vault_id: int) -> dict:
         if e["dst_relpath"] and status_map.get(e["dst_relpath"]) != "superseded"
     ]
     link_suggestions = entity_link.suggest_links(db_path, vault_id=vault_id)
+    structural = wiki_lint.check(db_path, vault_id=vault_id)
 
     return {
         "vault_id": vault_id,
@@ -97,6 +98,9 @@ def check(db_path: Path, *, vault_id: int) -> dict:
             "superseded_unmarked": superseded_unmarked,
             "link_suggestions": link_suggestions,
         },
+        # These are the exact categories counted by the session-start
+        # maintenance nudge.  Exposing them here makes `/omw lint` actionable.
+        "structural": structural,
         "auto_fix_hints": _hints(fm_issues, missing_files, mtime_drift, broken,
                                  orphan_pages, index_drift_report, contradictions,
                                  superseded_unmarked, link_suggestions),

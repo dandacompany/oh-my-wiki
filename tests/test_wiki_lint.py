@@ -35,11 +35,11 @@ def broken_wiki(tmp_db, tmp_path):
 
 
 def test_orphan_pages_detected(broken_wiki):
+    from scripts import links
+
     db, vault, root = broken_wiki
     report = wiki_lint.check(db, vault_id=vault["id"])
-    orphans = {item["relpath"] for item in report["orphan_pages"]}
-    assert "wiki/summaries/orphan-summary.md" in orphans
-    assert "wiki/summaries/good-summary.md" not in orphans
+    assert report["orphan_pages"] == links.orphans(db, vault["id"])
 
 
 def test_missing_concepts_detected(broken_wiki):
@@ -56,6 +56,37 @@ def test_existing_entity_not_flagged_as_missing(broken_wiki):
     missing = {item["title"] for item in report["missing_concepts"]}
     assert "karpathy" not in missing
     assert "compounding" not in missing
+
+
+def test_existing_cross_layer_page_not_flagged_as_missing(tmp_path, tmp_db):
+    registry.init_db(tmp_db)
+    root = tmp_path / "cross-layer"
+    adapters.get_adapter("markdown").init_vault(root, "wiki")
+    (root / "wiki" / "summaries" / "answer.md").write_text("# Answer", encoding="utf-8")
+    for name in ("a", "b"):
+        (root / "wiki" / "concepts" / f"{name}.md").write_text(
+            f"# {name}\n\nSee [[answer]].", encoding="utf-8"
+        )
+    vault = registry.add_vault(
+        tmp_db, name="cross", path=root, type_="markdown", mode="wiki"
+    )
+    reindex.full(tmp_db, vault_id=vault["id"])
+
+    report = wiki_lint.check(tmp_db, vault_id=vault["id"])
+    assert "answer" not in {item["title"] for item in report["missing_concepts"]}
+
+
+def test_wiki_lint_orphans_match_graph_and_are_visible_in_lint(broken_wiki):
+    from scripts import links, lint
+
+    db, vault, _root = broken_wiki
+    structural = wiki_lint.check(db, vault_id=vault["id"])
+    graph_orphans = links.orphans(db, vault["id"])
+    visible = lint.check(db, vault_id=vault["id"])
+
+    assert structural["orphan_pages"] == graph_orphans
+    assert visible["structural"]["orphan_pages"] == graph_orphans
+    assert visible["structural"]["missing_concepts"] == structural["missing_concepts"]
 
 
 def test_empty_data_detected(broken_wiki):

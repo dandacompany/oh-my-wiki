@@ -163,6 +163,16 @@ def get_vault_by_name(db_path: Path, name: str) -> sqlite3.Row | None:
         conn.close()
 
 
+def get_vault_by_id(db_path: Path, vault_id: int) -> sqlite3.Row | None:
+    conn = connect(db_path)
+    try:
+        return conn.execute(
+            "SELECT * FROM vaults WHERE id = ?", (vault_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+
 def get_vault_root(db_path: Path, vault_id: int) -> Path:
     """Return a vault's content root by id. Raises VaultError if the id is unknown.
     Single source of truth for the `SELECT path FROM vaults WHERE id=?` lookup."""
@@ -281,9 +291,11 @@ def update_mode_config(db_path: Path, name: str, *,
             raise VaultError(f"vault {name!r} not found")
         sets, params = [], []
         if mode is not None:
-            sets.append("mode = ?"); params.append(mode)
+            sets.append("mode = ?")
+            params.append(mode)
         if config_json is not None:
-            sets.append("config_json = ?"); params.append(config_json)
+            sets.append("config_json = ?")
+            params.append(config_json)
         if not sets:
             raise VaultError("nothing to update")
         params.append(row["id"])

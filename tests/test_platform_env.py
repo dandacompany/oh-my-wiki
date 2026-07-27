@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 from scripts import platform_env as pe
 
 
@@ -24,6 +25,41 @@ def test_windows_user_profile_via_cmd(monkeypatch):
     assert pe.windows_user_profile() == Path("/mnt/c/Users/dante")
 
 
+def test_userprofile_windows_decodes_unicode_cmd_output(monkeypatch):
+    seen = {}
+
+    def fake_run(argv, **kwargs):
+        seen["argv"] = argv
+        seen["kwargs"] = kwargs
+        return SimpleNamespace(
+            returncode=0,
+            stdout="C:\\Users\\홍길동\r\n".encode("utf-16le"),
+            stderr="UNC 경로 경고\r\n".encode("utf-16le"),
+        )
+
+    monkeypatch.setattr(pe.subprocess, "run", fake_run)
+
+    assert pe._userprofile_windows() == r"C:\Users\홍길동"
+    assert seen["argv"] == ["cmd.exe", "/u", "/c", "echo", "%USERPROFILE%"]
+    assert seen["kwargs"]["capture_output"] is True
+    assert "text" not in seen["kwargs"]
+
+
+def test_userprofile_windows_malformed_output_is_recoverable(monkeypatch):
+    monkeypatch.setattr(
+        pe.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(returncode=0, stdout=b"\xc0", stderr=b""),
+    )
+
+    assert pe._userprofile_windows() is None
+
+
+def test_windows_user_profile_preserves_korean_username(monkeypatch):
+    monkeypatch.setattr(pe, "_userprofile_windows", lambda: r"C:\Users\홍길동")
+    assert pe.windows_user_profile() == Path("/mnt/c/Users/홍길동")
+
+
 def test_to_unc_path(monkeypatch):
     monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
     got = pe.to_unc_path("/home/dante/.omw/vaults/x")
@@ -44,6 +80,27 @@ def test_windows_user_profile_returns_none_on_oserror(monkeypatch):
     monkeypatch.setattr(pe, "_WIN_USERS", _FakePath())
     result = pe.windows_user_profile()
     assert result is None
+
+
+def test_windows_user_profile_does_not_guess_when_scan_is_ambiguous(monkeypatch):
+    monkeypatch.setattr(pe, "_userprofile_windows", lambda: None)
+
+    class _Candidate:
+        def __init__(self, name):
+            self.name = name
+
+        def is_dir(self):
+            return True
+
+    class _FakePath:
+        def is_dir(self):
+            return True
+
+        def iterdir(self):
+            return [_Candidate("alice"), _Candidate("bob")]
+
+    monkeypatch.setattr(pe, "_WIN_USERS", _FakePath())
+    assert pe.windows_user_profile() is None
 
 
 def test_install_context_pipx(monkeypatch):

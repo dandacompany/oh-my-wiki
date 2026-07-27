@@ -11,7 +11,7 @@ def resolve_dim(db_path, model: str) -> int:
     if model in embed.KNOWN_MODEL_DIMS:
         return embed.KNOWN_MODEL_DIMS[model]
     emb = embed.get_embedder({"provider": "fastembed", "model": model})
-    vec = emb.embed(["probe"])[0]
+    vec = emb.embed(embed.passage_texts(emb, ["probe"]))[0]
     return len(vec)
 
 
@@ -117,6 +117,7 @@ def status(db_path) -> dict:
         "provider": emb.get("provider") or "none",
         "model": emb.get("model") or embed.DEFAULT_LOCAL_MODEL,
         "dim": emb.get("dim"),
+        "prefix_scheme": embed.prefix_scheme(embed.get_embedder(emb)),
         "strategy": cfg.get("strategy") or "fts",
         "fastembed_available": embed_install.fastembed_available(),
         "vector_index_available": vector_index.available(),

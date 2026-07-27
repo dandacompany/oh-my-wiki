@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Protocol
 
+from scripts.paths import ensure_vault_trash
+
 
 class AdapterError(Exception):
     pass
@@ -14,7 +16,7 @@ class AdapterError(Exception):
 class VaultAdapter(Protocol):
     def open(self, abs_path: Path) -> None: ...
     def link_syntax(self, target_relpath: str) -> str: ...
-    def init_vault(self, root: Path, mode: str) -> None: ...
+    def init_vault(self, root: Path, mode: str) -> Path: ...
     def is_valid(self, root: Path) -> bool: ...
 
 
@@ -131,6 +133,9 @@ status: meta
 class MarkdownAdapter:
     """Plain-markdown adapter — works with any editor (VS Code, Cursor, etc.)."""
 
+    def __init__(self, *, vault_name: str | None = None):
+        self.vault_name = vault_name
+
     def open(self, abs_path: Path) -> None:
         _os_open(abs_path)
 
@@ -141,10 +146,10 @@ class MarkdownAdapter:
         name = rel.rsplit("/", 1)[-1]
         return f"[{name}](./{rel}.md)"
 
-    def init_vault(self, root: Path, mode: str) -> None:
+    def init_vault(self, root: Path, mode: str) -> Path:
         root = Path(root)
         root.mkdir(parents=True, exist_ok=True)
-        (root / ".trash").mkdir(exist_ok=True)
+        trash = ensure_vault_trash(root, self.vault_name or root.name)
         if mode == "memo":
             self._init_memo(root)
         elif mode == "wiki":
@@ -161,6 +166,7 @@ class MarkdownAdapter:
             self._init_website(root)
         else:
             raise AdapterError(f"unknown mode: {mode!r}")
+        return trash
 
     def _init_memo(self, root: Path) -> None:
         (root / "inbox").mkdir(exist_ok=True)
@@ -219,7 +225,7 @@ class MarkdownAdapter:
 
 def get_adapter(type_: str, *, vault_name: str | None = None) -> VaultAdapter:
     if type_ == "markdown":
-        return MarkdownAdapter()
+        return MarkdownAdapter(vault_name=vault_name)
     if type_ == "obsidian":
         return ObsidianAdapter(vault_name=vault_name)
     raise AdapterError(f"unknown adapter type: {type_!r}")
@@ -241,9 +247,10 @@ class ObsidianAdapter(MarkdownAdapter):
         root = Path(root)
         return root.is_dir() and (root / ".obsidian").is_dir()
 
-    def init_vault(self, root: Path, mode: str) -> None:
-        super().init_vault(root, mode)
+    def init_vault(self, root: Path, mode: str) -> Path:
+        trash = super().init_vault(root, mode)
         (Path(root) / ".obsidian").mkdir(exist_ok=True)
+        return trash
 
     def open(self, abs_path: Path, vault_root: Path | None = None) -> None:
         if self.vault_name and vault_root is not None:

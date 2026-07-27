@@ -42,6 +42,21 @@ def test_save_raw_txt(wiki_vault):
     assert (root / rel).read_text(encoding="utf-8") == "plain text"
 
 
+def test_save_raw_md_records_source_url_frontmatter(wiki_vault):
+    db, vault, root = wiki_vault
+    rel = ingest.save_raw(
+        db, vault_id=vault["id"], content="# Body", ext="md",
+        title="Web Source", date_str="2026-07-27",
+        source_url="https://example.com/article",
+    )
+    meta, body = ingest.frontmatter.parse((root / rel).read_text(encoding="utf-8"))
+    assert meta["source_url"] == "https://example.com/article"
+    assert body == "# Body"
+    assert ingest.find_raw_by_source_url(
+        db, vault_id=vault["id"], source_url="https://example.com/article"
+    ) == rel
+
+
 def test_save_raw_collision(wiki_vault):
     db, vault, root = wiki_vault
     ingest.save_raw(
