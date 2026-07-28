@@ -50,3 +50,4 @@ def test_reference_tables_are_mobile_scrollable():
     mod = _load("tutorial_mobile", "docs/tutorial-reference/build_tutorial_reference.py")
     assert 'class="table-scroll"' in mod.CLI_TABLE
     assert ".table-scroll{max-width:100%;overflow-x:auto" in mod.HEAD
+    assert "html,body{max-width:100%;overflow-x:hidden}" in mod.HEAD

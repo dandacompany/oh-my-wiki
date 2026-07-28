@@ -98,6 +98,7 @@ HEAD = """<!DOCTYPE html>
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
+html,body{max-width:100%;overflow-x:hidden}
 body{
   font-family:'Noto Sans KR',sans-serif;
   font-weight:400; font-size:15.5px; line-height:1.8;
