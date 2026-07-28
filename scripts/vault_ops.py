@@ -9,11 +9,10 @@ import shutil
 import sqlite3
 from pathlib import Path
 
-from scripts import registry
+from scripts import adapters, registry
 from scripts.paths import omw_home
 
-_VALID_MODES = {"memo", "wiki", "personal", "book", "business",
-                "github-codebase", "website"}
+_VALID_MODES = frozenset(adapters.VAULT_MODES)
 
 
 def _require(db_path: Path, name: str) -> sqlite3.Row:
@@ -88,13 +87,28 @@ def set_(db_path: Path, name: str, *, mode: str | None = None,
         raise registry.VaultError(
             f"invalid mode {mode!r}; choose one of {sorted(_VALID_MODES)}")
     config_json = None
+    existing = json.loads(row["config_json"]) if row["config_json"] else {}
+    config_changed = False
+    if mode is not None and mode != row["mode"]:
+        root = Path(row["path"])
+        if not root.is_dir():
+            raise registry.VaultError(
+                f"vault path is missing; refusing to scaffold: {root}"
+            )
+        trash = adapters.get_adapter(
+            row["type"], vault_name=name
+        ).init_vault(root, mode)
+        if trash != root / ".trash":
+            existing["trash_dir"] = str(trash)
+            config_changed = True
     if config_pairs:
-        existing = json.loads(row["config_json"]) if row["config_json"] else {}
         for pair in config_pairs:
             if "=" not in pair:
                 raise registry.VaultError(f"bad --config {pair!r}; expected k=v")
             k, v = pair.split("=", 1)
             existing[k] = v
+            config_changed = True
+    if config_changed:
         config_json = json.dumps(existing, ensure_ascii=False)
     updated = registry.update_mode_config(db_path, name, mode=mode,
                                           config_json=config_json)

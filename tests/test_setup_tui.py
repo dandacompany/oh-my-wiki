@@ -80,9 +80,11 @@ def test_run_interactive_uses_selectors(monkeypatch, tmp_path):
 
     rc = sw._run_interactive("demo", "wiki", "obsidian", "global", in_wizard=True)
     assert rc == 0
-    kinds = {c[0] for c in calls}
     # mode/type/location are selectors; name is text
-    assert ("select", ("wiki", "memo")) in calls
+    assert (
+        "select",
+        ("wiki", "memo", "personal", "book", "business", "github-codebase", "website"),
+    ) in calls
     assert ("select", ("obsidian", "markdown")) in calls
     assert any(c[0] == "select" and c[1] and "global" in c[1] for c in calls)
     assert any(c[0] == "text" for c in calls)  # vault name

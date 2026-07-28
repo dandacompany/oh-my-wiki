@@ -1,5 +1,6 @@
 """omw setup wizard — non-interactive contract."""
 import sys
+from pathlib import Path
 
 import pytest
 import yaml
@@ -20,6 +21,39 @@ def test_noninteractive_setup_creates_vault_and_config(capsys):
     assert cfg.is_file()
     data = yaml.safe_load(cfg.read_text())
     assert data["default_vault"] == "first" and data["version"] == 1
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        ("personal", "journal"),
+        ("book", "chapters"),
+        ("business", "meetings"),
+        ("github-codebase", "modules"),
+        ("website", "pages"),
+    ],
+)
+def test_noninteractive_setup_supports_extended_modes(mode, expected):
+    rc = omw_cli.main([
+        "setup", "vault", "--noninteractive", "--name", f"v-{mode}",
+        "--mode", mode, "--type", "markdown", "--location", "global",
+    ])
+    assert rc == 0
+    row = registry.list_vaults(registry_path())[0]
+    assert row["mode"] == mode
+    assert (Path(row["path"]) / expected).is_dir()
+
+
+def test_setup_rejects_gate_mode_for_vault(capsys):
+    rc = omw_cli.main(["setup", "vault", "--noninteractive", "--mode", "off"])
+    assert rc == 2
+    assert "unknown vault mode" in capsys.readouterr().err
+
+
+def test_setup_rejects_vault_mode_for_gate(capsys):
+    rc = omw_cli.main(["setup", "gate", "--noninteractive", "--mode", "wiki"])
+    assert rc == 2
+    assert "unknown gate mode" in capsys.readouterr().err
 
 
 def test_noninteractive_setup_idempotent(capsys):

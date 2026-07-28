@@ -15,7 +15,7 @@ oh-my-wiki exposes exactly two surfaces. The **`omw` CLI** handles deterministic
 
 ---
 
-## What's new in v3
+## Current capabilities
 
 - **Schemas** — 13 built-in page types (`omw schema list/show`), with per-vault overrides in `<vault>/schemas/`
 - **Confidence + supersede** — `confidence` frontmatter field; `omw supersede` retires old pages cleanly
@@ -31,6 +31,8 @@ oh-my-wiki exposes exactly two surfaces. The **`omw` CLI** handles deterministic
 - **Persona slash commands** — one per persona (`/omw-fact-checker`, `/omw-librarian`, `/omw-auditor`, `/omw-curator`, `/omw-consistency-checker`, `/omw-terminology-manager`), each dispatching `omw persona-run <role>`
 - **Guided lifecycle chaining** — after a pipeline op, `omw next --after <op>` computes the state-endorsed next op (deterministic — static successor filtered by vault state); the skill offers it via your host's ask tool (safe default = stop, never auto-runs)
 - **`summary` / `synthesis` ops** — `omw summary <page>` condenses a page into a summary page; `omw synthesis <topic>` weaves a cluster's structured pages into a `wiki/syntheses/` page
+- **Portable vaults** — WSL Korean Windows paths, non-UTF-8 notes, custom `HERMES_HOME`, and NAS/SMB trash fallback are handled without blocking setup or reindex
+- **Integrity loop** — all-mode page delete cleans inbound graph edges, inbox fetch reuses matching `source_url`, `omw reindex --full` prunes missing files, and `omw lint` exposes the same structural signal used by session maintenance
 
 ---
 

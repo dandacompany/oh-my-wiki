@@ -1,6 +1,13 @@
-# except the published tutorial showcase + the full-feature reference)
-# Meta/planning + generated tutorials: docs/ is local-only, never distributed
-docs/
+# Meta/planning + generated tutorial HTML stay local. The two builders are
+# published so the website can render its pinned OMW submodule without a stale
+# copied source.
+docs/*
+!docs/tutorial-omw/
+docs/tutorial-omw/*
+!docs/tutorial-omw/build_tutorial_omw.py
+!docs/tutorial-reference/
+docs/tutorial-reference/*
+!docs/tutorial-reference/build_tutorial_reference.py
 
 # Claude Code / AI agent instructions and memory (local-only, never publish)
 CLAUDE.md

@@ -1,4 +1,4 @@
-"""Six vault-setup modes: each produces a distinct folder scaffold."""
+"""Seven vault-setup modes: each produces a distinct folder scaffold."""
 from pathlib import Path
 
 import pytest

@@ -827,6 +827,18 @@ def _cmd_serve(args) -> int:
 
 def _cmd_setup(args) -> int:
     from scripts import setup_wizard
+    if args.section in (None, "vault") and args.mode not in (None, *adapters.VAULT_MODES):
+        print(
+            f"error: unknown vault mode {args.mode!r}; choose from {list(adapters.VAULT_MODES)}",
+            file=sys.stderr,
+        )
+        return 2
+    if args.section == "gate" and args.mode not in (None, "off", "advisory", "enforce"):
+        print(
+            f"error: unknown gate mode {args.mode!r}; choose from ['off', 'advisory', 'enforce']",
+            file=sys.stderr,
+        )
+        return 2
     if args.section is None:
         interactive = (not args.noninteractive) and sys.stdin.isatty()
         if interactive:
@@ -1409,7 +1421,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     pc = vsub.add_parser("create", help="Create + register a vault.")
     pc.add_argument("name")
-    pc.add_argument("--mode", choices=["memo", "wiki"], default="wiki")
+    pc.add_argument("--mode", choices=adapters.VAULT_MODES, default="wiki")
     pc.add_argument("--type", choices=["markdown", "obsidian"], default="markdown")
     pc.add_argument(
         "--location", default="global", help="global | project | <absolute path>"
@@ -1444,7 +1456,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     pset = vsub.add_parser("set", help="Edit a vault's mode and/or config (k=v).")
     pset.add_argument("name")
-    pset.add_argument("--mode", help="New mode (memo|wiki|personal|book|business|github-codebase|website).")
+    pset.add_argument("--mode", choices=adapters.VAULT_MODES,
+                      help="New mode; adds that mode's scaffold without removing existing files.")
     pset.add_argument("--config", action="append", metavar="k=v",
                       help="Set a config key (repeatable).")
     pset.set_defaults(func=_cmd_vault_set)
@@ -1765,9 +1778,12 @@ def build_parser() -> argparse.ArgumentParser:
     pset.add_argument("--dry-run", dest="dry_run", action="store_true",
                       help="preview recall/persona/agent host-config writes (blocks, hooks, skills); make none")
     pset.add_argument("--name", default="default")
-    pset.add_argument("--mode", default=None,
-                      help="vault mode (memo|wiki) for `omw setup vault`, "
-                           "or gate mode (off|advisory|enforce) for `omw setup gate`")
+    pset.add_argument(
+        "--mode",
+        metavar="MODE",
+        default=None,
+        help="vault mode for `omw setup vault`, or off|advisory|enforce for `omw setup gate`",
+    )
     pset.add_argument("--type", choices=["markdown", "obsidian"], default="markdown")
     pset.add_argument("--location", default="global")
     pset.add_argument("--provider", default=None)

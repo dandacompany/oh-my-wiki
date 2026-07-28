@@ -26,7 +26,7 @@ A storage-agnostic LLM Wiki skill. Implements Andrej Karpathy's three-layer patt
 2. **Web search MUST go through `omw search "<query>"`.** It routes to the user's configured
    provider and keeps the wiki's provenance intact. Do NOT use your own / native web-search
    tool for OMW work.
-3. **Create vaults ONLY with `omw vault create <name> --mode wiki --type <markdown|obsidian>`** —
+3. **Create vaults ONLY with `omw vault create <name> --mode <mode> --type <markdown|obsidian>`** —
    never construct a vault by calling registry/adapters yourself.
 4. **Ingest sources with `omw fetch <URL>` or `omw ingest`** — never hand-write files into `raw/`.
    `omw search` auto-falls back across keyed providers on 429/empty; for fetching, try your native
@@ -35,11 +35,12 @@ A storage-agnostic LLM Wiki skill. Implements Andrej Karpathy's three-layer patt
 > If you catch yourself about to write `python3 -c`, `python3 -m scripts`, or use a native web
 > search, STOP and use the matching `omw` command above instead.
 
-## Current status — v1 shipped, v2 in progress
+## Current status
 
-v1 (Plans A + B + C) is complete: dispatcher + foundation scripts, vault management (`omw vault` sub-commands), memo-mode ops (`create`, `find`, `open`, `edit`, `move`, `delete`), wiki-mode ops (`ingest`, `query`), and the common `lint` op (with wiki-mode structural extensions). 91 pytest tests pass on GitHub Actions matrix (Python 3.10/3.11/3.12 × ubuntu/macos). See `README.md`, `TUTORIAL.md`, `TUTORIAL.ko.md` for usage.
-
-v2 adds 6 vault modes, extended wiki-lint categories, autoresearch, wiki-maintenance personas (wiki-librarian / curator / fact-checker / consistency-checker / terminology-manager), Obsidian/Logseq viewers, URL fetch + inbox, and per-prompt wiki recall hooks. (Earlier prototypes of a tmux-based multi-agent swarm/team runtime were removed — omw stays focused on the wiki; the host AI agent handles orchestration.)
+The current release supports seven vault modes, graph-backed lint, autoresearch,
+six wiki-maintenance personas, Obsidian/Logseq viewers, URL fetch + inbox,
+per-prompt recall hooks, local embeddings, and deterministic lifecycle guidance.
+See `README.md`, `TUTORIAL.md`, and `TUTORIAL.ko.md` for usage.
 
 ## Step 1 — Read registry state
 

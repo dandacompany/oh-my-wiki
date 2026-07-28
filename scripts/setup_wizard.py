@@ -124,7 +124,7 @@ def _run_interactive(name: str, mode: str, type_: str, location: str,
                      *, in_wizard: bool = False) -> int:
     from scripts import platform_env
     name = _prompt("text", "Vault name", default=name) or name
-    mode = _prompt("select", "Mode", choices=["wiki", "memo"], default=mode) or mode
+    mode = _prompt("select", "Mode", choices=list(adapters.VAULT_MODES), default=mode) or mode
     type_ = _prompt("select", "Type", choices=["obsidian", "markdown"], default=type_) or type_
 
     loc_resolved = False

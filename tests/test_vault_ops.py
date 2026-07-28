@@ -172,10 +172,13 @@ VALID_MODES = {"memo", "wiki", "personal", "book", "business",
 
 def test_set_updates_mode(tmp_path):
     db = _fresh_db(tmp_path)
-    registry.add_vault(db, name="v1", path=tmp_path / "v1",
+    root = tmp_path / "v1"
+    root.mkdir()
+    registry.add_vault(db, name="v1", path=root,
                        type_="markdown", mode="wiki")
     vault_ops.set_(db, "v1", mode="memo")
     assert registry.get_vault_by_name(db, "v1")["mode"] == "memo"
+    assert (root / "inbox").is_dir()
 
 
 def test_set_invalid_mode_rejected(tmp_path):
@@ -184,6 +187,16 @@ def test_set_invalid_mode_rejected(tmp_path):
                        type_="markdown", mode="wiki")
     with pytest.raises(registry.VaultError):
         vault_ops.set_(db, "v1", mode="nonsense")
+    assert registry.get_vault_by_name(db, "v1")["mode"] == "wiki"
+
+
+def test_set_mode_refuses_missing_vault_path(tmp_path):
+    db = _fresh_db(tmp_path)
+    root = tmp_path / "missing"
+    registry.add_vault(db, name="v1", path=root, type_="markdown", mode="wiki")
+    with pytest.raises(registry.VaultError, match="path is missing"):
+        vault_ops.set_(db, "v1", mode="business")
+    assert not root.exists()
     assert registry.get_vault_by_name(db, "v1")["mode"] == "wiki"
 
 
@@ -325,7 +338,9 @@ def test_cli_vault_set(tmp_path, monkeypatch):
     from scripts.paths import registry_path
     db = registry_path()
     registry.init_db(db)
-    registry.add_vault(db, name="v1", path=tmp_path / "v1", type_="markdown", mode="wiki")
+    root = tmp_path / "v1"
+    root.mkdir()
+    registry.add_vault(db, name="v1", path=root, type_="markdown", mode="wiki")
     ret = omw_cli.main(["vault", "set", "v1", "--mode", "memo"])
     assert ret == 0
     row = registry.get_vault_by_name(db, "v1")

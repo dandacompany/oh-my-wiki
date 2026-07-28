@@ -13,6 +13,18 @@ class AdapterError(Exception):
     pass
 
 
+# Ordered, user-facing contract shared by every vault entry point.
+VAULT_MODES = (
+    "wiki",
+    "memo",
+    "personal",
+    "book",
+    "business",
+    "github-codebase",
+    "website",
+)
+
+
 class VaultAdapter(Protocol):
     def open(self, abs_path: Path) -> None: ...
     def link_syntax(self, target_relpath: str) -> str: ...

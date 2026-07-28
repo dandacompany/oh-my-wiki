@@ -1,9 +1,9 @@
-# oh-my-wiki — v3 Scenario Tutorial
+# oh-my-wiki — Current Release Scenario Tutorial
 
 > **Korean version**: [TUTORIAL.ko.md](./TUTORIAL.ko.md)
 
 This tutorial walks you through building and maintaining a real wiki vault.
-Every command block shows exact output from a live v3 CLI run.
+Commands and flags are checked against the current public CLI. Run `omw version` for the installed release.
 Natural-language operations (ingest, query, autoresearch, personas) are shown
 as prompts you say in a Claude Code / Codex / Gemini session — not as CLI output.
 
@@ -606,17 +606,30 @@ Relation keys (`uses`, `contradicts`, `supersedes`) that reference wikilinks
 
 ### 4.8 Wiki-maintenance personas (in-session, natural language)
 
-oh-my-wiki ships five wiki-maintenance personas you invoke in your Claude Code /
+oh-my-wiki ships six wiki-maintenance personas you invoke in your Claude Code /
 Codex / Gemini session by talking naturally. No separate command is needed — the
 skill routes to the right persona based on what you say. The roster is
-wiki-librarian / curator / fact-checker / consistency-checker /
+wiki-auditor / wiki-librarian / curator / fact-checker / consistency-checker /
 terminology-manager (see the Part 5 table).
 
-**Curator** — reviews the wiki for gaps, orphan pages, and structural
-weaknesses, then proposes a maintenance plan. In your Claude session, say:
+**Wiki-auditor** — combines lint, maintenance, report, and graph signals to
+prioritize what is wrong. It never edits content directly:
 
 ```
-curate my wiki — what pages are most in need of attention?
+audit my wiki
+```
+
+**Wiki-librarian** — proposes structural fixes for orphan pages, cross-links,
+and merge candidates:
+
+```
+tidy the wiki structure
+```
+
+**Curator** — reviews and proposes a better ordering for `wiki/index.md`:
+
+```
+curate my index
 ```
 
 **Fact-checker** — decomposes a draft into atomic claims, verifies each via web
@@ -961,6 +974,21 @@ can live anywhere; the registry just records their paths.
 
 Every mode also gets `.trash/` for soft deletes and an `index.md` (plus
 `wiki/log.md` for wiki mode).
+
+### Q. What should I check on Windows, NAS, or Hermes?
+
+- On WSL, use an explicit `/mnt/c/Users/...` path when Windows profile discovery is not reliable.
+- Reindex accepts existing CP949 and UTF-16 Markdown notes.
+- If macOS SMB rejects `.trash`, OMW falls back to `OMW_HOME/.trash/<vault>/`.
+- Set `HERMES_HOME` before `omw setup personas/recall` when Hermes uses a custom root.
+- Use `omw doctor` and `omw vault info <name>` to inspect the effective paths.
+
+### Q. What is the recommended integrity loop?
+
+Run `omw report` → `omw lint` → `omw next`, perform the selected maintenance,
+then verify with `omw reindex --full` → `omw report`. `inbox run` reuses an
+existing raw page with the same `source_url`, and OMW applies E5 `query:` and
+`passage:` prefixes internally when that model family is active.
 
 ### Q. How does oh-my-wiki work in Codex CLI vs Claude Code?
 

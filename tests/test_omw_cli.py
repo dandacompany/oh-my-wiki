@@ -72,6 +72,24 @@ def test_vault_create_global_default(capsys):
     assert (root / "wiki" / "index.md").is_file()
 
 
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        ("memo", "inbox"),
+        ("personal", "journal"),
+        ("book", "chapters"),
+        ("business", "meetings"),
+        ("github-codebase", "modules"),
+        ("website", "pages"),
+    ],
+)
+def test_vault_create_supports_every_mode(mode, expected, capsys):
+    assert _run(["vault", "create", f"v-{mode}", "--mode", mode]) == 0
+    row = registry.list_vaults(registry_path())[0]
+    assert row["mode"] == mode
+    assert (Path(row["path"]) / expected).is_dir()
+
+
 def test_vault_create_duplicate_errors(capsys):
     assert _run(["vault", "create", "dup"]) == 0
     capsys.readouterr()  # drain first create output

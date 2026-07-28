@@ -1,9 +1,9 @@
-# oh-my-wiki — v3 시나리오 튜토리얼
+# oh-my-wiki — 현재 릴리스 시나리오 튜토리얼
 
 > **영어 버전**: [TUTORIAL.md](./TUTORIAL.md)
 
 이 튜토리얼은 실제 wiki vault를 구축하고 유지하는 과정을 단계별로 안내합니다.
-모든 커맨드 블록은 실제 v3 CLI를 실행한 결과물 그대로입니다.
+명령과 플래그는 현재 공개 CLI를 기준으로 검증합니다. 설치된 정확한 버전은 `omw version`으로 확인하세요.
 자연어 작업(ingest, query, autoresearch, persona)은 Claude Code / Codex / Gemini 세션에서
 입력하는 프롬프트 형태로 표시됩니다. CLI 출력이 아닙니다.
 
@@ -591,16 +591,27 @@ frontmatter `relations:`와 동일한 방식으로 타입드 엣지 그래프에
 
 ### 4.8 wiki 유지 관리 persona (세션 내, 자연어)
 
-oh-my-wiki는 Claude Code / Codex / Gemini 세션에서 자연어로 호출하는 다섯 가지 wiki
+oh-my-wiki는 Claude Code / Codex / Gemini 세션에서 자연어로 호출하는 여섯 가지 wiki
 유지 관리 persona를 제공합니다. 별도 커맨드가 필요 없습니다. 스킬이 입력한 내용에 따라
-적절한 persona로 라우팅합니다. 목록은 wiki-librarian / curator / fact-checker /
+적절한 persona로 라우팅합니다. 목록은 wiki-auditor / wiki-librarian / curator / fact-checker /
 consistency-checker / terminology-manager입니다(Part 5 표 참고).
 
-**Curator** — wiki의 공백, 고립 페이지, 구조적 취약점을 검토하고 유지 관리 계획을 제안합니다.
-Claude 세션에서 다음과 같이 말하세요:
+**Wiki-auditor** — lint·유지 상태·그래프를 모아 무엇이 문제인지 우선순위로 진단합니다.
 
 ```
-curate my wiki — what pages are most in need of attention?
+audit my wiki
+```
+
+**Wiki-librarian** — 고립 페이지·교차 링크·병합 후보 등 구조를 어떻게 고칠지 제안합니다.
+
+```
+tidy the wiki structure
+```
+
+**Curator** — `wiki/index.md`의 누락과 순서를 검토하고 새 구성을 제안합니다.
+
+```
+curate my index
 ```
 
 **Fact-checker** — 초안을 원자 단위 주장으로 분해하고, 웹 검색으로 각각을 검증한 후,
@@ -922,6 +933,21 @@ export OMW_HOME=~/personal/.omw   omw vault create journal --mode wiki
 
 모든 모드에는 소프트 삭제를 위한 `.trash/`와 `index.md`(wiki 모드에는 `wiki/log.md`도)가
 함께 생성됩니다.
+
+### Q. Windows·NAS·Hermes에서는 무엇을 확인해야 하나요?
+
+- WSL에서 Windows 쪽 vault를 쓸 때는 필요하면 `/mnt/c/Users/...` 절대 경로를 지정합니다.
+- CP949·UTF-16로 저장된 기존 Markdown도 재색인할 수 있습니다.
+- macOS SMB가 `.trash`를 막으면 `OMW_HOME/.trash/<vault>/`를 자동으로 사용합니다.
+- Hermes 홈을 바꿨다면 `HERMES_HOME`을 먼저 설정한 뒤 `omw setup personas/recall`을 실행합니다.
+- 실제 설치·vault·휴지통 경로는 `omw doctor`와 `omw vault info <name>`으로 확인합니다.
+
+### Q. 위키를 중복 없이 안전하게 유지하는 순서는 무엇인가요?
+
+`omw report` → `omw lint` → `omw next`로 필요한 일을 고르고, 수정 후
+`omw reindex --full` → `omw report`로 다시 확인합니다. `inbox run`은 같은
+`source_url`의 raw 문서를 재사용하며, E5 임베딩 모델의 `query:`·`passage:` 형식은
+OMW가 내부에서 자동 처리합니다.
 
 ### Q. Codex CLI에서의 oh-my-wiki는 Claude Code와 어떻게 다른가요?
 
