@@ -4,8 +4,8 @@ Two host kinds:
   - "repo"    — instruction file is a working-dir-relative name (claude/codex/
                 gemini/opencode). codex and opencode share AGENTS.md.
   - "scoped"  — instruction file lives under the agent's own profile/workspace
-                root (hermes → ~/.hermes/profiles/<p>/SOUL.md; openclaw →
-                <workspace>/AGENTS.md).
+                root (hermes main → ~/.hermes/SOUL.md, named profiles →
+                ~/.hermes/profiles/<p>/SOUL.md; openclaw → <workspace>/AGENTS.md).
 Instruction-injection pickers group repo hosts by their shared file (a
 "convention"); skill install stays per-agent (see agent_skills)."""
 from __future__ import annotations
@@ -175,8 +175,10 @@ def resolve_instruction_path(host: str, base_dir, *, profile: str | None = None,
         return Path(base_dir) / d["file"]
     if host == "hermes":
         prof = profile or active_profile()
-        if not prof:
-            raise ValueError("hermes: no profile given and no active_profile")
+        # A profile-less Hermes install is its main HERMES_HOME root. The skill
+        # installer also names this target "main".
+        if not prof or prof == "main":
+            return _hermes_root() / d["file"]
         return _hermes_root() / "profiles" / prof / d["file"]
     if host == "openclaw":
         ws = workspace or default_workspace()

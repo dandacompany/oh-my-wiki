@@ -42,11 +42,11 @@ def test_setup_personas_legacy_single_profile_still_works(tmp_path, monkeypatch)
     assert (home / ".hermes" / "profiles" / "iris" / "SOUL.md").exists()
 
 
-def test_setup_personas_unresolvable_scoped_skips_cleanly(tmp_path, monkeypatch):
-    """Non-interactive hermes host with no profile should skip cleanly (return 0, no SOUL.md)."""
+def test_setup_personas_no_profile_uses_main_root(tmp_path, monkeypatch):
+    """A profile-less Hermes installation writes its main HERMES_HOME/SOUL.md."""
     home = tmp_path / "home"
     home.mkdir(parents=True)
-    # No ~/.hermes/active_profile and no profiles directory → hermes cannot resolve.
+    # No active_profile or profiles directory means the main Hermes installation.
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
     rc = setup_wizard.setup_personas(
         enabled=["wiki-librarian"], main="wiki-librarian",
@@ -54,9 +54,7 @@ def test_setup_personas_unresolvable_scoped_skips_cleanly(tmp_path, monkeypatch)
         base_dir=str(tmp_path), profile=None,
     )
     assert rc == 0
-    # No SOUL.md should have been written anywhere under tmp home.
-    soul_files = list(home.rglob("SOUL.md"))
-    assert soul_files == [], f"unexpected SOUL.md files: {soul_files}"
+    assert (home / ".hermes" / "SOUL.md").exists()
 
 
 def test_setup_recall_merged_agents_written_once(tmp_path, monkeypatch):

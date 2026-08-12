@@ -95,3 +95,25 @@ def test_recall_hermes_honors_hermes_home(monkeypatch, tmp_path):
 
     assert rc == 0
     assert str(hermes_home / "profiles" / "oliver" / "SOUL.md") in calls["upsert"]
+
+
+def test_recall_hermes_no_active_profile_targets_main_root(monkeypatch, tmp_path):
+    calls = _patch_writers(monkeypatch)
+    from scripts import recall
+    wired = []
+    monkeypatch.setattr(
+        recall, "wire_hermes",
+        lambda **kwargs: (wired.append(kwargs.get("profile")) or (True, "wired")),
+    )
+    hermes_home = tmp_path / "opt" / "data"
+    hermes_home.mkdir(parents=True)
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+
+    rc = setup_wizard.setup_recall(
+        mode="auto", strategy="fts", normalizer="heuristic",
+        hosts=["hermes"], base_dir=str(tmp_path), noninteractive=True,
+    )
+
+    assert rc == 0
+    assert str(hermes_home / "SOUL.md") in calls["upsert"]
+    assert wired == [None]

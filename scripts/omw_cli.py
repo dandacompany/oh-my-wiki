@@ -1970,7 +1970,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pset.add_argument("--profile", default=None,
                       help="hermes profile name(s) for `omw setup personas/recall` "
-                           "(comma-separated for multiple)")
+                           "(comma-separated for multiple; main = HERMES_HOME root)")
     pset.add_argument("--workspace", default=None,
                       help="openclaw workspace path(s) for `omw setup personas/recall` "
                            "(comma-separated for multiple)")

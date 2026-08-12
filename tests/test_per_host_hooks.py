@@ -264,6 +264,19 @@ def test_wire_hermes_honors_hermes_home_for_config_and_allowlist(tmp_path, monke
     assert json.loads(allow.read_text())["approvals"]
 
 
+def test_wire_hermes_main_uses_hermes_home_root(tmp_path, monkeypatch):
+    home = tmp_path / "opt" / "data"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("HERMES_HOME", str(home))
+
+    changed, _ = recall.wire_hermes(profile="main")
+
+    assert changed is True
+    data = yaml.safe_load((home / "config.yaml").read_text())
+    assert "pre_llm_call" in data["hooks"]
+    assert "post_llm_call" in data["hooks"]
+
+
 # ── P3: opencode + openclaw TS plugins ───────────────────────────────────────
 
 def test_wire_opencode_writes_plugin_file(tmp_path):

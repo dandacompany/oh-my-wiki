@@ -981,7 +981,7 @@ def _hermes_config_path(profile: str | None):
     is `config.yaml` (docs alternate with `cli-config.yaml`, which does not exist)."""
     from scripts import hermes_detect
     root = hermes_detect.hermes_home()
-    if profile:
+    if profile and profile != "main":
         return root / "profiles" / profile / "config.yaml"
     return root / "config.yaml"
 
