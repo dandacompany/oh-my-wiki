@@ -5,6 +5,7 @@ sqlite-vec is not installed — callers fall back to fts. Cosine via vec0 distan
 from __future__ import annotations
 
 import re
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -12,11 +13,21 @@ from scripts import embed, registry
 
 
 def available() -> bool:
+    conn = None
     try:
-        import sqlite_vec  # noqa: F401
+        import sqlite_vec
+        conn = sqlite3.connect(":memory:")
+        if not hasattr(conn, "enable_load_extension"):
+            return False
+        conn.enable_load_extension(True)
+        sqlite_vec.load(conn)
+        conn.enable_load_extension(False)
         return True
     except Exception:
         return False
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def _connect(db_path: Path):

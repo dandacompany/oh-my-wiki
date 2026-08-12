@@ -87,6 +87,22 @@ def test_ensure_local_embedding_requires_model_and_vector_store(monkeypatch):
     assert calls == ["fastembed", "sqlite-vec"]
 
 
+def test_sqlite_vec_requires_runtime_extension_loading(monkeypatch):
+    class _NoExtensionConnection:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(vector_index.sqlite3, "connect", lambda *a, **k: _NoExtensionConnection())
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "sqlite_vec",
+        types.SimpleNamespace(load=lambda conn: None),
+    )
+
+    assert vector_index.available() is False
+    assert embed_install.sqlite_vec_available() is False
+
+
 def _fake_env(tmp_path, monkeypatch):
     monkeypatch.setenv("OMW_HOME", str(tmp_path))
     from scripts import registry

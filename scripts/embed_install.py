@@ -17,11 +17,8 @@ def fastembed_available() -> bool:
 
 
 def sqlite_vec_available() -> bool:
-    try:
-        import sqlite_vec  # noqa: F401
-        return True
-    except Exception:
-        return False
+    from scripts import vector_index
+    return vector_index.available()
 
 
 def ensure_fastembed(*, assume_yes: bool = False, interactive: bool = True) -> bool:
