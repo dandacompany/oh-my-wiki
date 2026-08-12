@@ -102,7 +102,10 @@ def test_switch_model_writes_config_resets_and_reindexes(tmp_path, monkeypatch):
     monkeypatch.setattr(embed_admin.embed_install, "ensure_local_embedding", lambda **k: True)
     monkeypatch.setattr(embed_admin, "resolve_dim", lambda d, m: 384)
     reset_called = {"n": 0}
+    monkeypatch.setattr(embed_admin.vector_index, "available", lambda: True)
     monkeypatch.setattr(embed_admin.vector_index, "reset", lambda d: reset_called.__setitem__("n", reset_called["n"] + 1))
+    monkeypatch.setattr(embed_admin.vector_index, "prepare", lambda *a, **k: None)
+    monkeypatch.setattr(embed_admin.vector_index, "replace_from", lambda *a, **k: None)
     reidx = {"vaults": 0}
     monkeypatch.setattr(embed_admin.reindex, "refresh_embeddings",
                         lambda d, *, vault_id, relpaths=None, strict=False,
@@ -313,7 +316,9 @@ def test_switch_model_fails_when_no_vectors_produced_for_wiki_vault(tmp_path, mo
     db = _fake_env(tmp_path, monkeypatch)
     monkeypatch.setattr(embed_admin.embed_install, "ensure_local_embedding", lambda **k: True)
     monkeypatch.setattr(embed_admin, "resolve_dim", lambda d, m: 384)
+    monkeypatch.setattr(embed_admin.vector_index, "available", lambda: True)
     monkeypatch.setattr(embed_admin.vector_index, "reset", lambda d: None)
+    monkeypatch.setattr(embed_admin.vector_index, "prepare", lambda *a, **k: None)
     monkeypatch.setattr(embed_admin.reindex, "refresh_embeddings",
                         lambda d, *, vault_id, relpaths=None, strict=False,
                         embedding_config=None: 0)
@@ -341,6 +346,8 @@ def test_reindex_all_resets_vector_schema_before_rebuilding(tmp_path, monkeypatc
     monkeypatch.setattr(embed_admin.vector_index, "available", lambda: True)
     monkeypatch.setattr(embed_admin, "_wiki_count", lambda path, vault_id: 0)
     monkeypatch.setattr(embed_admin.vector_index, "reset", lambda path: calls.append(("reset", path)))
+    monkeypatch.setattr(embed_admin.vector_index, "prepare", lambda *a, **k: None)
+    monkeypatch.setattr(embed_admin.vector_index, "replace_from", lambda *a, **k: None)
     monkeypatch.setattr(
         embed_admin.reindex, "refresh_embeddings",
         lambda path, *, vault_id, relpaths, strict=False, embedding_config=None:
@@ -363,6 +370,7 @@ def test_reindex_all_reports_named_failure(tmp_path, monkeypatch):
     })
     monkeypatch.setattr(embed_admin.vector_index, "available", lambda: True)
     monkeypatch.setattr(embed_admin.vector_index, "reset", lambda path: None)
+    monkeypatch.setattr(embed_admin.vector_index, "prepare", lambda *a, **k: None)
     monkeypatch.setattr(
         embed_admin.reindex, "refresh_embeddings",
         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("model exploded")),
