@@ -225,3 +225,35 @@ def test_tokens_strip_josa_for_symmetric_match():
 
 def test_tokens_lowercase_ascii_preserved():
     assert search_index._tokens("ARIMA Model") == ["arima", "model"]
+
+
+def test_tokens_split_multiword_normalizer_output(monkeypatch):
+    from scripts import text_normalize
+
+    monkeypatch.setattr(text_normalize, "normalize_text", lambda text: "링크 되다 NIC")
+    assert search_index._tokens("ignored") == ["링크", "되다", "nic"]
+
+
+def test_quality_gate_checks_bounded_body_across_distant_matches(tmp_path, monkeypatch):
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    raw = root / "raw"
+    raw.mkdir()
+    gap = " ".join(["채움"] * 120)
+    (raw / "hostinger.md").write_text(
+        "도커 " + gap + " 컨테이너 " + gap + " 에이전트 " + gap
+        + " 홈 경로 " + gap + " 예상과 다르게 잡힌 원인",
+        encoding="utf-8",
+    )
+    (root / "wiki" / "concepts" / "noise.md").write_text(
+        "---\ntitle: 일반 에이전트 문서\ndate: 2026-01-01\ntype: concept\ntags: []\n---\n"
+        "에이전트 일반 설명",
+        encoding="utf-8",
+    )
+    reindex.full(db, vault_id=vid)
+
+    out = search_index.search_strategy(
+        db, vault_id=vid,
+        q="도커 컨테이너에서 에이전트 홈 경로가 예상과 다르게 잡힌 문제",
+        limit=3, strategy="hybrid", embedder=None, quality_gate=True,
+    )
+    assert out and out[0]["relpath"] == "raw/hostinger.md"

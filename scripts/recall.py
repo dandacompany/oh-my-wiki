@@ -176,7 +176,8 @@ def _hits(text: str, top_k: int) -> list[dict]:
                                                 limit=top_k,
                                                 strategy=strat,
                                                 embedder=embedder,
-                                                visibility=visibility)
+                                                visibility=visibility,
+                                                quality_gate=(strat in ("hybrid", "embedding")))
     except Exception:
         return []
 

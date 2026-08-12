@@ -37,3 +37,49 @@ def test_normalize_query_delegates_and_preserves_behavior():
 
 def test_strip_josa_still_callable():
     assert recall._strip_josa("평가지표를") == "평가지표"
+
+
+def test_hybrid_recall_uses_quality_gate(tmp_path, monkeypatch):
+    """Only hook-side hybrid recall opts into strict relevance filtering."""
+    from scripts import config, embed, search_index
+    from scripts import paths
+
+    db = tmp_path / "registry.db"
+    db.touch()
+    monkeypatch.setattr(paths, "registry_path", lambda: db)
+    monkeypatch.setattr(config, "load_config", lambda: {
+        "recall": {"strategy": "hybrid", "embedding": {"provider": "fake"}}
+    })
+    monkeypatch.setattr(recall, "_active", lambda _db: {"id": 7})
+    monkeypatch.setattr(embed, "get_embedder", lambda cfg: object())
+    seen = {}
+
+    def fake_search(*args, **kwargs):
+        seen.update(kwargs)
+        return []
+
+    monkeypatch.setattr(search_index, "search_strategy", fake_search)
+    assert recall._hits("ZimaBoard NIC 협상", 3) == []
+    assert seen["quality_gate"] is True
+    assert seen["limit"] == 3
+
+
+def test_embedding_recall_also_uses_quality_gate(tmp_path, monkeypatch):
+    from scripts import config, embed, search_index
+    from scripts import paths
+
+    db = tmp_path / "registry.db"
+    db.touch()
+    monkeypatch.setattr(paths, "registry_path", lambda: db)
+    monkeypatch.setattr(config, "load_config", lambda: {
+        "recall": {"strategy": "embedding", "embedding": {"provider": "fake"}}
+    })
+    monkeypatch.setattr(recall, "_active", lambda _db: {"id": 7})
+    monkeypatch.setattr(embed, "get_embedder", lambda cfg: object())
+    seen = {}
+    monkeypatch.setattr(
+        search_index, "search_strategy",
+        lambda *args, **kwargs: seen.update(kwargs) or [],
+    )
+    recall._hits("프로젝트 의미 검색 질문", 3)
+    assert seen["quality_gate"] is True

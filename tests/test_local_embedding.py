@@ -327,3 +327,21 @@ def test_switch_model_fails_when_no_vectors_produced_for_wiki_vault(tmp_path, mo
                                    assume_yes=True)
     assert out["ok"] is False
     assert "no vectors" in out["detail"]
+
+
+def test_reindex_all_resets_vector_schema_before_rebuilding(tmp_path, monkeypatch):
+    from scripts import registry as _reg
+
+    db = tmp_path / "registry.db"
+    _reg.init_db(db)
+    _reg.add_vault(db, name="v1", path=tmp_path / "v1", type_="markdown", mode="wiki")
+    calls = []
+    monkeypatch.setattr(embed_admin.vector_index, "reset", lambda path: calls.append(("reset", path)))
+    monkeypatch.setattr(
+        embed_admin.reindex, "refresh_embeddings",
+        lambda path, *, vault_id, relpaths: calls.append(("refresh", vault_id)),
+    )
+    out = embed_admin.reindex_all(db)
+    assert out["ok"] is True
+    assert calls[0] == ("reset", db)
+    assert calls[1:] == [("refresh", 1)]

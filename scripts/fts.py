@@ -107,7 +107,7 @@ def _match_query(query: str) -> str:
 
 
 def search(db_path: Path, *, vault_id: int, query: str, limit: int,
-           visibility: str | None = None):
+           visibility: str | None = None, include_match_text: bool = False):
     """FTS5 BM25 search. Returns a list of hit dicts, [] for no match, or
     None when the vault isn't indexed yet (caller should fall back).
     When visibility='public', only public rows are returned."""
@@ -126,7 +126,12 @@ def search(db_path: Path, *, vault_id: int, query: str, limit: int,
             return None  # vault not indexed → fall back
         if not match:
             return []
+        match_select = (
+            ", snippet(notes_fts, 4, '', '', ' ', 96) AS match_text"
+            if include_match_text else ""
+        )
         sql = ("SELECT relpath, title, summary, tags, bm25(notes_fts) AS rank "
+               f"{match_select} "
                "FROM notes_fts WHERE notes_fts MATCH ? AND vault_id = ?")
         params: list = [match, str(vault_id)]
         if visibility == "public":
@@ -134,12 +139,18 @@ def search(db_path: Path, *, vault_id: int, query: str, limit: int,
         sql += " ORDER BY rank LIMIT ?"
         params.append(limit)
         rows = list(conn.execute(sql, params))
-        return [{
-            "relpath": r["relpath"],
-            "title": r["title"] or None,
-            "summary": r["summary"] or None,
-            "tags": r["tags"].split() if r["tags"] else [],
-            "score": round(-r["rank"], 3),  # bm25: lower = better; negate so higher = better
-        } for r in rows]
+        out = []
+        for r in rows:
+            hit = {
+                "relpath": r["relpath"],
+                "title": r["title"] or None,
+                "summary": r["summary"] or None,
+                "tags": r["tags"].split() if r["tags"] else [],
+                "score": round(-r["rank"], 3),  # bm25 lower = better; negate
+            }
+            if include_match_text:
+                hit["_match_text"] = r["match_text"] or ""
+            out.append(hit)
+        return out
     finally:
         conn.close()

@@ -6,6 +6,7 @@ callers degrade to fts — embedding is opt-in (references/auto-recall-hook-desi
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import re
 import struct
 
@@ -35,6 +36,26 @@ def passage_texts(embedder, texts: list[str]) -> list[str]:
 
 def query_text(embedder, text: str) -> str:
     return f"query: {text}" if prefix_scheme(embedder) == E5_PREFIX_SCHEME else text
+
+
+def embedding_fingerprint(embedder) -> str:
+    """Runtime contract used to build/query a vector store.
+
+    Model name and dimension do not catch dependency changes that alter pooling
+    or model metadata.  FastEmbed 0.8, for example, changed the pooling contract
+    of a previously available model.  Persist the provider package version so a
+    stale index fails closed and asks for a rebuild instead of silently degrading.
+    """
+    provider = type(embedder).__name__
+    model = str(getattr(embedder, "model", "") or "")
+    dim = str(getattr(embedder, "dim", "") or "")
+    version = ""
+    if provider == "FastEmbedEmbedder":
+        try:
+            version = importlib.metadata.version("fastembed")
+        except importlib.metadata.PackageNotFoundError:
+            version = "unknown"
+    return "|".join((provider, model, dim, prefix_scheme(embedder), version))
 
 
 class Embedder:

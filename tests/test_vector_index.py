@@ -78,3 +78,56 @@ def test_e5_prefix_scheme_is_stored_and_roles_are_applied(tmp_path):
 
     assert recorder.calls == [["passage: 문서"], ["query: 질문"]]
     assert vector_index.meta(db)["prefix_scheme"] == embed.E5_PREFIX_SCHEME
+
+
+@pytest.mark.skipif(not vector_index.available(), reason="sqlite-vec not installed")
+def test_query_fails_closed_when_embedding_runtime_fingerprint_changes(tmp_path, monkeypatch):
+    """Same model/dim is insufficient when the runtime changed its pooling contract."""
+    from scripts import registry
+
+    db = tmp_path / "reg.db"
+    registry.init_db(db)
+    vault = registry.add_vault(
+        db, name="v", path=tmp_path / "v", type_="markdown", mode="wiki"
+    )
+    emb = embed.FakeEmbedder(dim=8)
+    monkeypatch.setattr(embed, "embedding_fingerprint", lambda _: "fastembed:0.5.1:cls")
+    vector_index.upsert(
+        db, vault_id=vault["id"], embedder=emb,
+        rows=[("wiki/a.md", "hello")],
+    )
+
+    monkeypatch.setattr(embed, "embedding_fingerprint", lambda _: "fastembed:0.8.0:mean")
+    assert vector_index.query(
+        db, vault_id=vault["id"], embedder=emb, text="hello", limit=1
+    ) == []
+
+
+@pytest.mark.skipif(not vector_index.available(), reason="sqlite-vec not installed")
+def test_vector_table_uses_cosine_not_default_l2(tmp_path):
+    """Collinear vectors have cosine distance 0 even when magnitudes differ."""
+    from scripts import registry
+
+    db = tmp_path / "reg.db"
+    registry.init_db(db)
+    vault = registry.add_vault(
+        db, name="v", path=tmp_path / "v", type_="markdown", mode="wiki"
+    )
+
+    class MagnitudeEmbedder:
+        model = "magnitude-test"
+        dim = 2
+
+        def embed(self, texts):
+            return [[10.0, 0.0] if text == "query" else [1.0, 0.0] for text in texts]
+
+    emb = MagnitudeEmbedder()
+    vector_index.upsert(
+        db, vault_id=vault["id"], embedder=emb,
+        rows=[("wiki/a.md", "passage")],
+    )
+    hits = vector_index.query(
+        db, vault_id=vault["id"], embedder=emb, text="query", limit=1
+    )
+    assert hits[0]["score"] == pytest.approx(1.0, abs=1e-6)
+    assert vector_index.meta(db)["distance_metric"] == "cosine"

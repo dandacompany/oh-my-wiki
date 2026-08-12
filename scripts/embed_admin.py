@@ -93,6 +93,9 @@ def list_models(db_path) -> dict:
 
 
 def reindex_all(db_path) -> dict:
+    # Recreate vec_notes so schema/runtime changes (notably L2 → cosine) cannot
+    # survive a nominal full reindex.
+    vector_index.reset(db_path)
     n = 0
     for v in registry.list_vaults(db_path):
         try:
