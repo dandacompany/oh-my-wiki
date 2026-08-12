@@ -74,6 +74,7 @@ HOOK: dict[str, dict] = {
         "events": {"session": "on_session_start", "prompt": "pre_llm_call",
                    "pretool": "pre_tool_call", "turnend": "post_llm_call"},
         "recall": ["prompt"],  # pre_llm_call is hermes' only injecting hook
+        "capture": ["turnend"],  # post_llm_call is observation-only; fail-open capture
     },
     "opencode": {"mech": "ts-opencode", "fmt": "plain"},
     "openclaw": {"mech": "ts-openclaw", "fmt": "plain"},

@@ -51,6 +51,7 @@ OP_SUMMARY_KO = {
     "serve": "읽기 전용 로컬 검색 HTTP API 실행",
     "view": "vault·페이지·검색을 Obsidian/Logseq에서 열기",
     "recall": "에이전트 훅에서 사용할 위키 회상 실행",
+    "candidates": "완료 세션의 지식 후보를 검토·승인·폐기",
     "maint": "자동화에 적합한 유지보수 상태 확인",
     "gate": "작업 종료 시 유지보수 필요 여부 기록·확인",
     "setup": "vault와 호스트 연결을 설정하는 마법사",
@@ -964,7 +965,7 @@ SECTIONS: list[dict] = [
                 "<strong>PreCompact · Stop</strong>에서 같은 프로젝트의 최소 세션 맥락을 임시 저장합니다. 호스트 선택지는 규약 단위로 "
                 "묶입니다 — <code>claude</code>(CLAUDE.md) · <code>codex·opencode</code>(AGENTS.md, 한 번만) · "
                 "<code>gemini</code>(GEMINI.md) · <code>hermes</code>(프로필) · <code>openclaw</code>(워크스페이스). "
-                "Gemini는 SessionStart·BeforeAgent, Hermes는 pre_llm_call, OpenCode·OpenClaw는 TypeScript recall 플러그인을 사용합니다.",
+                "Gemini는 SessionStart·BeforeAgent, Hermes는 pre_llm_call 회상 + post_llm_call 캡처, OpenCode·OpenClaw는 TypeScript recall 플러그인을 사용합니다.",
             },
             {
                 "label": "세션 임시 캡처 확인·끄기",
@@ -976,6 +977,18 @@ SECTIONS: list[dict] = [
                 "불러올 때는 실행 지시가 아닌 이스케이프된 JSON 데이터로 구분합니다. "
                 "같은 프로젝트에 최대 5개, 30일 보관하며 위키 페이지로 자동 승격하지 않습니다. "
                 "Codex에서는 설정 뒤 <code>/hooks</code>에서 새 OMW 사용자 훅을 승인해야 합니다.",
+            },
+            {
+                "label": "완료 세션의 지식 후보 — 검토 후 승인",
+                "bar": "terminal",
+                "text": "omw setup recall --knowledge-candidates staged\n"
+                "omw candidates status\n"
+                "omw candidates list\n"
+                "omw candidates show <batch-id>\n"
+                "omw candidates approve <batch-id>   # 또는 dismiss",
+                "callout": "기본값은 <code>off</code>입니다. 권장 <code>staged</code> 모드는 결정·선호·검증된 사실·재사용 절차·원인+수정 쌍을 후보로 묶지만, 승인 전에는 vault 파일을 쓰지 않습니다. "
+                "<code>Stop</code>은 캡처만 하고 <code>PreCompact</code> 또는 다음 세션 경계에서 한 번 분석합니다. 대기 후보는 30일 뒤 만료됩니다. "
+                "<code>auto-raw</code>는 신뢰도 높은 새 항목만 비공개 raw로 쓰는 별도 선택입니다.",
             },
             {
                 "label": "설정 두 축 — recall.mode (언제) · recall.strategy (어떻게)",

@@ -31,7 +31,7 @@ def test_ask_ssot_tool_names_match_survey():
 
 def test_taxonomy_has_core_decision_classes():
     keys = {d.key for d in ask.TAXONOMY}
-    for k in ("duplicate-ingest", "new-vs-update", "stale-page", "merge-candidates",
+    for k in ("duplicate-ingest", "candidate-approval", "new-vs-update", "stale-page", "merge-candidates",
               "supersede", "visibility-publish", "persona-delegate", "export-scope"):
         assert k in keys, f"missing decision class {k!r}"
 

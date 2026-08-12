@@ -33,18 +33,20 @@ _RESET = "\x1b[0m"
 
 def version() -> str:
     """Read the package version from the single source of truth (never hardcoded)."""
+    import re
+    from scripts import paths
+    try:
+        pj = (paths.bundled_root() / "pyproject.toml").read_text(encoding="utf-8")
+        mt = re.search(r'^version\s*=\s*"([^"]+)"', pj, re.M)
+        if mt:
+            return mt.group(1)
+    except Exception:
+        pass
     import importlib.metadata as m
     try:
         return m.version("oh-my-wiki")
     except Exception:
-        import re
-        from scripts import paths
-        try:
-            pj = (paths.bundled_root() / "pyproject.toml").read_text(encoding="utf-8")
-            mt = re.search(r'^version\s*=\s*"([^"]+)"', pj, re.M)
-            return mt.group(1) if mt else "0.0.0"
-        except Exception:
-            return "0.0.0"
+        return "0.0.0"
 
 
 def should_animate(stream=None) -> bool:

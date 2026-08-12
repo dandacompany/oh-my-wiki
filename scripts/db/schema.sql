@@ -119,3 +119,64 @@ CREATE TABLE IF NOT EXISTS session_captures (
 );
 CREATE INDEX IF NOT EXISTS idx_session_captures_project
   ON session_captures(project_root, status, id DESC);
+
+-- Reviewable knowledge candidates derived from completed session captures.
+-- Hooks may stage rows here, but only an explicit approve command writes a vault
+-- file (except the separately opt-in auto-raw mode).
+CREATE TABLE IF NOT EXISTS knowledge_candidate_batches (
+  id             INTEGER PRIMARY KEY,
+  vault_id       INTEGER REFERENCES vaults(id) ON DELETE SET NULL,
+  project_root   TEXT NOT NULL,
+  host           TEXT NOT NULL,
+  session_id     TEXT NOT NULL,
+  created_at     TEXT NOT NULL,
+  content_hash   TEXT NOT NULL,
+  mode           TEXT NOT NULL CHECK (mode IN ('staged', 'auto-raw')),
+  status         TEXT NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending', 'approved', 'dismissed')),
+  raw_relpath    TEXT,
+  expired_at     TEXT,
+  UNIQUE(vault_id, project_root, session_id, content_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_candidate_batches_status
+  ON knowledge_candidate_batches(project_root, status, id DESC);
+
+CREATE TABLE IF NOT EXISTS knowledge_candidates (
+  id               INTEGER PRIMARY KEY,
+  batch_id         INTEGER NOT NULL REFERENCES knowledge_candidate_batches(id)
+                     ON DELETE CASCADE,
+  ordinal          INTEGER NOT NULL,
+  kind             TEXT NOT NULL
+                     CHECK (kind IN ('decision', 'preference', 'fact', 'procedure', 'incident')),
+  classification   TEXT NOT NULL
+                     CHECK (classification IN ('new', 'update', 'duplicate', 'conflict', 'discard')),
+  confidence       REAL NOT NULL,
+  title            TEXT NOT NULL,
+  content          TEXT NOT NULL,
+  reason           TEXT NOT NULL,
+  matched_relpath  TEXT,
+  provenance       TEXT NOT NULL DEFAULT '{}',
+  status           TEXT NOT NULL DEFAULT 'pending'
+                     CHECK (status IN ('pending', 'approved', 'dismissed')),
+  UNIQUE(batch_id, ordinal)
+);
+CREATE INDEX IF NOT EXISTS idx_candidates_batch_status
+  ON knowledge_candidates(batch_id, status, ordinal);
+
+-- A processed marker is stored separately so the pre-2.48 session_captures row
+-- shape stays byte-compatible when candidate staging is disabled.
+CREATE TABLE IF NOT EXISTS knowledge_candidate_processed (
+  capture_id    INTEGER PRIMARY KEY REFERENCES session_captures(id) ON DELETE CASCADE,
+  processed_at  TEXT NOT NULL,
+  outcome       TEXT NOT NULL CHECK (outcome IN ('staged', 'discarded')),
+  reason        TEXT NOT NULL DEFAULT '',
+  batch_id      INTEGER REFERENCES knowledge_candidate_batches(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS knowledge_candidate_scope_modes (
+  scope_type   TEXT NOT NULL CHECK (scope_type IN ('project', 'host', 'vault')),
+  scope_value  TEXT NOT NULL,
+  mode         TEXT NOT NULL CHECK (mode IN ('off', 'advisory', 'staged', 'auto-raw')),
+  updated_at   TEXT NOT NULL,
+  PRIMARY KEY (scope_type, scope_value)
+);

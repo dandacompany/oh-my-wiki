@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 SCHEMA_SQL_PATH = Path(__file__).parent / "db" / "schema.sql"
 DEFAULT_BUSY_TIMEOUT_MS = 30_000
 
@@ -164,7 +164,26 @@ def _migration_needed(conn: sqlite3.Connection) -> bool:
     }
     if "vaults" in names:
         vault_cols = {r["name"] for r in conn.execute("PRAGMA table_info(vaults)")}
-        if "archived_at" not in vault_cols or "session_captures" not in names:
+        if (
+            "archived_at" not in vault_cols
+            or "session_captures" not in names
+            or "knowledge_candidate_batches" not in names
+            or "knowledge_candidates" not in names
+            or "knowledge_candidate_processed" not in names
+            or "knowledge_candidate_scope_modes" not in names
+        ):
+            return True
+        batch_cols = {
+            r["name"] for r in conn.execute(
+                "PRAGMA table_info(knowledge_candidate_batches)"
+            )
+        } if "knowledge_candidate_batches" in names else set()
+        processed_cols = {
+            r["name"] for r in conn.execute(
+                "PRAGMA table_info(knowledge_candidate_processed)"
+            )
+        } if "knowledge_candidate_processed" in names else set()
+        if "expired_at" not in batch_cols or "reason" not in processed_cols:
             return True
     if "notes" in names:
         note_cols = {r["name"] for r in conn.execute("PRAGMA table_info(notes)")}
@@ -240,6 +259,83 @@ def _ensure_session_capture_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_candidate_tables(conn: sqlite3.Connection) -> None:
+    """Create v5 candidate staging tables without changing capture row shape."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS knowledge_candidate_batches (
+          id INTEGER PRIMARY KEY,
+          vault_id INTEGER REFERENCES vaults(id) ON DELETE SET NULL,
+          project_root TEXT NOT NULL,
+          host TEXT NOT NULL,
+          session_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          content_hash TEXT NOT NULL,
+          mode TEXT NOT NULL CHECK (mode IN ('staged', 'auto-raw')),
+          status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (status IN ('pending', 'approved', 'dismissed')),
+          raw_relpath TEXT,
+          expired_at TEXT,
+          UNIQUE(vault_id, project_root, session_id, content_hash)
+        );
+        CREATE INDEX IF NOT EXISTS idx_candidate_batches_status
+          ON knowledge_candidate_batches(project_root, status, id DESC);
+        CREATE TABLE IF NOT EXISTS knowledge_candidates (
+          id INTEGER PRIMARY KEY,
+          batch_id INTEGER NOT NULL REFERENCES knowledge_candidate_batches(id)
+            ON DELETE CASCADE,
+          ordinal INTEGER NOT NULL,
+          kind TEXT NOT NULL
+            CHECK (kind IN ('decision', 'preference', 'fact', 'procedure', 'incident')),
+          classification TEXT NOT NULL
+            CHECK (classification IN ('new', 'update', 'duplicate', 'conflict', 'discard')),
+          confidence REAL NOT NULL,
+          title TEXT NOT NULL,
+          content TEXT NOT NULL,
+          reason TEXT NOT NULL,
+          matched_relpath TEXT,
+          provenance TEXT NOT NULL DEFAULT '{}',
+          status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (status IN ('pending', 'approved', 'dismissed')),
+          UNIQUE(batch_id, ordinal)
+        );
+        CREATE INDEX IF NOT EXISTS idx_candidates_batch_status
+          ON knowledge_candidates(batch_id, status, ordinal);
+        CREATE TABLE IF NOT EXISTS knowledge_candidate_processed (
+          capture_id INTEGER PRIMARY KEY REFERENCES session_captures(id) ON DELETE CASCADE,
+          processed_at TEXT NOT NULL,
+          outcome TEXT NOT NULL CHECK (outcome IN ('staged', 'discarded')),
+          reason TEXT NOT NULL DEFAULT '',
+          batch_id INTEGER REFERENCES knowledge_candidate_batches(id) ON DELETE SET NULL
+        );
+        CREATE TABLE IF NOT EXISTS knowledge_candidate_scope_modes (
+          scope_type TEXT NOT NULL CHECK (scope_type IN ('project', 'host', 'vault')),
+          scope_value TEXT NOT NULL,
+          mode TEXT NOT NULL CHECK (mode IN ('off', 'advisory', 'staged', 'auto-raw')),
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (scope_type, scope_value)
+        );
+        """
+    )
+    batch_cols = {
+        row["name"] for row in conn.execute(
+            "PRAGMA table_info(knowledge_candidate_batches)"
+        )
+    }
+    if "expired_at" not in batch_cols:
+        conn.execute("ALTER TABLE knowledge_candidate_batches ADD COLUMN expired_at TEXT")
+    processed_cols = {
+        row["name"] for row in conn.execute(
+            "PRAGMA table_info(knowledge_candidate_processed)"
+        )
+    }
+    if "reason" not in processed_cols:
+        conn.execute(
+            "ALTER TABLE knowledge_candidate_processed "
+            "ADD COLUMN reason TEXT NOT NULL DEFAULT ''"
+        )
+
+
 def _migrate_existing(conn: sqlite3.Connection) -> None:
     """Apply idempotent column migrations to tables that already exist, so every
     connection self-heals a DB created by an older schema version (read paths like
@@ -253,6 +349,7 @@ def _migrate_existing(conn: sqlite3.Connection) -> None:
         _ensure_note_columns(conn)
     if "vaults" in names:
         _ensure_session_capture_table(conn)
+        _ensure_candidate_tables(conn)
     conn.commit()
 
 
@@ -272,6 +369,7 @@ def init_db(db_path: Path) -> None:
         _ensure_note_columns(conn)
         _ensure_vault_columns(conn)
         _ensure_session_capture_table(conn)
+        _ensure_candidate_tables(conn)
         existing = conn.execute(
             "SELECT 1 FROM schema_migrations WHERE version = ?",
             (SCHEMA_VERSION,),

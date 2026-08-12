@@ -692,14 +692,34 @@ one engine, translated into each host's hook format.
 The staged session capture is not a wiki page. OMW redacts secrets and stores only
 the last request, result, and touched files in the local registry, scoped to the
 same project (at most five captures, retained for 30 days). A new session or a
-resume prompt such as "pick up where we left off" receives that context. OMW never
-promotes it into a vault automatically.
+resume prompt such as "pick up where we left off" receives that context. Candidate
+promotion defaults to `off`; the recommended `staged` mode prepares a review queue
+but still changes no vault file before approval.
 
 ```
 omw recall sessions                         # inspect staged captures
 omw recall sessions --dismiss <id>          # hide a consumed capture
 omw setup recall --session-capture off      # disable staged capture
+omw setup recall --knowledge-candidates staged
+omw candidates status                       # mode, scopes, retention, outcome reasons
+omw candidates list                         # review batches (content-free list)
+omw candidates show <batch-id>              # classification, confidence, and reason
+omw candidates approve <batch-id>            # explicit private raw/ promotion
+omw candidates dismiss <batch-id>            # no vault write
 ```
+
+Candidate extraction is deterministic (no model call on every turn). `Stop` remains
+capture-only; OMW consolidates at `PreCompact` or the next session boundary, searches
+the active vault with the configured recall strategy, and labels each item `new`,
+`update`, `duplicate`, or `conflict`. Pending batches expire after 30 days. You can
+override the mode per project, host, or vault with `omw candidates config`. The
+separate `auto-raw` opt-in writes only high-confidence new items to private `raw/`;
+wiki-page updates, merges, publishing, and overwrites still require confirmation.
+
+AgentMemory is an optional evidence source. Export JSON through AgentMemory's
+documented `GET /agentmemory/export` endpoint, then run
+`omw candidates run --agentmemory-json <export.json>`. OMW does not inspect
+AgentMemory's internal database.
 
 Codex requires trust review when a user hook is first installed or its command
 changes. After setup, open `/hooks` in Codex and approve the new OMW entries;
@@ -720,13 +740,13 @@ hook are written into every selected target. Set them non-interactively with
 (e.g. `--profile iris,mark`). The exact native-hook coverage depends on each host;
 Claude Code and Codex use the full recall and staged-capture flow described above.
 
-| Host                | Native recall coverage                             | Staged session capture                      |
-| ------------------- | -------------------------------------------------- | ------------------------------------------- |
-| Claude Code         | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop`                       |
-| Codex               | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop` — approve in `/hooks` |
-| Gemini CLI          | `SessionStart` · `BeforeAgent`                     | Not enabled                                 |
-| Hermes              | `pre_llm_call` for each selected profile           | Not enabled                                 |
-| OpenCode · OpenClaw | Host-specific TypeScript recall plugin             | Not enabled                                 |
+| Host                | Native recall coverage                             | Staged session capture                                                 |
+| ------------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
+| Claude Code         | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop`                                                  |
+| Codex               | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop` — approve in `/hooks`                            |
+| Gemini CLI          | `SessionStart` · `BeforeAgent`                     | Not enabled                                                            |
+| Hermes              | `pre_llm_call` for each selected profile           | `post_llm_call`; older sessions consolidate at the next `pre_llm_call` |
+| OpenCode · OpenClaw | Host-specific TypeScript recall plugin             | Not enabled                                                            |
 
 Session capture is independent of `recall.mode` and defaults to on. Turning recall
 off does not silently delete prior captures; use the inspection and dismissal
@@ -816,6 +836,7 @@ lifecycle-grouped list generated from the operation registry.
 | `omw merge`       | CLI     | Consolidate two near-duplicate pages into one (frontmatter union + `## Merged from` body + winner `aliases` + source tombstone); staged as `.proposed.md` → `--apply`                                                                                                                                                                  |
 | `omw next`        | CLI     | Recommend the next lifecycle action; `--after <op>` returns the state-endorsed next op after a pipeline op (deterministic; safe default = stop)                                                                                                                                                                                        |
 | `omw recall`      | CLI     | Agent-hook recall: `preamble` · `prompt` · `pretool` · `capture` · `sessions`; `sessions --dismiss <id>` hides staged context and `omw setup recall --session-capture on/off` controls future capture                                                                                                                                  |
+| `omw candidates`  | CLI     | Review completed-session knowledge proposals: `status` · `config` · `list` · `show` · `run` · `approve` · `dismiss`; staged mode writes nothing before explicit approval                                                                                                                                                               |
 
 Reasoning-ops (`ingest`, `query`, `summary`, `synthesis`, `find`, `edit`,
 `autoresearch`, personas) require a Claude / Codex / Gemini session — invoke them by
@@ -1093,6 +1114,10 @@ capture from the same project.
 - `omw recall sessions` lists them; `--dismiss <id>` prevents one from being
   recalled again; `omw setup recall --session-capture off` disables future
   capture.
+- Knowledge-candidate promotion is separately controlled and defaults to `off`.
+  Use `--knowledge-candidates staged`, then review with `omw candidates
+list/show` and explicitly `approve` or `dismiss`. Pending batches expire after
+  30 days; `omw candidates status` shows content-free keep/discard reasons.
 
 The old `hot.md` utility is not the native session-continuity path and is not
 wired by `omw setup recall`.

@@ -1,7 +1,7 @@
 # omw 자동 위키 recall 훅 — 현재 계약과 설계 기록
 
-> 상태: **구현 완료** (엔진 + Tier1 + Tier2 + 같은 프로젝트 세션 임시 캡처 + PreTool 회상). 2026-08-12 갱신.
-> 구현: `scripts/recall.py`(`omw recall preamble|prompt|pretool|capture|sessions`, stdin JSON 추출, `wire_host`), `scripts/session_capture.py`, `omw setup recall`(Tier1 가이드 + 검색 모드 + 네이티브 훅 + 캡처 토글).
+> 상태: **구현 완료** (엔진 + Tier1 + Tier2 + 같은 프로젝트 세션 임시 캡처 + PreTool 회상 + 승인형 지식 후보). 2026-08-13 갱신.
+> 구현: `scripts/recall.py`(`omw recall preamble|prompt|pretool|capture|sessions`, stdin JSON 추출, `wire_host`), `scripts/session_capture.py`, `scripts/knowledge_candidates.py`, `omw setup recall`(Tier1 가이드 + 검색 모드 + 네이티브 훅 + 캡처/후보 모드).
 > JSON 훅을 쓰는 세 호스트는 같은 큰 틀의 설정 스키마
 > (`{"hooks": {<Event>: [{"hooks":[{"type":"command","command":...}]}]}}`)를 씀:
 >
@@ -23,7 +23,7 @@
 | Claude Code         | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop` | `~/.claude/settings.json`                 |
 | Codex               | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop` | `~/.codex/hooks.json`, `/hooks` 승인 필요 |
 | Gemini CLI          | `SessionStart` · `BeforeAgent`                     | 없음                  | `~/.gemini/settings.json`                 |
-| Hermes              | `pre_llm_call`                                     | 없음                  | 선택한 프로필의 YAML 훅                   |
+| Hermes              | `pre_llm_call`                                     | `post_llm_call`       | 선택한 프로필의 YAML 훅                   |
 | OpenCode · OpenClaw | 호스트별 recall 플러그인                           | 없음                  | TypeScript 플러그인                       |
 
 아래 1~~9절은 2026-06의 초기 제안과 의사결정 과정을 보존한 기록이다. 현재 동작을
@@ -263,3 +263,24 @@ recall이 지식을 **읽어 오는** 축이라면, 이 큐는 지식을 **넣�
 - `omw setup recall --session-capture on|off`로 독립 제어한다. 기본값은 `on`이다.
 - Codex 사용자 훅은 설치 또는 명령 변경 뒤 `/hooks` 신뢰 검토가 필요하다. setup은 보안 경계를
   우회하거나 자동 승인하지 않고, 새 훅을 썼을 때 승인 안내를 출력한다.
+
+## 13. 완료 세션의 승인형 지식 후보 (2026-08-13)
+
+- `recall.knowledge_candidates`는 `off | advisory | staged | auto-raw`를 지원하고 기본값은
+  `off`다. 따라서 업그레이드만으로 기존 캡처 출력이나 볼트 파일이 바뀌지 않는다.
+- `Stop`/Hermes `post_llm_call`은 캡처만 한다. Claude·Codex는 `PreCompact` 또는 다음
+  `SessionStart`, Hermes는 새 세션 ID의 첫 `pre_llm_call`에서 이전 세션 캡처를 한 번 묶는다.
+- 결정·선호·검증 사실·재사용 절차·재현 가능한 원인+수정 쌍만 추출하며, 확인 응답·진행 상태·
+  임시 포트·비밀값이 포함된 문맥은 버린다. 별도 LLM을 매 턴 호출하지 않는다.
+- 활성 볼트를 설정된 recall 검색 전략으로 확인해 `new | update | duplicate | conflict`와
+  신뢰도·이유·관련 페이지를 저장한다. 캡처별 keep/discard 이유 집계는 원문 없이 표시한다.
+- `staged`는 `knowledge_candidate_*` 로컬 테이블만 쓰며 볼트는 바꾸지 않는다.
+  `omw candidates list/show` 후 `candidate-approval` 확인을 받아 `approve` 또는 `dismiss`한다.
+  승인은 기존 `ingest.save_raw` + reindex 계약으로 비공개 provenance-bearing `raw/`를 만든다.
+- 미승인 묶음은 30일 뒤 닫히며, 프로젝트·호스트·볼트별 `off`가 항상 우선한다.
+  `auto-raw`는 별도 opt-in이고 신뢰도 0.90 이상의 `new`만 비공개 raw로 자동 승격한다.
+- AgentMemory는 선택형 JSON 어댑터다. 문서화된 `GET /agentmemory/export` 결과를
+  `omw candidates run --agentmemory-json <file>`로 주며, OMW는 AgentMemory DB나 미문서 REST
+  쿼리를 추측해 읽지 않는다.
+- 훅 내부 오류는 모두 fail-open이다. 후보 알림은 배치 ID와 개수만 보여 주고 후보 원문은
+  `show`를 명시적으로 실행할 때만 노출한다.

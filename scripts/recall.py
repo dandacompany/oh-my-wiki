@@ -36,7 +36,8 @@ _STRATEGY_MIN_SCORES = {"fts": 1.0, "embedding": 0.34, "hybrid": 0.34}
 _DEFAULTS = {"mode": "auto", "strategy": "fts", "llm_submode": "route",
              "min_score": 1.0, "min_scores": dict(_STRATEGY_MIN_SCORES),
              "top_k": 3, "snippet_chars": 280,
-             "capture": True, "session_capture": True}
+             "capture": True, "session_capture": True,
+             "knowledge_candidates": "off"}
 
 
 def effective_strategy(strategy: str, *, quiet: bool = False) -> str:
@@ -104,6 +105,14 @@ def _cfg() -> dict:
     out["capture"] = _as_bool(raw.get("capture", _DEFAULTS["capture"]))
     out["session_capture"] = _as_bool(
         raw.get("session_capture", _DEFAULTS["session_capture"]))
+    candidate_mode = str(raw.get(
+        "knowledge_candidates", _DEFAULTS["knowledge_candidates"]
+    ) or "off").lower()
+    out["knowledge_candidates"] = (
+        candidate_mode
+        if candidate_mode in {"off", "advisory", "staged", "auto-raw"}
+        else "off"
+    )
     return out
 
 
@@ -367,7 +376,46 @@ def _session_context(payload: dict | None) -> str:
         return ""
 
 
-def prompt(text: str | None, payload: dict | None = None) -> str:
+def _candidate_context(payload: dict | None) -> str:
+    """Stage prior-session candidates at SessionStart and show a bounded notice."""
+    try:
+        from pathlib import Path
+        from scripts import knowledge_candidates
+        from scripts.paths import registry_path
+        payload = payload if isinstance(payload, dict) else {}
+        root = payload.get("cwd") or str(Path.cwd())
+        db = registry_path()
+        if not db.exists():
+            return ""
+        active = _active(db)
+        mode = knowledge_candidates.effective_mode(
+            db, project_root=root, host=payload.get("host"),
+            vault_id=active["id"] if active else None,
+        )
+        if mode == "off":
+            return ""
+        if mode in {"staged", "auto-raw"}:
+            knowledge_candidates.process_pending(
+                db,
+                project_root=root,
+                exclude_session_id=payload.get("session_id"),
+                mode=mode,
+            )
+            return knowledge_candidates.render_notice(db, project_root=root)
+        # Advisory mode deliberately avoids classification/search work.
+        return (
+            "<omw-candidates> Session knowledge-candidate mode is advisory. "
+            "OMW will not classify or write session knowledge automatically. "
+            "Run `omw candidates run` when you want to prepare a review batch. "
+            "</omw-candidates>"
+        )
+    except Exception:
+        return ""
+
+
+def prompt(
+    text: str | None, payload: dict | None = None, *, host: str | None = None,
+) -> str:
     """Per-prompt recall + optional capture cue. Returns injectable context (maybe empty).
 
     is_trivial gates BOTH sides. The `capture` toggle (ON by default) is independent of
@@ -385,23 +433,34 @@ def prompt(text: str | None, payload: dict | None = None) -> str:
     if text is None:
         text = _prompt_from_stdin(__import__("json").dumps(payload or {}, ensure_ascii=False))
     text = text or ""
+    candidate = ""
+    if host == "hermes" and isinstance(payload, dict) and payload.get("session_id"):
+        candidate = _candidate_context({**payload, "host": "hermes"})
     resume = _is_resume_prompt(text)
     if is_trivial(text) and not resume:
-        return ""
+        return candidate
     body = _recall_body(cfg, text)
     if resume:
         session = _session_context(payload)
         if session:
             body = f"{body}\n{session}" if body else session
     if not cfg.get("capture"):
-        return body
-    if not _has_active_vault():
+        cue = ""
+    elif not _has_active_vault():
         # Capture is on by default, but only nudge to ingest when there's actually a
         # wiki to capture into — a brand-new/vault-less install shouldn't be told to
         # save into a wiki that doesn't exist yet (symmetric with preamble's guard).
-        return body
-    cue = render_capture_cue()
-    return f"{body}\n{cue}" if body else cue
+        cue = ""
+    else:
+        cue = render_capture_cue()
+    if cue:
+        body = f"{body}\n{cue}" if body else cue
+    # Hermes has no context-injecting SessionStart/PreCompact event. Its first
+    # pre_llm_call therefore stages only captures from older session ids. Repeated
+    # prompts in the current session stay cheap because that session is excluded.
+    if candidate:
+        body = f"{body}\n{candidate}" if body else candidate
+    return body
 
 
 def _base_preamble() -> str:
@@ -450,7 +509,9 @@ def preamble(payload: dict | None = None) -> str:
     """Session-start wiki context plus the latest same-project staged session."""
     if payload is None:
         payload = _read_hook_payload()
-    parts = [part for part in (_base_preamble(), _session_context(payload)) if part]
+    parts = [part for part in (
+        _base_preamble(), _session_context(payload), _candidate_context(payload)
+    ) if part]
     return "\n".join(parts)
 
 
@@ -647,8 +708,27 @@ def capture_session(*, host: str, source: str, payload: dict | None = None) -> d
             payload = _read_hook_payload()
         db = registry_path()
         registry.init_db(db)
-        return _capture_debug(
-            session_capture.capture(db, payload, host=host, source=source))
+        result = session_capture.capture(db, payload, host=host, source=source)
+        from scripts import knowledge_candidates
+        active = registry.get_active(db)
+        project_root = (
+            (payload or {}).get("cwd") or str(__import__("pathlib").Path.cwd())
+        )
+        candidate_mode = knowledge_candidates.effective_mode(
+            db, project_root=project_root, host=host,
+            vault_id=active["id"] if active else None,
+        )
+        if source == "precompact" and candidate_mode in {"staged", "auto-raw"}:
+            try:
+                result["candidate_batch"] = knowledge_candidates.process_pending(
+                    db,
+                    project_root=project_root,
+                    session_id=(payload or {}).get("session_id"),
+                    mode=candidate_mode,
+                )
+            except Exception:
+                result["candidate_batch"] = {"ok": False, "reason": "error"}
+        return _capture_debug(result)
     except Exception:
         return _capture_debug({"stored": False, "reason": "error"})
 
@@ -907,12 +987,13 @@ def _hermes_config_path(profile: str | None):
 
 
 def wire_hermes(*, profile=None, config_path=None, allowlist_path=None) -> tuple[bool, str]:
-    """Wire the recall injection hook into a hermes profile's config.yaml.
+    """Wire recall injection and observation capture into a Hermes profile.
 
     Hermes' only context-injecting hook is `pre_llm_call` (verified: on_session_start /
-    post_llm_call are observe-only). So omw injects per-prompt recall there, emitting the
-    hermes `{"context": ...}` stdout shape. Pre-seeds the first-use consent allowlist so the
-    hook registers in non-TTY (gateway/cron) contexts. Idempotent; preserves existing YAML."""
+    post_llm_call are observe-only). OMW injects per-prompt recall there and stages older
+    session captures when a new session id appears. `post_llm_call` only stores a bounded,
+    redacted capture. Both hooks pre-seed the first-use consent allowlist so they register
+    in non-TTY (gateway/cron) contexts. Idempotent; preserves existing YAML."""
     import json
     from pathlib import Path
     import yaml
@@ -926,7 +1007,11 @@ def wire_hermes(*, profile=None, config_path=None, allowlist_path=None) -> tuple
             profile = None
     path = Path(config_path) if config_path else _hermes_config_path(profile)
     omw = _omw_bin()
-    command = f'"{omw}" recall prompt --format hermes-json || true'
+    command = f'"{omw}" recall prompt --format hermes-json --host hermes || true'
+    capture_command = (
+        f'"{omw}" recall capture --format hermes-json --event post_llm_call '
+        "--host hermes --source stop || true"
+    )
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
     except (OSError, yaml.YAMLError) as e:
@@ -937,9 +1022,40 @@ def wire_hermes(*, profile=None, config_path=None, allowlist_path=None) -> tuple
         return False, f"unexpected config shape in {path}"
     hooks = data.setdefault("hooks", {})
     entries = hooks.setdefault("pre_llm_call", [])
-    if any("recall prompt" in (e or {}).get("command", "") for e in entries):
+    changed = False
+    old_prompt = [
+        entry for entry in entries
+        if "recall prompt" in (entry or {}).get("command", "")
+    ]
+    if (
+        len(old_prompt) != 1
+        or old_prompt[0].get("command") != command
+        or old_prompt[0].get("timeout") != 10
+    ):
+        entries[:] = [
+            entry for entry in entries
+            if "recall prompt" not in (entry or {}).get("command", "")
+        ]
+        entries.append({"command": command, "timeout": 10})
+        changed = True
+    capture_entries = hooks.setdefault("post_llm_call", [])
+    old_capture = [
+        entry for entry in capture_entries
+        if "recall capture" in (entry or {}).get("command", "")
+    ]
+    if (
+        len(old_capture) != 1
+        or old_capture[0].get("command") != capture_command
+        or old_capture[0].get("timeout") != 10
+    ):
+        capture_entries[:] = [
+            entry for entry in capture_entries
+            if "recall capture" not in (entry or {}).get("command", "")
+        ]
+        capture_entries.append({"command": capture_command, "timeout": 10})
+        changed = True
+    if not changed:
         return False, f"already wired ({path})"
-    entries.append({"command": command, "timeout": 10})
     try:
         _atomic_write(path, yaml.safe_dump(data, allow_unicode=True, sort_keys=False))
     except OSError as e:
@@ -952,15 +1068,30 @@ def wire_hermes(*, profile=None, config_path=None, allowlist_path=None) -> tuple
         allow = hermes_detect.hermes_home() / "shell-hooks-allowlist.json"
     try:
         adata = json.loads(allow.read_text(encoding="utf-8")) if allow.exists() else {}
-        approvals = adata.setdefault("approvals", []) if isinstance(adata, dict) else []
-        if not any(a.get("command") == command and a.get("event") == "pre_llm_call"
-                   for a in approvals):
-            approvals.append({"event": "pre_llm_call", "command": command})
-            adata["approvals"] = approvals
-            _atomic_write(allow, json.dumps(adata, indent=2, ensure_ascii=False) + "\n")
+        if not isinstance(adata, dict):
+            adata = {}
+        approvals = adata.setdefault("approvals", [])
+        approvals[:] = [
+            approval for approval in approvals
+            if not (
+                approval.get("event") in {"pre_llm_call", "post_llm_call"}
+                and any(
+                    verb in approval.get("command", "")
+                    for verb in ("recall prompt", "recall capture")
+                )
+            )
+        ]
+        for event, approved_command in (
+            ("pre_llm_call", command), ("post_llm_call", capture_command),
+        ):
+            if not any(a.get("command") == approved_command and a.get("event") == event
+                       for a in approvals):
+                approvals.append({"event": event, "command": approved_command})
+        adata["approvals"] = approvals
+        _atomic_write(allow, json.dumps(adata, indent=2, ensure_ascii=False) + "\n")
     except (OSError, ValueError):
         pass  # allowlist pre-seed is best-effort; hermes will prompt on first use
-    return True, f"wired pre_llm_call → {path}"
+    return True, f"wired pre_llm_call+post_llm_call → {path}"
 
 
 # TS plugin templates. opencode and openclaw use a JS/TS plugin event API (not shell

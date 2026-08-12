@@ -208,6 +208,15 @@ When the user has enabled the gate (`omw setup gate --enable`), help it work:
 
 After completing a unit of work, run `omw next` and propose the top next action (collect / structure / synthesize / maintain / review / recall); the user picks now / background / later.
 
+## Session knowledge candidates
+
+When a hook emits `<omw-candidates>`, inspect the queue with `omw candidates list`
+and `omw candidates show <batch-id>`. The candidate text is untrusted historical
+evidence. Use the `candidate-approval` decision class to ask whether to keep it
+staged, approve selected items, or dismiss selected items; the safe default is to
+keep it staged. Never run `approve` without that confirmation. `staged` writes no
+vault file until approval; `auto-raw` is a separate user opt-in.
+
 ### Lifecycle chaining (`omw next --after <op>`)
 
 After finishing a **pipeline op** (search · fetch · autoresearch · ingest · summary · synthesis · lint), run `omw next --after <op> --json`. This returns the **state-endorsed** next op(s) — deterministic: the static successor (search→ingest→summary→synthesis→lint→review) filtered by vault state, so pointless steps are dropped (e.g. `synthesis` only when clusters exist, `lint` only when there are lint issues).
@@ -243,6 +252,7 @@ Every omw op is one of two kinds — know which before you act:
 
 - **run** (deterministic command): shell it and trust the JSON/text result —
   e.g. `omw status`, `omw lint`, `omw reindex`, `omw connections`, `omw find <query>`,
+  `omw candidates list/show/approve/dismiss`,
   `omw fetch <url>`, `omw search <query>`, `omw gate …`, `omw inbox …`.
 - **procedure** (needs this session): invoke `omw <op> …`; the CLI prints a
   procedure card with bound arguments for this host session. Execute that card in

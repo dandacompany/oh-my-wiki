@@ -249,7 +249,7 @@ SECTIONS: list[dict] = [
                 "<code>~/.hermes/profiles/&lt;프로필&gt;/SOUL.md</code>) · <code>openclaw</code>(워크스페이스 선택 → "
                 "<code>&lt;워크스페이스&gt;/AGENTS.md</code>). 프로필/워크스페이스는 <code>--profile</code>·"
                 "<code>--workspace</code>로 비대화형 지정합니다. Gemini는 SessionStart·BeforeAgent, "
-                "Hermes는 pre_llm_call, OpenCode·OpenClaw는 TypeScript recall 플러그인을 사용합니다. 스킬 설치"
+                "Hermes는 pre_llm_call 회상 + post_llm_call 캡처, OpenCode·OpenClaw는 TypeScript recall 플러그인을 사용합니다. 스킬 설치"
                 "(<code>omw setup agents</code>)는 <strong>에이전트 단위</strong>로 6종 모두 각자 디렉토리에 깝니다.",
             },
             {
@@ -294,6 +294,19 @@ SECTIONS: list[dict] = [
                 "일반적인 비밀값 패턴을 가리고, 불러올 때는 이스케이프된 JSON 데이터로 구분합니다. "
                 "최대 5개·30일 보관하며 위키로 자동 승격하지 않습니다. "
                 "Codex는 <code>/hooks</code>에서 새 사용자 훅 승인이 필요합니다.",
+            },
+            {
+                "label": "세션 지식 후보 — 설정·검토·승인",
+                "bar": "terminal",
+                "text": "omw setup recall --knowledge-candidates staged\n"
+                "omw candidates status\n"
+                "omw candidates list\n"
+                "omw candidates show <batch-id>\n"
+                "omw candidates approve <batch-id>   # 또는 dismiss",
+                "callout": "기본값 <code>off</code>는 기존 세션 캡처 동작을 그대로 보존합니다. "
+                "<code>staged</code>는 후보만 로컬 queue에 만들며 승인 전에는 vault 파일을 쓰지 않습니다. "
+                "후보는 새 지식·업데이트·중복·충돌로 분류되고 판단 이유와 출처를 함께 보관합니다. "
+                "30일 지난 미승인 후보는 자동 만료됩니다. 프로젝트·호스트·vault별로 끌 수 있습니다.",
             },
             {
                 "label": "호스트 훅 출력 형식 — omw recall --format / --event",

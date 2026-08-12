@@ -171,7 +171,9 @@ def test_wire_hermes_writes_pre_llm_call_with_context_format(tmp_path):
     data = yaml.safe_load(cfg.read_text())
     assert "pre_llm_call" in data["hooks"]
     cmd = data["hooks"]["pre_llm_call"][0]["command"]
-    assert "recall prompt" in cmd and "hermes-json" in cmd
+    assert "recall prompt" in cmd and "hermes-json" in cmd and "--host hermes" in cmd
+    capture = data["hooks"]["post_llm_call"][0]["command"]
+    assert "recall capture" in capture and "--host hermes" in capture
 
 
 def test_wire_hermes_preseeds_consent_allowlist(tmp_path):
@@ -181,6 +183,23 @@ def test_wire_hermes_preseeds_consent_allowlist(tmp_path):
     approvals = json.loads(allow.read_text())["approvals"]
     assert any(a["event"] == "pre_llm_call" and "recall prompt" in a["command"]
                for a in approvals)
+    assert any(a["event"] == "post_llm_call" and "recall capture" in a["command"]
+               for a in approvals)
+
+
+def test_wire_hermes_recovers_non_object_consent_allowlist(tmp_path):
+    cfg = tmp_path / "config.yaml"
+    allow = tmp_path / "allow.json"
+    allow.write_text("[]\n")
+
+    recall.wire_hermes(config_path=cfg, allowlist_path=allow)
+
+    data = json.loads(allow.read_text())
+    assert isinstance(data, dict)
+    assert {item["event"] for item in data["approvals"]} == {
+        "pre_llm_call",
+        "post_llm_call",
+    }
 
 
 def test_wire_hermes_idempotent_and_preserves(tmp_path):
@@ -195,6 +214,40 @@ def test_wire_hermes_idempotent_and_preserves(tmp_path):
     assert data["model"]["default"] == "x"                       # preserved
     assert data["hooks"]["pre_tool_call"][0]["command"] == "keep.sh"  # preserved
     assert len(data["hooks"]["pre_llm_call"]) == 1               # not duplicated
+    assert len(data["hooks"]["post_llm_call"]) == 1              # not duplicated
+
+
+def test_wire_hermes_replaces_stale_omw_commands_only(tmp_path):
+    cfg = tmp_path / "config.yaml"
+    allow = tmp_path / "allow.json"
+    cfg.write_text(yaml.safe_dump({
+        "hooks": {
+            "pre_llm_call": [
+                {"command": '"old-omw" recall prompt --format hermes-json || true'},
+                {"command": "keep-pre.sh"},
+            ],
+            "post_llm_call": [
+                {"command": '"old-omw" recall capture --host hermes || true'},
+                {"command": "keep-post.sh"},
+            ],
+        }
+    }))
+    allow.write_text(json.dumps({"approvals": [
+        {"event": "pre_llm_call", "command": '"old-omw" recall prompt'},
+        {"event": "pre_llm_call", "command": "keep-pre.sh"},
+    ]}))
+
+    changed, _ = recall.wire_hermes(config_path=cfg, allowlist_path=allow)
+
+    assert changed is True
+    data = yaml.safe_load(cfg.read_text())
+    pre = [entry["command"] for entry in data["hooks"]["pre_llm_call"]]
+    post = [entry["command"] for entry in data["hooks"]["post_llm_call"]]
+    assert pre.count("keep-pre.sh") == 1 and any("--host hermes" in cmd for cmd in pre)
+    assert post.count("keep-post.sh") == 1 and any("--source stop" in cmd for cmd in post)
+    approvals = json.loads(allow.read_text())["approvals"]
+    assert any(item["command"] == "keep-pre.sh" for item in approvals)
+    assert not any("old-omw" in item["command"] for item in approvals)
 
 
 def test_wire_hermes_honors_hermes_home_for_config_and_allowlist(tmp_path, monkeypatch):

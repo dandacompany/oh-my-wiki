@@ -474,6 +474,15 @@ def test_setup_recall_persists_session_capture_toggle(tmp_path):
     assert config.load_config()["recall"]["session_capture"] == "off"
 
 
+def test_setup_recall_persists_knowledge_candidate_mode(tmp_path):
+    from scripts import setup_wizard, config
+    rc = setup_wizard.setup_recall(
+        mode="auto", strategy="fts", hosts=[], base_dir=str(tmp_path),
+        noninteractive=True, knowledge_candidates="staged")
+    assert rc == 0
+    assert config.load_config()["recall"]["knowledge_candidates"] == "staged"
+
+
 def test_setup_recall_discloses_codex_hook_trust_even_when_already_wired(
         tmp_path, monkeypatch, capsys):
     from scripts import recall, setup_wizard

@@ -546,9 +546,20 @@ def test_cli_setup_recall_accepts_embed_flags(tmp_path, monkeypatch):
     assert config.load_config()["recall"]["embedding"]["provider"] == "openai"
 
 
+def test_cli_setup_recall_accepts_knowledge_candidate_mode(tmp_path, monkeypatch):
+    from scripts import omw_cli, config
+    monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw"))
+    rc = omw_cli.main([
+        "setup", "recall", "--noninteractive", "--base-dir", str(tmp_path),
+        "--knowledge-candidates", "staged",
+    ])
+    assert rc == 0
+    assert config.load_config()["recall"]["knowledge_candidates"] == "staged"
+
+
 def test_cli_recall_accepts_hook_format_flags(monkeypatch, capsys):
     from scripts import omw_cli
-    monkeypatch.setattr("scripts.recall.prompt", lambda text: "ctx")
+    monkeypatch.setattr("scripts.recall.prompt", lambda text, **_kwargs: "ctx")
     rc = omw_cli.main(["recall", "prompt", "--format", "claude-json",
                        "--event", "UserPromptSubmit", "--text", "hello wiki"])
     assert rc == 0
@@ -559,7 +570,7 @@ def test_cli_recall_accepts_hook_format_flags(monkeypatch, capsys):
 
 def test_cli_recall_accepts_codex_json_format(monkeypatch, capsys):
     from scripts import omw_cli
-    monkeypatch.setattr("scripts.recall.prompt", lambda text: "ctx")
+    monkeypatch.setattr("scripts.recall.prompt", lambda text, **_kwargs: "ctx")
     rc = omw_cli.main(["recall", "prompt", "--format", "codex-json",
                        "--event", "UserPromptSubmit", "--text", "hello wiki"])
     assert rc == 0

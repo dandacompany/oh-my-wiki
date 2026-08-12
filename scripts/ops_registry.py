@@ -90,6 +90,9 @@ OPS: tuple[OpSpec, ...] = (
          triggers=("open in obsidian", "open in logseq", "뷰어", "옵시디언에서 열어", "logseq에서 열어")),
     _det("recall", "Wiki and staged-session recall for agent hooks.",
          "omw recall {preamble|prompt|pretool|capture|sessions} …"),
+    _det("candidates", "Review and promote staged session knowledge candidates.",
+         "omw candidates {status|config|list|show|approve|dismiss|run} …",
+         triggers=("knowledge candidates", "지식 후보", "세션 후보")),
     _det("maint", "Knowledge-maintenance status (cron-friendly).", "omw maint status"),
     _det("gate", "Maintenance gate: note moments / turn-end check.", "omw gate {note|check} …"),
     _det("setup", "Interactive setup wizard.",
@@ -222,6 +225,7 @@ OPS: tuple[OpSpec, ...] = (
 _PHASE = {
     # capture — bring sources in
     "inbox": "capture", "fetch": "capture", "import": "capture", "ingest": "capture",
+    "candidates": "capture",
     # structure — organize into the graph
     "reindex": "structure", "links": "structure", "fields": "structure",
     "connections": "structure", "open": "structure", "edit": "structure",

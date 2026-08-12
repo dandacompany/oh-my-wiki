@@ -776,11 +776,75 @@ def _cmd_recall(args) -> int:
             print(json.dumps(recall.session_captures(limit=args.limit), ensure_ascii=False))
         return 0
     else:
-        out = recall.prompt(args.text)
+        out = recall.prompt(args.text, host=args.host)
     rendered = recall._format_output(out or "", args.fmt, args.event)
     if rendered:
         print(rendered)
     return 0
+
+
+def _cmd_candidates(args) -> int:
+    from pathlib import Path
+    from scripts import config, knowledge_candidates, registry
+    db = registry_path()
+    if not db.exists():
+        print(json.dumps({"error": "registry not found"}))
+        return 1
+    registry.init_db(db)
+    if args.candidates_cmd == "status":
+        result = {
+            "global_mode": knowledge_candidates.configured_mode(),
+            "scope_modes": knowledge_candidates.scope_modes(db),
+            **knowledge_candidates.processing_summary(db),
+        }
+    elif args.candidates_cmd == "config":
+        if args.project:
+            result = knowledge_candidates.set_scope_mode(
+                db, scope_type="project", scope_value=args.project, mode=args.mode,
+            )
+        elif args.host:
+            result = knowledge_candidates.set_scope_mode(
+                db, scope_type="host", scope_value=args.host, mode=args.mode,
+            )
+        elif args.vault:
+            vault = registry.get_vault_by_name(db, args.vault)
+            if not vault:
+                result = {"ok": False, "error": f"vault {args.vault!r} not found"}
+            else:
+                result = knowledge_candidates.set_scope_mode(
+                    db, scope_type="vault", scope_value=str(vault["id"]), mode=args.mode,
+                )
+        else:
+            config.set_config("recall.knowledge_candidates", args.mode)
+            result = {"ok": True, "scope_type": "global", "mode": args.mode}
+    elif args.candidates_cmd == "list":
+        status = None if args.status == "all" else args.status
+        result = knowledge_candidates.list_batches(
+            db, status=status, project_root=args.project, limit=args.limit,
+        )
+    elif args.candidates_cmd == "show":
+        result = knowledge_candidates.show_batch(db, args.batch_id)
+        if result is None:
+            print(json.dumps({"error": f"batch {args.batch_id} not found"}))
+            return 1
+    elif args.candidates_cmd == "approve":
+        result = knowledge_candidates.approve_batch(
+            db, batch_id=args.batch_id, item_ids=args.item or None,
+        )
+    elif args.candidates_cmd == "dismiss":
+        result = knowledge_candidates.dismiss_batch(
+            db, batch_id=args.batch_id, item_ids=args.item or None,
+        )
+    else:
+        result = knowledge_candidates.process_pending(
+            db,
+            project_root=args.project or str(Path.cwd()),
+            session_id=args.session_id,
+            mode="staged",
+            agentmemory_json=args.agentmemory_json,
+        )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if not isinstance(result, dict) or result.get("ok", True) else 1
 
 
 def _cmd_star(args) -> int:
@@ -925,6 +989,7 @@ def _cmd_setup(args) -> int:
             profiles=profiles, workspaces=workspaces,
             session_capture=(None if args.session_capture is None
                              else args.session_capture == "on"),
+            knowledge_candidates=args.knowledge_candidates,
             dry_run=args.dry_run,
         )
     if args.section == "gate":
@@ -1777,13 +1842,57 @@ def build_parser() -> argparse.ArgumentParser:
                      choices=["plain", "claude-json", "codex-json", "gemini-json", "hermes-json"],
                      help="stdout shape for the calling host's hook system")
     prc.add_argument("--event", default="", help="concrete host event name (for json formats)")
-    prc.add_argument("--host", default="claude", choices=["claude", "codex", "gemini"],
+    prc.add_argument("--host", default="claude",
+                     choices=["claude", "codex", "gemini", "hermes"],
                      help="calling host for session capture")
     prc.add_argument("--source", default="stop", choices=["stop", "precompact"],
                      help="capture lifecycle source")
     prc.add_argument("--limit", type=int, default=20, help="session capture list limit")
     prc.add_argument("--dismiss", type=int, default=None, help="dismiss a staged session capture")
     prc.set_defaults(func=_cmd_recall)
+
+    pkc = sub.add_parser(
+        "candidates", help="Review and promote staged session knowledge candidates."
+    )
+    kcsub = pkc.add_subparsers(dest="candidates_cmd", required=True)
+    pkcst = kcsub.add_parser("status", help="Show global and scoped candidate modes.")
+    pkcst.set_defaults(func=_cmd_candidates)
+    pkcc = kcsub.add_parser("config", help="Set candidate mode globally or for one scope.")
+    pkcc.add_argument("--mode", choices=["off", "advisory", "staged", "auto-raw"],
+                      required=True)
+    scope = pkcc.add_mutually_exclusive_group()
+    scope.add_argument("--project", default=None)
+    scope.add_argument("--host", choices=["claude", "codex", "gemini", "hermes"],
+                       default=None)
+    scope.add_argument("--vault", default=None)
+    pkcc.set_defaults(func=_cmd_candidates)
+    pkcl = kcsub.add_parser("list", help="List candidate batches.")
+    pkcl.add_argument("--status", choices=["pending", "approved", "dismissed", "all"],
+                      default="pending")
+    pkcl.add_argument("--project", default=None, help="limit to one project root")
+    pkcl.add_argument("--limit", type=int, default=20)
+    pkcl.set_defaults(func=_cmd_candidates)
+    pkcs = kcsub.add_parser("show", help="Show one candidate batch with evidence.")
+    pkcs.add_argument("batch_id", type=int)
+    pkcs.set_defaults(func=_cmd_candidates)
+    pkca = kcsub.add_parser("approve", help="Approve pending candidates into private raw/.")
+    pkca.add_argument("batch_id", type=int)
+    pkca.add_argument("--item", type=int, action="append", default=[],
+                      help="approve selected candidate id (repeatable; default all pending)")
+    pkca.set_defaults(func=_cmd_candidates)
+    pkcd = kcsub.add_parser("dismiss", help="Dismiss pending candidates without writing a page.")
+    pkcd.add_argument("batch_id", type=int)
+    pkcd.add_argument("--item", type=int, action="append", default=[],
+                      help="dismiss selected candidate id (repeatable; default all pending)")
+    pkcd.set_defaults(func=_cmd_candidates)
+    pkcr = kcsub.add_parser("run", help="Stage unprocessed captures now.")
+    pkcr.add_argument("--project", default=None, help="project root (default current directory)")
+    pkcr.add_argument("--session-id", default=None, help="limit to one captured session")
+    pkcr.add_argument(
+        "--agentmemory-json", default=None,
+        help="optional JSON from AgentMemory GET /agentmemory/export",
+    )
+    pkcr.set_defaults(func=_cmd_candidates)
 
     pm = sub.add_parser("maint", help="Knowledge-maintenance status (cron-friendly).")
     msub = pm.add_subparsers(dest="maint_cmd", required=True)
@@ -1854,6 +1963,11 @@ def build_parser() -> argparse.ArgumentParser:
                       help="embedding dimension for `omw setup recall`")
     pset.add_argument("--session-capture", choices=["on", "off"], default=None,
                       help="local same-project Stop/PreCompact capture for `omw setup recall`")
+    pset.add_argument(
+        "--knowledge-candidates",
+        choices=["off", "advisory", "staged", "auto-raw"], default=None,
+        help="completed-session knowledge candidate mode for `omw setup recall`",
+    )
     pset.add_argument("--profile", default=None,
                       help="hermes profile name(s) for `omw setup personas/recall` "
                            "(comma-separated for multiple)")

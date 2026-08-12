@@ -74,6 +74,8 @@ TAXONOMY: tuple[Decision, ...] = (
        ("Skip", "Ingest anyway", "Merge into existing")),
     _d("vault-target", "capture", "multi-vault and target is ambiguous",
        ("Active vault", "Choose another vault")),
+    _d("candidate-approval", "capture", "a staged session candidate batch is ready",
+       ("Keep staged", "Approve selected", "Dismiss selected")),
     # structure
     _d("new-vs-update", "structure", "a distilled page ≈ an existing page",
        ("Propose as new", "Update existing", "Show diff first")),

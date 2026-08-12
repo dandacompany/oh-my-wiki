@@ -669,13 +669,31 @@ omw setup recall
 
 임시 세션 캡처는 위키 페이지가 아닙니다. 마지막 요청·결과·다룬 파일만 비밀값을 가린 뒤
 같은 프로젝트 범위에 최대 5개, 30일 동안 로컬 레지스트리에 보관합니다. 새 세션을 시작하거나
-"이어서 진행해"처럼 재개를 요청하면 이 맥락을 함께 보여 줍니다. 위키로 자동 승격하지 않습니다.
+"이어서 진행해"처럼 재개를 요청하면 이 맥락을 함께 보여 줍니다. 지식 후보 승격은 기본값이
+`off`이며, 권장 `staged` 모드도 승인 전에는 볼트 파일을 바꾸지 않습니다.
 
 ```
 omw recall sessions                         # 임시 캡처 확인
 omw recall sessions --dismiss <id>          # 사용한 캡처 숨기기
 omw setup recall --session-capture off      # 임시 캡처 끄기
+omw setup recall --knowledge-candidates staged
+omw candidates status                       # 모드·범위·보존 기간·처리 이유
+omw candidates list                         # 후보 묶음 목록
+omw candidates show <batch-id>              # 분류·신뢰도·판단 이유
+omw candidates approve <batch-id>           # 승인한 항목만 private raw/로 승격
+omw candidates dismiss <batch-id>           # 파일 변경 없이 버리기
 ```
+
+후보 추출은 결정론적으로 동작합니다(같은 입력이면 같은 결과이며, 매 턴 모델을 호출하지
+않습니다). `Stop`은 캡처만 하고, `PreCompact` 또는 다음 세션 경계에서 묶어서 분석합니다.
+활성 볼트를 현재 회상 검색 방식으로 확인한 뒤 `new`·`update`·`duplicate`·`conflict`로
+표시합니다. 승인하지 않은 후보 묶음은 30일 뒤 만료됩니다. `omw candidates config`로
+프로젝트·호스트·볼트별 모드를 따로 끌 수 있습니다. 별도 선택인 `auto-raw`는 신뢰도가 높은
+새 항목만 비공개 `raw/`에 저장하며, 위키 페이지 수정·병합·공개·덮어쓰기는 계속 확인을 받습니다.
+
+AgentMemory는 선택 사항입니다. 문서화된 `GET /agentmemory/export`로 JSON을 내보낸 뒤
+`omw candidates run --agentmemory-json <export.json>`을 실행합니다. OMW는 AgentMemory의
+내부 데이터베이스를 직접 읽지 않습니다.
 
 Codex는 새 사용자 훅을 처음 설치하거나 명령이 바뀌면 신뢰 확인을 요구합니다. 설정 후 Codex에서
 `/hooks`를 열어 OMW의 새 훅을 검토·승인해야 실제로 실행됩니다.
@@ -685,13 +703,13 @@ Codex는 새 사용자 훅을 처음 설치하거나 명령이 바뀌면 신뢰 
 
 호스트 선택지는 **지침 파일(규약) 단위**로 묶입니다 — `claude`(CLAUDE.md) · `codex·opencode`(AGENTS.md, 한 번만 기록) · `gemini`(GEMINI.md) · `hermes`(프로필 **여러 개 선택** → `~/.hermes/profiles/<프로필>/SOUL.md`) · `openclaw`(워크스페이스 **여러 개 선택** → `<워크스페이스>/AGENTS.md`). 프로필/워크스페이스 선택은 **멀티 셀렉트(체크박스)** 입니다 — 원하는 만큼 체크하면(활성 프로필·기본 워크스페이스는 기본 체크) 선택한 **모든** 대상에 가이드 블록과 네이티브 훅이 기록됩니다. 비대화형으로는 `--profile` / `--workspace`에 **콤마로 여러 개**를 줄 수 있습니다(예: `--profile iris,mark`). 호스트가 제공하는 훅 종류에 따라 실제 배선 범위는 달라지며, Claude Code와 Codex가 위의 전체 회상·임시 캡처 흐름을 사용합니다.
 
-| 호스트              | 네이티브 회상 범위                                 | 세션 임시 캡처                             |
-| ------------------- | -------------------------------------------------- | ------------------------------------------ |
-| Claude Code         | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop`                      |
-| Codex               | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop` — `/hooks` 승인 필요 |
-| Gemini CLI          | `SessionStart` · `BeforeAgent`                     | 사용하지 않음                              |
-| Hermes              | 선택한 프로필별 `pre_llm_call`                     | 사용하지 않음                              |
-| OpenCode · OpenClaw | 호스트별 TypeScript recall 플러그인                | 사용하지 않음                              |
+| 호스트              | 네이티브 회상 범위                                 | 세션 임시 캡처                                              |
+| ------------------- | -------------------------------------------------- | ----------------------------------------------------------- |
+| Claude Code         | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop`                                       |
+| Codex               | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop` — `/hooks` 승인 필요                  |
+| Gemini CLI          | `SessionStart` · `BeforeAgent`                     | 사용하지 않음                                               |
+| Hermes              | 선택한 프로필별 `pre_llm_call`                     | `post_llm_call`; 이전 세션은 다음 `pre_llm_call`에서 후보화 |
+| OpenCode · OpenClaw | 호스트별 TypeScript recall 플러그인                | 사용하지 않음                                               |
 
 세션 캡처는 `recall.mode`와 독립적이며 기본값은 켜짐입니다. recall을 꺼도 이전 캡처가
 자동 삭제되지는 않습니다. 위의 확인·숨김 명령으로 관리하세요.
@@ -775,6 +793,7 @@ FTS와 의미 검색은 점수 범위가 다릅니다. `recall.min_score`는 FTS
 | `omw merge`       | CLI        | 두 유사 페이지를 하나로 통합 (frontmatter union + `## Merged from` 본문 + winner `aliases` + source tombstone); `.proposed.md` 스테이징 → `--apply`                                                                                                                                            |
 | `omw next`        | CLI        | 다음 라이프사이클 액션 추천; `--after <op>`는 파이프라인 op 완료 후 상태가 승인한 다음 op을 반환(결정론적; 안전 기본값=중단)                                                                                                                                                                   |
 | `omw recall`      | CLI        | 에이전트 훅 회상: `preamble` · `prompt` · `pretool` · `capture` · `sessions`; `sessions --dismiss <id>`는 임시 맥락을 숨기고 `omw setup recall --session-capture on/off`는 이후 캡처를 제어                                                                                                    |
+| `omw candidates`  | CLI        | 완료 세션의 지식 제안 검토: `status` · `config` · `list` · `show` · `run` · `approve` · `dismiss`; staged 모드는 명시적 승인 전까지 파일을 쓰지 않음                                                                                                                                           |
 
 추론 작업(`ingest`, `query`, `summary`, `synthesis`, `find`, `edit`, `autoresearch`,
 persona)은 Claude / Codex / Gemini 세션이 필요합니다. 자연어로 말하거나, `/omw <op>`,
@@ -1038,6 +1057,10 @@ Claude Code와 Codex에서는 `PreCompact`와 `Stop`이 마지막 요청·결과
 - 캡처는 위키 페이지로 자동 승격되지 않습니다.
 - `omw recall sessions`로 확인하고, `--dismiss <id>`로 다음 회상에서 숨기며,
   `omw setup recall --session-capture off`로 이후 캡처를 끕니다.
+- 지식 후보 승격은 별도 설정이며 기본값은 `off`입니다. `--knowledge-candidates staged`로
+  켠 뒤 `omw candidates list/show`로 검토하고 `approve` 또는 `dismiss`를 명시적으로
+  실행합니다. 대기 후보는 30일 뒤 만료되며, `omw candidates status`는 원문을 드러내지
+  않고 유지·폐기 이유의 개수만 보여 줍니다.
 
 예전 `hot.md` 유틸리티는 현재 네이티브 세션 연속성 경로가 아니며 `omw setup recall`이
 자동 배선하지 않습니다.

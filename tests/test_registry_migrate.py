@@ -31,6 +31,10 @@ def test_connect_automigrates_pre3_vaults(tmp_path):
         tables = {r["name"] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'")}
         assert "session_captures" in tables
+        assert "knowledge_candidate_batches" in tables
+        assert "knowledge_candidates" in tables
+        assert "knowledge_candidate_processed" in tables
+        assert "knowledge_candidate_scope_modes" in tables
     finally:
         conn.close()
 

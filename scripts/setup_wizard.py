@@ -797,6 +797,7 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                  workspaces: list[str] | None = None,
                  normalizer: str | None = None,
                  session_capture: bool | None = None,
+                 knowledge_candidates: str | None = None,
                  dry_run: bool = False) -> int:
     """Configure auto wiki-recall (two axes):
       mode     — trigger: off | advisory | auto
@@ -814,6 +815,9 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     cur_emb = cur.get("embedding") or {}
     cur_session_capture = recall._as_bool(
         cur.get("session_capture", recall._DEFAULTS["session_capture"]))
+    cur_candidates = str(cur.get(
+        "knowledge_candidates", recall._DEFAULTS["knowledge_candidates"]
+    ) or "off").lower()
     choices = ["auto", "advisory", "off"]
     interactive = (not noninteractive) and sys.stdin.isatty()
     # Normalize legacy single profile/workspace into the list form.
@@ -839,6 +843,24 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
         else:
             config.set_config(
                 "recall.session_capture", "on" if session_capture else "off")
+    candidate_modes = ["off", "advisory", "staged", "auto-raw"]
+    if interactive and knowledge_candidates is None:
+        knowledge_candidates = _prompt(
+            "select", "Session knowledge candidates",
+            choices=candidate_modes, default=cur_candidates,
+        ) or cur_candidates
+    chosen_candidates = knowledge_candidates or cur_candidates
+    if chosen_candidates not in candidate_modes:
+        print(
+            f"error: unknown knowledge-candidate mode {chosen_candidates!r}; "
+            f"choose from {candidate_modes}", file=sys.stderr,
+        )
+        return 1
+    if knowledge_candidates is not None:
+        if dry_run:
+            _dry(f"set recall.knowledge_candidates={chosen_candidates}")
+        else:
+            config.set_config("recall.knowledge_candidates", chosen_candidates)
     if mode == "off":
         print("recall disabled (recall.mode=off). "
               f"staged session capture is {'on' if effective_session_capture else 'off'}. "
@@ -1007,6 +1029,9 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     print("  staged session capture: "
           f"{'on' if effective_session_capture else 'off'} "
           "(local, same-project only, 30-day retention; no automatic wiki write).")
+    print("  session knowledge candidates: "
+          f"{chosen_candidates} "
+          "(staged requires explicit approval; auto-raw is a separate opt-in).")
     # Tier 2: wire each host's NATIVE recall hook, dispatched by its hook mechanism
     # (JSON shell hook / hermes YAML shell hook / TS plugin). Each host's event names +
     # stdout inject format differ — see hosts.HOOK. Scoped hosts wire once per unit
