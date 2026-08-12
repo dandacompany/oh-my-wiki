@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-from scripts import frontmatter, registry, slugify, urls
+from scripts import frontmatter, registry, schema, slugify, urls
 
 _OCR_MAX_IMAGES = 50
 
@@ -141,7 +141,7 @@ def write_wiki_page(
 
     `extra_meta` merges additional frontmatter (e.g. `synthesizes`, `compared_items`,
     `source_raw`, `relations`) so the page can satisfy its per-type schema contract.
-    For the syntheses layer a `## Sources` section is auto-appended when absent.
+    Missing required sections are scaffolded from the resolved bundled/vault schema.
     """
     if layer not in WIKI_LAYERS:
         raise ValueError(f"unknown wiki layer: {layer!r} (valid: {sorted(WIKI_LAYERS)})")
@@ -160,10 +160,8 @@ def write_wiki_page(
         meta["summary"] = summary
     if extra_meta:
         meta.update(extra_meta)
-    if layer == "syntheses" and not any(
-        line.strip() == "## Sources" for line in body.splitlines()
-    ):
-        body = body.rstrip() + "\n\n## Sources\n"
+    schemas = schema.load_schemas(vault_path=root)
+    body = schema.scaffold_required_sections(body, schemas.get(type_))
     abs_path = root / relpath
     abs_path.parent.mkdir(parents=True, exist_ok=True)
     abs_path.write_text(frontmatter.dump(meta, body), encoding="utf-8")

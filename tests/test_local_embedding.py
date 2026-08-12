@@ -27,8 +27,9 @@ def test_fastembed_embed_lazy_imports_and_maps(monkeypatch):
     calls = {}
 
     class _FakeTE:
-        def __init__(self, model_name=None):
+        def __init__(self, model_name=None, cache_dir=None):
             calls["model_name"] = model_name
+            calls["cache_dir"] = cache_dir
 
         def embed(self, texts):
             for _ in texts:
@@ -40,6 +41,7 @@ def test_fastembed_embed_lazy_imports_and_maps(monkeypatch):
     out = e.embed(["a", "b"])
     assert out == [[0.1, 0.2, 0.3], [0.1, 0.2, 0.3]]
     assert calls["model_name"] == "m"
+    assert calls["cache_dir"].endswith("models/fastembed")
 
 
 def test_ensure_fastembed_noop_when_present(monkeypatch):
@@ -73,6 +75,18 @@ def test_ensure_fastembed_no_consent_no_pip(monkeypatch):
     assert pip_called["n"] == 0, "pip must NOT be called when consent is not given"
 
 
+def test_ensure_local_embedding_requires_model_and_vector_store(monkeypatch):
+    monkeypatch.setattr(embed_install, "fastembed_available", lambda: False)
+    monkeypatch.setattr(embed_install, "sqlite_vec_available", lambda: False)
+    calls = []
+    monkeypatch.setattr(embed_install, "ensure_fastembed",
+                        lambda **kwargs: calls.append("fastembed") or True)
+    monkeypatch.setattr(embed_install, "ensure_sqlite_vec",
+                        lambda **kwargs: calls.append("sqlite-vec") or True)
+    assert embed_install.ensure_local_embedding(assume_yes=True) is True
+    assert calls == ["fastembed", "sqlite-vec"]
+
+
 def _fake_env(tmp_path, monkeypatch):
     monkeypatch.setenv("OMW_HOME", str(tmp_path))
     from scripts import registry
@@ -85,13 +99,15 @@ def _fake_env(tmp_path, monkeypatch):
 
 def test_switch_model_writes_config_resets_and_reindexes(tmp_path, monkeypatch):
     db = _fake_env(tmp_path, monkeypatch)
-    monkeypatch.setattr(embed_admin.embed_install, "ensure_fastembed", lambda **k: True)
+    monkeypatch.setattr(embed_admin.embed_install, "ensure_local_embedding", lambda **k: True)
     monkeypatch.setattr(embed_admin, "resolve_dim", lambda d, m: 384)
     reset_called = {"n": 0}
     monkeypatch.setattr(embed_admin.vector_index, "reset", lambda d: reset_called.__setitem__("n", reset_called["n"] + 1))
     reidx = {"vaults": 0}
     monkeypatch.setattr(embed_admin.reindex, "refresh_embeddings",
-                        lambda d, *, vault_id, relpaths=None: reidx.__setitem__("vaults", reidx["vaults"] + 1) or 1)
+                        lambda d, *, vault_id, relpaths=None, strict=False,
+                        embedding_config=None:
+                        reidx.__setitem__("vaults", reidx["vaults"] + 1) or 0)
     # stub count: return 0 (no wiki notes) so vault counts as ok (no wiki pages)
     monkeypatch.setattr(embed_admin.vector_index, "count", lambda d, *, vault_id: 0)
     model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -104,7 +120,7 @@ def test_switch_model_writes_config_resets_and_reindexes(tmp_path, monkeypatch):
 
 def test_switch_model_aborts_on_install_failure_no_config_change(tmp_path, monkeypatch):
     db = _fake_env(tmp_path, monkeypatch)
-    monkeypatch.setattr(embed_admin.embed_install, "ensure_fastembed", lambda **k: False)
+    monkeypatch.setattr(embed_admin.embed_install, "ensure_local_embedding", lambda **k: False)
     out = embed_admin.switch_model(db, "some/model", assume_yes=True)
     assert out["ok"] is False
     assert (_config.load_config().get("recall") or {}).get("embedding") in (None, {})
@@ -112,7 +128,7 @@ def test_switch_model_aborts_on_install_failure_no_config_change(tmp_path, monke
 
 def test_add_model_registers_known(tmp_path, monkeypatch):
     db = _fake_env(tmp_path, monkeypatch)
-    monkeypatch.setattr(embed_admin.embed_install, "ensure_fastembed", lambda **k: True)
+    monkeypatch.setattr(embed_admin.embed_install, "ensure_local_embedding", lambda **k: True)
     monkeypatch.setattr(embed_admin, "resolve_dim", lambda d, m: 512)
     out = embed_admin.add_model(db, "custom/model", assume_yes=True)
     assert out["ok"] is True and out["dim"] == 512
@@ -294,32 +310,14 @@ def test_vector_index_meta_is_none_after_reset(tmp_path, monkeypatch):
 
 def test_switch_model_fails_when_no_vectors_produced_for_wiki_vault(tmp_path, monkeypatch):
     """switch_model returns ok=False when wiki notes exist but no vectors were stored."""
-    from scripts import registry as _reg
     db = _fake_env(tmp_path, monkeypatch)
-    monkeypatch.setattr(embed_admin.embed_install, "ensure_fastembed", lambda **k: True)
+    monkeypatch.setattr(embed_admin.embed_install, "ensure_local_embedding", lambda **k: True)
     monkeypatch.setattr(embed_admin, "resolve_dim", lambda d, m: 384)
     monkeypatch.setattr(embed_admin.vector_index, "reset", lambda d: None)
     monkeypatch.setattr(embed_admin.reindex, "refresh_embeddings",
-                        lambda d, *, vault_id, relpaths=None: None)
-    # Simulate: vault has 3 wiki notes but 0 vectors (model unsupported)
-    monkeypatch.setattr(embed_admin.vector_index, "count", lambda d, *, vault_id: 0)
-
-    # We need the vault's notes table to report wiki notes.
-    # Patch registry.connect to return a fake conn for the notes count query.
-    real_connect = _reg.connect
-    class _FakeConn:
-        def execute(self, sql, params=()):
-            if "FROM notes" in sql:
-                class _Row:
-                    def __getitem__(self, k): return 3
-                class _Cursor:
-                    def fetchone(self): return _Row()
-                return _Cursor()
-            # delegate everything else
-            return real_connect(db).execute(sql, params)
-        def close(self): pass
-
-    monkeypatch.setattr(embed_admin.registry, "connect", lambda p: _FakeConn())
+                        lambda d, *, vault_id, relpaths=None, strict=False,
+                        embedding_config=None: 0)
+    monkeypatch.setattr(embed_admin, "_wiki_count", lambda path, vault_id: 3)
     monkeypatch.setattr(embed_admin.registry, "list_vaults",
                         lambda d: [{"id": 1, "name": "v1"}])
 
@@ -327,6 +325,7 @@ def test_switch_model_fails_when_no_vectors_produced_for_wiki_vault(tmp_path, mo
                                    assume_yes=True)
     assert out["ok"] is False
     assert "no vectors" in out["detail"]
+    assert (_config.load_config().get("recall") or {}).get("embedding") in (None, {})
 
 
 def test_reindex_all_resets_vector_schema_before_rebuilding(tmp_path, monkeypatch):
@@ -336,12 +335,101 @@ def test_reindex_all_resets_vector_schema_before_rebuilding(tmp_path, monkeypatc
     _reg.init_db(db)
     _reg.add_vault(db, name="v1", path=tmp_path / "v1", type_="markdown", mode="wiki")
     calls = []
+    monkeypatch.setattr(embed_admin.config, "load_config", lambda: {
+        "recall": {"embedding": {"provider": "fake"}}
+    })
+    monkeypatch.setattr(embed_admin.vector_index, "available", lambda: True)
+    monkeypatch.setattr(embed_admin, "_wiki_count", lambda path, vault_id: 0)
     monkeypatch.setattr(embed_admin.vector_index, "reset", lambda path: calls.append(("reset", path)))
     monkeypatch.setattr(
         embed_admin.reindex, "refresh_embeddings",
-        lambda path, *, vault_id, relpaths: calls.append(("refresh", vault_id)),
+        lambda path, *, vault_id, relpaths, strict=False, embedding_config=None:
+        calls.append(("refresh", vault_id)) or 0,
     )
     out = embed_admin.reindex_all(db)
     assert out["ok"] is True
-    assert calls[0] == ("reset", db)
+    assert calls[0][0] == "reset"
+    assert calls[0][1] != db
     assert calls[1:] == [("refresh", 1)]
+
+
+def test_reindex_all_reports_named_failure(tmp_path, monkeypatch):
+    from scripts import registry as _reg
+    db = tmp_path / "registry.db"
+    _reg.init_db(db)
+    _reg.add_vault(db, name="broken", path=tmp_path / "v", type_="markdown", mode="wiki")
+    monkeypatch.setattr(embed_admin.config, "load_config", lambda: {
+        "recall": {"embedding": {"provider": "fake"}}
+    })
+    monkeypatch.setattr(embed_admin.vector_index, "available", lambda: True)
+    monkeypatch.setattr(embed_admin.vector_index, "reset", lambda path: None)
+    monkeypatch.setattr(
+        embed_admin.reindex, "refresh_embeddings",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("model exploded")),
+    )
+    out = embed_admin.reindex_all(db)
+    assert out["ok"] is False
+    assert out["failures"] == [{"vault": "broken", "detail": "model exploded"}]
+
+
+def test_reindex_failure_preserves_live_vectors(tmp_path, monkeypatch):
+    pytest.importorskip("sqlite_vec")
+    from scripts import registry as _reg
+
+    db = tmp_path / "registry.db"
+    _reg.init_db(db)
+    vault = _reg.add_vault(
+        db, name="v1", path=tmp_path / "v1", type_="markdown", mode="wiki"
+    )
+    vault_id = vault["id"]
+    old_embedder = embed.FakeEmbedder(dim=8)
+    vector_index.upsert(
+        db,
+        vault_id=vault_id,
+        embedder=old_embedder,
+        rows=[("wiki/existing.md", "existing vector")],
+    )
+    before_meta = vector_index.meta(db)
+
+    monkeypatch.setattr(embed_admin.config, "load_config", lambda: {
+        "recall": {"embedding": {"provider": "fake", "dim": 16}}
+    })
+    monkeypatch.setattr(
+        embed_admin.reindex,
+        "refresh_embeddings",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("model exploded")),
+    )
+
+    out = embed_admin.reindex_all(db)
+
+    assert out["ok"] is False
+    assert vector_index.count(db, vault_id=vault_id) == 1
+    assert vector_index.meta(db) == before_meta
+
+
+def test_interrupted_model_switch_uses_still_live_vector_contract(tmp_path):
+    pytest.importorskip("sqlite_vec")
+    from scripts import registry as _reg
+
+    db = tmp_path / "registry.db"
+    _reg.init_db(db)
+    vault = _reg.add_vault(
+        db, name="v1", path=tmp_path / "v1", type_="markdown", mode="wiki"
+    )
+    old_embedder = embed.FakeEmbedder(dim=8)
+    vector_index.upsert(
+        db,
+        vault_id=vault["id"],
+        embedder=old_embedder,
+        rows=[("wiki/existing.md", "existing vector")],
+    )
+
+    # Simulate interruption after the new config was saved but before the old
+    # live vector generation was replaced.
+    active = embed.active_embedder(db, {"provider": "fake", "dim": 16})
+
+    assert isinstance(active, embed.FakeEmbedder)
+    assert active.dim == 8
+    assert vector_index.query(
+        db, vault_id=vault["id"], embedder=active, text="existing vector", limit=1
+    )[0]["relpath"] == "wiki/existing.md"

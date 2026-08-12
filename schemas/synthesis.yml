@@ -4,5 +4,7 @@ field_types:
   synthesizes: list
 required_sections:
   - "## Sources"
+section_positions:
+  "## Sources": end
 valid_relations:
   [synthesizes, derived-from, uses, contradicts, see-also, supersedes]

@@ -6,6 +6,8 @@ plain stdout into a JSON hook contract.
 """
 import json
 import subprocess
+import sys
+import time
 
 from scripts import recall
 
@@ -16,6 +18,7 @@ def test_json_hook_commands_are_failsafe_and_json_safe():
         assert specs, f"{host} should have recall hook events"
         for event, (cmd, _status, timeout) in specs.items():
             assert " recall " in cmd, (host, event, cmd)
+            assert "scripts.hook_watchdog" in cmd, (host, event, cmd)
             assert "rc=$?" in cmd, (host, event, cmd)
             assert "jq -e ." in cmd, (host, event, cmd)
             assert '{\"continue\":true}' in cmd, (host, event, cmd)
@@ -63,3 +66,15 @@ def test_valid_json_survives_and_stderr_stays_separate(monkeypatch, tmp_path):
     assert result.returncode == 0
     assert json.loads(result.stdout) == payload
     assert result.stderr == "diagnostic\n"
+
+
+def test_watchdog_stops_a_hung_child_before_host_timeout():
+    started = time.monotonic()
+    result = subprocess.run(
+        [sys.executable, "-m", "scripts.hook_watchdog", "--timeout", "0.1", "--",
+         sys.executable, "-c", "import time; time.sleep(30)"],
+        text=True, capture_output=True, check=False,
+    )
+    assert result.returncode == 124
+    assert time.monotonic() - started < 2
+    assert "stopped" in result.stderr

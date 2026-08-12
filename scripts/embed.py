@@ -9,6 +9,7 @@ import hashlib
 import importlib.metadata
 import re
 import struct
+from pathlib import Path
 
 DEFAULT_LOCAL_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 KNOWN_MODEL_DIMS = {
@@ -110,8 +111,11 @@ class FastEmbedEmbedder(Embedder):
     def embed(self, texts: list[str]) -> list[list[float]]:
         if self._te is None:
             from fastembed import TextEmbedding  # optional dep; lazy
+            from scripts.paths import omw_home
+            cache_dir = Path(omw_home()) / "models" / "fastembed"
+            cache_dir.mkdir(parents=True, exist_ok=True)
             try:
-                self._te = TextEmbedding(model_name=self.model)
+                self._te = TextEmbedding(model_name=self.model, cache_dir=str(cache_dir))
             except Exception as exc:
                 # First use downloads model files over HTTPS; a corporate proxy
                 # cert failure is opaque here — rewrite only that case with a hint.
@@ -144,3 +148,41 @@ def get_embedder(cfg: dict) -> Embedder | None:
         dim = int(cfg.get("dim") or KNOWN_MODEL_DIMS.get(model, 384))
         return FastEmbedEmbedder(model=model, dim=dim)
     return None
+
+
+def active_embedder(db_path: Path, cfg: dict) -> Embedder | None:
+    """Return the embedder matching the live vector generation when possible.
+
+    Model switches write config and replace a SQLite vector index in two separate
+    atomic operations. If the process is interrupted between them, prefer the
+    model contract stored with the still-working index instead of rejecting it.
+    A later successful reindex brings config and vector metadata back together.
+    """
+    configured = get_embedder(cfg)
+    try:
+        from scripts import vector_index
+        stored = vector_index.meta(db_path)
+    except Exception:
+        return configured
+    if not stored:
+        return configured
+    if configured is not None and embedding_fingerprint(configured) == stored["fingerprint"]:
+        return configured
+
+    provider_name = str(stored.get("fingerprint") or "").split("|", 1)[0]
+    provider = {
+        "FastEmbedEmbedder": "fastembed",
+        "FakeEmbedder": "fake",
+        "OpenAIEmbedder": "openai",
+    }.get(provider_name)
+    if provider is None:
+        return configured
+    recovered_cfg = {
+        "provider": provider,
+        "model": stored.get("model"),
+        "dim": stored.get("dim"),
+    }
+    recovered = get_embedder(recovered_cfg)
+    if recovered is not None and embedding_fingerprint(recovered) == stored["fingerprint"]:
+        return recovered
+    return configured

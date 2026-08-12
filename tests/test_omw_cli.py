@@ -427,6 +427,15 @@ def test_links_link_inserts(tmp_path, monkeypatch, capsys):
     assert out["target_slug"] == "k" and out["inserted"].startswith("[[k")
 
 
+def test_links_link_batch_from_suggestions(tmp_path, monkeypatch, capsys):
+    _db, root, _vid = _links_vault(tmp_path, monkeypatch)
+    rc = omw_cli.main(["links", "link", "--from-suggestions", "--vault", "cv"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["counts"] == {"applied": 1, "skipped": 0, "failed": 0}
+    assert "[[k|Karp]]" in (root / "wiki" / "entities" / "t.md").read_text()
+
+
 def test_links_link_missing_page_exits_1(tmp_path, monkeypatch, capsys):
     _links_vault(tmp_path, monkeypatch)
     rc = omw_cli.main(["links", "link", "wiki/entities/nope.md", "--to", "k", "--vault", "cv"])

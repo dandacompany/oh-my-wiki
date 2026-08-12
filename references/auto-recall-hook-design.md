@@ -188,7 +188,10 @@ recall:
   strategy: fts # fts | embedding | hybrid | llm (어떻게)
   llm:
     submode: route # route | generative           (strategy=llm일 때만)
-  min_score: 1.0 # fts/embedding 임계
+  min_score: 1.0 # FTS 점수 임계(기존 설정 호환)
+  min_scores:
+    embedding: 0.34 # 품질 게이트가 만든 0..1 점수
+    hybrid: 0.34 # 품질 게이트가 만든 0..1 점수
   top_k: 3
 ```
 

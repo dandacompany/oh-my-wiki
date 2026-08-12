@@ -515,6 +515,14 @@ wikilink 없이 언급됩니다. 두 경우 모두 vault에 일치하는 페이�
 omw links link wiki/concepts/llm-wiki.md --to andrej-karpathy
 ```
 
+전체 제안 목록을 검토한 뒤 승인했다면 한 프로세스에서 일괄 적용할 수 있습니다.
+재색인은 마지막에 한 번만 실행됩니다.
+
+```bash
+omw links link --from-suggestions
+omw links link --from-suggestions --dry-run
+```
+
 ```json
 {
   "relpath": "wiki/concepts/llm-wiki.md",
@@ -687,6 +695,11 @@ Codex는 새 사용자 훅을 처음 설치하거나 명령이 바뀌면 신뢰 
 
 세션 캡처는 `recall.mode`와 독립적이며 기본값은 켜짐입니다. recall을 꺼도 이전 캡처가
 자동 삭제되지는 않습니다. 위의 확인·숨김 명령으로 관리하세요.
+
+FTS와 의미 검색은 점수 범위가 다릅니다. `recall.min_score`는 FTS 기준으로 유지되고,
+임베딩·하이브리드의 0~1 기준은 `recall.min_scores.embedding`과
+`recall.min_scores.hybrid`로 따로 설정합니다. `omw embed status`에서 실제 기준값,
+설정 경고, 영구 모델 캐시 위치, 볼트별 색인 비율을 확인할 수 있습니다.
 
 설정 가능한 두 축:
 

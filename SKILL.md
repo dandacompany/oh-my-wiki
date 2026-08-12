@@ -66,7 +66,7 @@ Always invoke this before doing anything else:
 >    `omw view [page] [--search Q] [--viewer obsidian|logseq] [--vault <name>] [--print]` (open vault/page/search in Obsidian or Logseq via URI scheme; companion: `omw setup viewer`),
 >    `omw visibility get <relpath>` / `omw visibility set <relpath...> public|private` (per-page visibility management),
 >    `omw inbox add <url>` / `omw inbox list` / `omw inbox remove <url>` / `omw inbox run` (queue URLs then batch-fetch into `raw/`),
->    `omw embed status|list|use <model>|add <model>|install|reindex` (local embedding model: pick/manage the fastembed model used for embedding/hybrid search; `use` resets + re-embeds so storage and search always share one model),
+>    `omw embed status|list|use <model>|add <model>|install|reindex` (local embedding model: pick/manage FastEmbed + sqlite-vec; rebuilds happen in a disposable DB and replace the live vector index only after full success),
 >    `omw fetch <url> [--backend auto|urllib|chromium|cloud] [--vault] [--today YYYY-MM-DD]` (fetch one URL or YouTube transcript into `raw/`, tiered urllib → chromium → cloud, SSRF-guarded),
 >    `omw reindex [--full]` (rescan files into the registry — **registers body `[[wikilinks]]`** for search/connections; run it after writing or hand-editing wiki pages directly so the link graph is current),
 >    `omw connections [--no-reindex]` (link-graph communities / hubs / surprising bridges; **auto-reindexes first** so freshly-written page links are already in the graph).
@@ -84,7 +84,8 @@ Always invoke this before doing anything else:
 >    with an automatic token-scorer fallback; `commands/query.md` then LLM-reranks the candidates.
 >    Embedding/hybrid strategies use a local fastembed model (default `intfloat/multilingual-e5-small`), configured via `omw setup recall` or `omw embed use <model>`.
 >    Unlinked mentions of existing pages are auto-proposed (`omw links suggest` /
->    `lint`'s `link_suggestions`) and inserted via `omw links link <relpath> --to <slug>`; a page
+>    `lint`'s `link_suggestions`) and inserted via `omw links link <relpath> --to <slug>` or,
+>    after one explicit confirmation, in a batch via `omw links link --from-suggestions`; a page
 >    may declare an optional `aliases:` frontmatter list for matching. Pages may also carry inline
 >    `key:: value` fields (Dataview line syntax); relation keys (`uses`/`contradicts`/`supersedes:: [[B]]`)
 >    feed the typed-edge graph like frontmatter `relations:`, and `omw fields <relpath>` lists a

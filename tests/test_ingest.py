@@ -115,6 +115,32 @@ def test_write_wiki_page_entity(wiki_vault):
     assert rel == "wiki/entities/andrej-karpathy.md"
     text = (root / rel).read_text(encoding="utf-8")
     assert "type: entity" in text
+    assert text.count("## Summary") == 1
+    assert text.index("## Summary") < text.index("AI researcher.")
+
+
+def test_write_wiki_page_uses_vault_local_required_sections(wiki_vault):
+    db, vault, root = wiki_vault
+    (root / "schemas").mkdir()
+    (root / "schemas" / "concept.yml").write_text(
+        "extends: base\nrequired_sections: ['## Local Contract']\n",
+        encoding="utf-8",
+    )
+    rel = ingest.write_wiki_page(
+        db, vault_id=vault["id"], layer="concepts", title="Local schema",
+        body="Body text.", tags=[], date_str="2026-05-25",
+    )
+    text = (root / rel).read_text(encoding="utf-8")
+    assert text.count("## Local Contract") == 1
+
+
+def test_write_wiki_page_does_not_duplicate_existing_required_section(wiki_vault):
+    db, vault, root = wiki_vault
+    rel = ingest.write_wiki_page(
+        db, vault_id=vault["id"], layer="entities", title="Existing summary",
+        body="## Summary\n\nAlready here.", tags=[], date_str="2026-05-25",
+    )
+    assert (root / rel).read_text(encoding="utf-8").count("## Summary") == 1
 
 
 def test_write_wiki_page_rejects_bad_layer(wiki_vault):

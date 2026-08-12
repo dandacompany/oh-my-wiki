@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from pathlib import Path
 
 from scripts import registry
@@ -22,7 +23,8 @@ META_RELPATHS = ("wiki/index.md", "wiki/log.md")
 
 def _slugify(target: str) -> str:
     """basename without .md, alias/heading/query stripped, lowercased."""
-    t = target.split("|", 1)[0].split("#", 1)[0].split("?", 1)[0]
+    t = unicodedata.normalize("NFC", str(target))
+    t = t.split("|", 1)[0].split("#", 1)[0].split("?", 1)[0]
     t = t.strip().split("/")[-1]
     if t.lower().endswith(".md"):
         t = t[:-3]
@@ -107,12 +109,20 @@ def replace_links(db_path: Path, *, vault_id: int, src_note_id: int, body: str,
     dst_note_id is left NULL (resolve() sets it). The DELETE clears prior body
     links AND relations for this note before re-inserting both.
     """
-    edges = list(extract_links(body))
-    if meta:
-        edges.extend(extract_relations(meta))
-    edges.extend(extract_inline_relations(body))
     conn = registry.connect(db_path)
     try:
+        src = conn.execute(
+            "SELECT layer FROM notes WHERE id = ? AND vault_id = ?",
+            (src_note_id, vault_id),
+        ).fetchone()
+        # raw/ is evidence, not a structured wiki graph. Bracket-heavy source
+        # material (transcripts, code, scraped pages) must not create edges.
+        edges = []
+        if src is None or src["layer"] != "raw":
+            edges = list(extract_links(body))
+            if meta:
+                edges.extend(extract_relations(meta))
+            edges.extend(extract_inline_relations(body))
         with conn:
             conn.execute("DELETE FROM links WHERE src_note_id = ?", (src_note_id,))
             for slug, link_type, position in edges:
@@ -131,6 +141,12 @@ def resolve(db_path: Path, vault_id: int) -> None:
     conn = registry.connect(db_path)
     try:
         with conn:
+            # Migration/repair for indexes created before raw link exclusion.
+            conn.execute(
+                "DELETE FROM links WHERE vault_id = ? AND src_note_id IN "
+                "(SELECT id FROM notes WHERE vault_id = ? AND layer = 'raw')",
+                (vault_id, vault_id),
+            )
             relpath_to_ids: dict[str, list[int]] = {}
             alias_to_ids: dict[str, list[int]] = {}
             for row in conn.execute(
@@ -172,7 +188,8 @@ def backlinks(db_path: Path, vault_id: int, relpath: str) -> list[dict]:
         return [dict(r) for r in conn.execute(
             "SELECT n.relpath, n.title, l.dst_slug, l.link_type, l.position FROM links l "
             "JOIN notes n ON n.id = l.src_note_id "
-            "WHERE l.vault_id = ? AND l.dst_note_id = ? ORDER BY n.relpath, l.position",
+            "WHERE l.vault_id = ? AND l.dst_note_id = ? AND n.layer != 'raw' "
+            "ORDER BY n.relpath, l.position",
             (vault_id, target["id"]),
         )]
     finally:
@@ -223,7 +240,7 @@ def broken_links(db_path: Path, vault_id: int) -> list[dict]:
         return [dict(r) for r in conn.execute(
             "SELECT n.relpath AS src_relpath, l.dst_slug, l.link_type, l.position "
             "FROM links l JOIN notes n ON n.id = l.src_note_id "
-            "WHERE l.vault_id = ? AND l.dst_note_id IS NULL "
+            "WHERE l.vault_id = ? AND l.dst_note_id IS NULL AND n.layer != 'raw' "
             "ORDER BY n.relpath, l.position",
             (vault_id,),
         )]
@@ -240,7 +257,7 @@ def graph(db_path: Path, vault_id: int) -> list[dict]:
             "l.link_type, (l.dst_note_id IS NOT NULL) AS resolved FROM links l "
             "JOIN notes s ON s.id = l.src_note_id "
             "LEFT JOIN notes d ON d.id = l.dst_note_id "
-            "WHERE l.vault_id = ? ORDER BY s.relpath, l.position",
+            "WHERE l.vault_id = ? AND s.layer != 'raw' ORDER BY s.relpath, l.position",
             (vault_id,),
         )]
     finally:

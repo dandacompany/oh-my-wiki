@@ -1,3 +1,5 @@
+import unicodedata
+
 from scripts import registry
 
 
@@ -237,6 +239,42 @@ def test_reindex_incremental_repairs_broken_link(tmp_db, tmp_path):
     _write(vroot, "wiki/late.md", "now exists")
     reindex.incremental(tmp_db, vault_id=vid)
     assert links.broken_links(tmp_db, vid) == []
+
+
+def test_nfd_filename_resolves_from_nfc_wikilink_after_full_reindex(tmp_db, tmp_path):
+    registry.init_db(tmp_db)
+    vroot = tmp_path / "unicode-vault"
+    (vroot / "wiki").mkdir(parents=True)
+    row = registry.add_vault(
+        tmp_db, name="unicode", path=str(vroot), type_="markdown", mode="wiki"
+    )
+    vid = row["id"]
+    nfc = "카르파시"
+    nfd = unicodedata.normalize("NFD", nfc)
+    _write(vroot, "wiki/index.md", f"[[{nfc}]]")
+    _write(vroot, f"wiki/{nfd}.md", "target")
+
+    reindex.full(tmp_db, vault_id=vid)
+
+    assert links.broken_links(tmp_db, vid) == []
+    assert len(links.backlinks(tmp_db, vid, f"wiki/{nfd}.md")) == 1
+    assert links.index_drift(tmp_db, vid)["dangling_in_index"] == []
+
+
+def test_raw_bracket_syntax_never_enters_link_graph(tmp_db, tmp_path):
+    registry.init_db(tmp_db)
+    vroot = tmp_path / "raw-vault"
+    (vroot / "raw").mkdir(parents=True)
+    row = registry.add_vault(
+        tmp_db, name="raw", path=str(vroot), type_="markdown", mode="wiki"
+    )
+    vid = row["id"]
+    _write(vroot, "raw/transcript.md", "source syntax [[ghost]] and [x](missing.md)")
+
+    reindex.full(tmp_db, vault_id=vid)
+
+    assert links.broken_links(tmp_db, vid) == []
+    assert links.graph(tmp_db, vid) == []
 
 
 def test_index_drift_reports_missing_and_dangling(tmp_db, tmp_path):

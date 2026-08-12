@@ -1,6 +1,32 @@
 from scripts import query_pipeline
 
 
+def test_context_uses_live_vector_contract_during_model_switch(tmp_path, monkeypatch):
+    configured = {"provider": "fake", "dim": 16}
+    active = object()
+    seen = {}
+    monkeypatch.setattr(query_pipeline.config, "load_config", lambda: {
+        "recall": {"strategy": "embedding", "embedding": configured}
+    })
+    monkeypatch.setattr(
+        query_pipeline.embed,
+        "active_embedder",
+        lambda db_path, cfg: seen.update({"db": db_path, "cfg": cfg}) or active,
+    )
+    monkeypatch.setattr(
+        query_pipeline.search_index,
+        "search_strategy",
+        lambda *args, **kwargs: seen.update({"embedder": kwargs["embedder"]}) or [],
+    )
+    monkeypatch.setattr(query_pipeline.registry, "get_vault_root", lambda *args: tmp_path)
+
+    out = query_pipeline.context(tmp_path / "registry.db", vault_id=1, q="test")
+
+    assert out["hits"] == []
+    assert seen == {"db": tmp_path / "registry.db", "cfg": configured,
+                    "embedder": active}
+
+
 def test_context_assembles_bodies_and_citations(tmp_path, monkeypatch):
     from tests.conftest import make_vault_with_pages
     long_body = "## Summary\n\n" + " ".join(f"forecast{i}" for i in range(50))

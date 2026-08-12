@@ -85,6 +85,34 @@ def test_embedding_recall_also_uses_quality_gate(tmp_path, monkeypatch):
     assert seen["quality_gate"] is True
 
 
+def test_strategy_thresholds_use_each_score_scale(monkeypatch):
+    monkeypatch.setattr(recall, "_hits", lambda *a, **k: [
+        {"title": "Semantic", "relpath": "wiki/semantic.md", "tags": [], "score": 0.52}
+    ])
+    monkeypatch.setattr(recall, "_record_use", lambda *a, **k: None)
+    cfg = {"mode": "auto", "strategy": "embedding", "top_k": 3,
+           "min_score": 9.0}
+    assert "semantic.md" in recall._recall_body(cfg, "semantic retrieval question")
+
+
+def test_strategy_threshold_override_and_unreachable_diagnostic():
+    cfg = {"min_score": 2.0, "min_scores": {"embedding": 1.2, "hybrid": 0.5}}
+    assert recall.score_threshold(cfg, "fts") == 2.0
+    assert recall.score_threshold(cfg, "hybrid") == 0.5
+    assert "unreachable" in recall.threshold_diagnostics(cfg)[0]
+
+
+def test_recall_threshold_overrides_do_not_mutate_later_defaults(monkeypatch):
+    configs = [
+        {"recall": {"min_scores": {"embedding": 0.91}}},
+        {"recall": {}},
+    ]
+    monkeypatch.setattr("scripts.config.load_config", lambda: configs.pop(0))
+
+    assert recall._cfg()["min_scores"]["embedding"] == 0.91
+    assert recall._cfg()["min_scores"]["embedding"] == 0.34
+
+
 def test_preamble_includes_same_project_staged_session(monkeypatch):
     monkeypatch.setattr(recall, "_base_preamble", lambda: "<omw-wiki>active</omw-wiki>")
     monkeypatch.setattr(recall, "_session_context", lambda payload: "<omw-session>resume</omw-session>")

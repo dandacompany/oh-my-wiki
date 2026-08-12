@@ -32,8 +32,10 @@ _IMPLEMENTED_STRATEGIES = {"fts", "embedding", "hybrid", "llm"}
 # min_score=1.0 keeps weak plain-FTS results out of automatic injection. FTS5
 # searches metadata and body text; embedding/hybrid recall additionally applies
 # the evidence-based quality gate in search_index before this final threshold.
+_STRATEGY_MIN_SCORES = {"fts": 1.0, "embedding": 0.34, "hybrid": 0.34}
 _DEFAULTS = {"mode": "auto", "strategy": "fts", "llm_submode": "route",
-             "min_score": 1.0, "top_k": 3, "snippet_chars": 280,
+             "min_score": 1.0, "min_scores": dict(_STRATEGY_MIN_SCORES),
+             "top_k": 3, "snippet_chars": 280,
              "capture": True, "session_capture": True}
 
 
@@ -85,15 +87,53 @@ def _cfg() -> dict:
     except Exception:
         raw = {}
     out = dict(_DEFAULTS)
+    # Keep nested defaults isolated per load. A shallow copy alone would let a
+    # configured threshold mutate _DEFAULTS for every later recall in-process.
+    out["min_scores"] = dict(_DEFAULTS["min_scores"])
     for k in ("mode", "strategy", "min_score", "top_k", "snippet_chars"):
         if k in raw:
             out[k] = raw[k]
+    configured_thresholds = raw.get("min_scores")
+    if isinstance(configured_thresholds, dict):
+        out["min_scores"].update({
+            k: v for k, v in configured_thresholds.items()
+            if k in _STRATEGY_MIN_SCORES
+        })
     llm = raw.get("llm")  # harden: a hand-edited non-dict must not raise here
     out["llm_submode"] = (llm if isinstance(llm, dict) else {}).get("submode", _DEFAULTS["llm_submode"])
     out["capture"] = _as_bool(raw.get("capture", _DEFAULTS["capture"]))
     out["session_capture"] = _as_bool(
         raw.get("session_capture", _DEFAULTS["session_capture"]))
     return out
+
+
+def score_threshold(cfg: dict, strategy: str) -> float:
+    """Return a threshold in the score scale produced by one strategy.
+
+    The legacy scalar ``min_score`` remains the FTS override. Embedding/hybrid
+    scores are normalized 0..1 and use ``min_scores.<strategy>`` instead.
+    """
+    if strategy == "fts":
+        return float(cfg.get("min_score", _STRATEGY_MIN_SCORES["fts"]))
+    values = cfg.get("min_scores") if isinstance(cfg.get("min_scores"), dict) else {}
+    return float(values.get(strategy, _STRATEGY_MIN_SCORES.get(strategy, 0.0)))
+
+
+def threshold_diagnostics(cfg: dict) -> list[str]:
+    """Explain threshold settings that can never accept a normalized score."""
+    warnings = []
+    for strategy in ("embedding", "hybrid"):
+        threshold = score_threshold(cfg, strategy)
+        if threshold > 1.0:
+            warnings.append(
+                f"recall.min_scores.{strategy}={threshold:g} is unreachable; "
+                "normalized scores are at most 1.0"
+            )
+        elif threshold < 0:
+            warnings.append(
+                f"recall.min_scores.{strategy}={threshold:g} is below the 0..1 score range"
+            )
+    return warnings
 
 
 def is_trivial(text: str) -> bool:
@@ -173,7 +213,9 @@ def _hits(text: str, top_k: int) -> list[dict]:
                                       query=normalize_query(text),
                                       limit=top_k, visibility=visibility)
         else:
-            embedder = embed.get_embedder((cfg.get("recall") or {}).get("embedding") or {})
+            embedder = embed.active_embedder(
+                db, (cfg.get("recall") or {}).get("embedding") or {}
+            )
             return search_index.search_strategy(db, vault_id=v["id"],
                                                 q=text, fts_query=normalize_query(text),
                                                 limit=top_k,
@@ -255,7 +297,8 @@ def _recall_body(cfg: dict, text: str) -> str:
         hits = sorted(
             by_path.values(), key=lambda h: float(h.get("score") or 0), reverse=True
         )[:top_k]
-    strong = [h for h in hits if (h.get("score") or 0) >= float(cfg["min_score"])]
+    threshold = score_threshold(cfg, strat)
+    strong = [h for h in hits if (h.get("score") or 0) >= threshold]
     if strong:  # Tier 2 — concrete grounding
         _record_use([h["relpath"] for h in strong])
         lines = [
@@ -696,7 +739,19 @@ _RECALL_VERBS = {
 # Cold starts need more headroom than ordinary tool hooks. Prompt recall may
 # open the search index, while the session preamble and pre-tool nudge are small.
 _RECALL_TIMEOUTS = {"session": 10, "prompt": 15, "pretool": 5}
+_WATCHDOG_TIMEOUTS = {"session": 8, "prompt": 12, "pretool": 4}
 _CAPTURE_SOURCES = {"precompact": "precompact", "turnend": "stop"}
+
+
+def _watched_recall_command(omw: str, verb: str, fmt: str, event: str,
+                            timeout: int) -> str:
+    """Shell-safe internal wrapper with a deadline below the host timeout."""
+    import shlex
+    python = shlex.quote(sys.executable)
+    argv = " ".join(shlex.quote(str(v)) for v in (
+        omw, "recall", verb, "--format", fmt, "--event", event,
+    ))
+    return f"{python} -m scripts.hook_watchdog --timeout {timeout} -- {argv}"
 
 
 def _recall_hook_specs(host: str = "claude") -> dict:
@@ -713,6 +768,9 @@ def _recall_hook_specs(host: str = "claude") -> dict:
         if not event:
             continue
         fmt = hosts.hook_event_fmt(host, abstract)
+        recall_cmd = _watched_recall_command(
+            omw, verb, fmt, event, _WATCHDOG_TIMEOUTS[abstract]
+        )
         # A successful process is insufficient for JSON hooks: an empty body (or
         # unexpected stdout) still makes the host reject the hook. Capture stdout,
         # forward it only when it is a non-empty JSON document, and otherwise emit
@@ -720,14 +778,14 @@ def _recall_hook_specs(host: str = "claude") -> dict:
         # zero exit status when a future CLI argument change makes recall fail.
         if fmt in {"claude-json", "codex-json", "gemini-json"}:
             cmd = (
-                f'out=$("{omw}" recall {verb} --format {fmt} --event {event}); rc=$?; '
+                f'out=$({recall_cmd}); rc=$?; '
                 'if [ "$rc" -eq 0 ] && [ -n "$out" ] '
                 '&& printf \'%s\' "$out" | jq -e . >/dev/null 2>&1; then '
                 'printf \'%s\\n\' "$out"; else printf \'{\"continue\":true}\\n\'; fi'
             )
         else:
             # Plain-output hosts may safely treat an empty result as no injection.
-            cmd = f'"{omw}" recall {verb} --format {fmt} --event {event} || true'
+            cmd = f'{recall_cmd} || true'
         specs[event] = (cmd, status, _RECALL_TIMEOUTS[abstract])
     return specs
 
@@ -743,9 +801,11 @@ def _capture_hook_specs(host: str) -> dict:
         if not event or not source:
             continue
         fmt = hosts.hook_event_fmt(host, abstract)
+        recall_cmd = _watched_recall_command(
+            omw, "capture", fmt, event, 8
+        ) + f" --host {host} --source {source}"
         cmd = (
-            f'out=$("{omw}" recall capture --host {host} --source {source} '
-            f'--format {fmt} --event {event}); rc=$?; '
+            f'out=$({recall_cmd}); rc=$?; '
             'if [ "$rc" -eq 0 ] && [ -n "$out" ] '
             '&& printf \'%s\' "$out" | jq -e . >/dev/null 2>&1; then '
             'printf \'%s\\n\' "$out"; else printf \'{"continue":true}\\n\'; fi'

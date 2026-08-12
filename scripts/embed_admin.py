@@ -3,7 +3,26 @@ reset + reindex), introspect, and register models. Single source of truth shared
 by the `omw embed` CLI op and the setup wizard."""
 from __future__ import annotations
 
-from scripts import config, embed, embed_install, reindex, registry, vector_index
+import copy
+import shutil
+import sqlite3
+import tempfile
+from pathlib import Path
+
+from scripts import config, embed, embed_install, paths, reindex, registry, vector_index
+
+
+def _wiki_count(db_path, vault_id: int) -> int:
+    conn = registry.connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM notes WHERE vault_id=? "
+            "AND relpath LIKE 'wiki/%' AND parse_error=0",
+            (vault_id,),
+        ).fetchone()
+        return int(row["c"]) if row else 0
+    finally:
+        conn.close()
 
 
 def resolve_dim(db_path, model: str) -> int:
@@ -15,65 +34,119 @@ def resolve_dim(db_path, model: str) -> int:
     return len(vec)
 
 
+def _copy_registry(source_path, target_path: Path) -> None:
+    """Take a consistent SQLite snapshot, including committed WAL content."""
+    source = registry.connect(source_path)
+    target = sqlite3.connect(target_path)
+    try:
+        source.backup(target)
+    finally:
+        target.close()
+        source.close()
+
+
+def _rebuild_staged(db_path, embedding_config: dict, *,
+                    before_promote=None, restore_before_promote=None) -> dict:
+    """Rebuild in a disposable DB; expose only a complete vector index."""
+    embedder = embed.get_embedder(embedding_config)
+    if embedder is None:
+        return {"ok": False, "vaults_reindexed": 0,
+                "failures": [{"vault": None,
+                              "detail": "embedding provider is not configured"}]}
+    if not vector_index.available():
+        return {"ok": False, "vaults_reindexed": 0,
+                "failures": [{"vault": None, "detail": "sqlite-vec is not installed"}]}
+
+    with tempfile.TemporaryDirectory(prefix="omw-embed-") as tmp:
+        original = Path(tmp) / "original.db"
+        staged = Path(tmp) / "staged.db"
+        _copy_registry(db_path, original)
+        shutil.copyfile(original, staged)
+        vector_index.reset(staged)
+        vector_index.prepare(staged, embedder=embedder)
+
+        n = 0
+        failures = []
+        for vault in registry.list_vaults(staged):
+            try:
+                stored = reindex.refresh_embeddings(
+                    staged,
+                    vault_id=vault["id"],
+                    relpaths=None,
+                    strict=True,
+                    embedding_config=embedding_config,
+                )
+                expected = _wiki_count(staged, vault["id"])
+                if stored != expected:
+                    raise RuntimeError(
+                        f"no vectors or incomplete vector index: stored {stored} of {expected} "
+                        "indexed wiki pages"
+                    )
+                n += 1
+            except Exception as exc:
+                failures.append({"vault": vault["name"], "detail": str(exc)})
+        if failures:
+            return {"ok": False, "vaults_reindexed": n, "failures": failures}
+
+        try:
+            if before_promote is not None:
+                before_promote()
+            vector_index.replace_from(db_path, staged)
+        except Exception as exc:
+            if restore_before_promote is not None:
+                restore_before_promote()
+            return {"ok": False, "vaults_reindexed": 0,
+                    "failures": [{"vault": None, "detail": str(exc)}]}
+        return {"ok": True, "vaults_reindexed": n, "failures": []}
+
+
 def switch_model(db_path, model: str, *, assume_yes: bool = False,
                  interactive: bool = True) -> dict:
-    if not embed_install.ensure_fastembed(assume_yes=assume_yes, interactive=interactive):
+    if not embed_install.ensure_local_embedding(
+        assume_yes=assume_yes, interactive=interactive
+    ):
         return {"ok": False, "model": model, "dim": None, "vaults_reindexed": 0,
-                "detail": "fastembed not installed"}
+                "detail": "fastembed/sqlite-vec not installed"}
     try:
         dim = resolve_dim(db_path, model)
     except Exception as exc:
         return {"ok": False, "model": model, "dim": None, "vaults_reindexed": 0,
                 "detail": f"could not load model {model!r}: {exc}"}
-    config.set_config("recall.embedding.provider", "fastembed")
-    config.set_config("recall.embedding.model", model)
-    config.set_config("recall.embedding.dim", dim)
-    vector_index.reset(db_path)
-    n = 0
-    failed = False
-    conn = registry.connect(db_path)
-    try:
-        vaults = registry.list_vaults(db_path)
-    finally:
-        conn.close()
-    for v in vaults:
-        try:
-            reindex.refresh_embeddings(db_path, vault_id=v["id"], relpaths=None)
-        except Exception:
-            pass
-        # Check how many wiki notes exist in this vault
-        db_conn = registry.connect(db_path)
-        try:
-            row = db_conn.execute(
-                "SELECT COUNT(*) AS c FROM notes WHERE vault_id=? AND relpath LIKE 'wiki/%' AND parse_error=0",
-                (v["id"],),
-            ).fetchone()
-            wiki_count = int(row["c"]) if row else 0
-        except Exception:
-            wiki_count = 0
-        finally:
-            db_conn.close()
-        vec_count = vector_index.count(db_path, vault_id=v["id"])
-        if wiki_count > 0:
-            if vec_count > 0:
-                n += 1
-            else:
-                failed = True
-    if failed:
+    embedding_config = {"provider": "fastembed", "model": model, "dim": dim}
+    previous = copy.deepcopy(config.load_config())
+    updated = copy.deepcopy(previous)
+    recall_cfg = updated.setdefault("recall", {})
+    prior_embedding = recall_cfg.get("embedding") or {}
+    recall_cfg["embedding"] = {**prior_embedding, **embedding_config}
+    result = _rebuild_staged(
+        db_path,
+        embedding_config,
+        before_promote=lambda: config.save_config(updated),
+        restore_before_promote=lambda: config.save_config(previous),
+    )
+    if not result["ok"]:
+        detail = "; ".join(
+            f"{item['vault'] or 'preflight'}: {item['detail']}"
+            for item in result["failures"]
+        )
         return {
             "ok": False,
             "model": model,
             "dim": dim,
-            "vaults_reindexed": n,
-            "detail": "embedding produced no vectors (model id may be unsupported)",
+            "vaults_reindexed": result["vaults_reindexed"],
+            "detail": detail,
         }
-    return {"ok": True, "model": model, "dim": dim, "vaults_reindexed": n, "detail": None}
+    return {"ok": True, "model": model, "dim": dim,
+            "vaults_reindexed": result["vaults_reindexed"], "detail": None}
 
 
 def add_model(db_path, model: str, *, assume_yes: bool = False,
               interactive: bool = True) -> dict:
-    if not embed_install.ensure_fastembed(assume_yes=assume_yes, interactive=interactive):
-        return {"ok": False, "model": model, "dim": None, "detail": "fastembed not installed"}
+    if not embed_install.ensure_local_embedding(
+        assume_yes=assume_yes, interactive=interactive
+    ):
+        return {"ok": False, "model": model, "dim": None,
+                "detail": "fastembed/sqlite-vec not installed"}
     try:
         dim = resolve_dim(db_path, model)
     except Exception as exc:
@@ -93,17 +166,9 @@ def list_models(db_path) -> dict:
 
 
 def reindex_all(db_path) -> dict:
-    # Recreate vec_notes so schema/runtime changes (notably L2 → cosine) cannot
-    # survive a nominal full reindex.
-    vector_index.reset(db_path)
-    n = 0
-    for v in registry.list_vaults(db_path):
-        try:
-            reindex.refresh_embeddings(db_path, vault_id=v["id"], relpaths=None)
-            n += 1
-        except Exception:
-            pass
-    return {"ok": True, "vaults_reindexed": n}
+    cfg = config.load_config().get("recall") or {}
+    emb_cfg = cfg.get("embedding") or {}
+    return _rebuild_staged(db_path, emb_cfg)
 
 
 def status(db_path) -> dict:
@@ -113,16 +178,33 @@ def status(db_path) -> dict:
     if vector_index.available():
         for v in registry.list_vaults(db_path):
             cnt = vector_index.count(db_path, vault_id=v["id"])
-            vaults.append({"name": v["name"], "embedded": cnt})
+            indexed = _wiki_count(db_path, v["id"])
+            vaults.append({"name": v["name"], "embedded": cnt, "indexed": indexed,
+                           "coverage": round(cnt / indexed, 4) if indexed else 1.0})
     else:
-        vaults = [{"name": v["name"], "embedded": 0} for v in registry.list_vaults(db_path)]
+        vaults = [
+            {"name": v["name"], "embedded": 0,
+             "indexed": _wiki_count(db_path, v["id"]), "coverage": 0.0}
+            for v in registry.list_vaults(db_path)
+        ]
+    from scripts import recall
+    effective_recall_cfg = recall._cfg()
+    index_meta = vector_index.meta(db_path)
     return {
         "provider": emb.get("provider") or "none",
         "model": emb.get("model") or embed.DEFAULT_LOCAL_MODEL,
         "dim": emb.get("dim"),
+        "index_model": (index_meta or {}).get("model"),
+        "index_dim": (index_meta or {}).get("dim"),
         "prefix_scheme": embed.prefix_scheme(embed.get_embedder(emb)),
         "strategy": cfg.get("strategy") or "fts",
         "fastembed_available": embed_install.fastembed_available(),
         "vector_index_available": vector_index.available(),
+        "cache_dir": str(paths.omw_home() / "models" / "fastembed"),
+        "score_thresholds": {
+            strategy: recall.score_threshold(effective_recall_cfg, strategy)
+            for strategy in ("fts", "embedding", "hybrid")
+        },
+        "diagnostics": recall.threshold_diagnostics(effective_recall_cfg),
         "vaults": vaults,
     }

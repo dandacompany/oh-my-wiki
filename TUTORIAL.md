@@ -527,6 +527,14 @@ Insert the link:
 omw links link wiki/concepts/llm-wiki.md --to andrej-karpathy
 ```
 
+After reviewing the full suggestion list, apply it in one process (with one
+final reindex) using:
+
+```bash
+omw links link --from-suggestions
+omw links link --from-suggestions --dry-run
+```
+
 ```json
 {
   "relpath": "wiki/concepts/llm-wiki.md",
@@ -723,6 +731,11 @@ Claude Code and Codex use the full recall and staged-capture flow described abov
 Session capture is independent of `recall.mode` and defaults to on. Turning recall
 off does not silently delete prior captures; use the inspection and dismissal
 commands above when you want to manage them.
+
+FTS and semantic search use different score ranges. `recall.min_score` remains
+the FTS threshold; normalized thresholds live under `recall.min_scores.embedding`
+and `recall.min_scores.hybrid`. `omw embed status` reports the effective values,
+warnings, durable cache directory, and per-vault index coverage.
 
 Two axes you can configure:
 

@@ -70,6 +70,31 @@ def validate(meta: dict, body: str, *, schemas: dict) -> list[dict]:
     return issues
 
 
+def scaffold_required_sections(body: str, spec: dict | None) -> str:
+    """Add missing schema sections once, using optional start/end placement.
+
+    ``section_positions`` is a mapping from the exact heading to ``start`` or
+    ``end``. Unspecified custom sections default to ``end`` for compatibility.
+    """
+    spec = spec or {}
+    positions = spec.get("section_positions") or {}
+    starts: list[str] = []
+    ends: list[str] = []
+    for section in spec.get("required_sections", []):
+        if _has_section(body, section):
+            continue
+        target = starts if positions.get(section) == "start" else ends
+        target.append(section)
+    parts = []
+    if starts:
+        parts.append("\n\n".join(starts))
+    if body.strip():
+        parts.append(body.strip())
+    if ends:
+        parts.append("\n\n".join(ends))
+    return "\n\n".join(parts) + ("\n" if parts else "")
+
+
 def _load_dir(dir_path: Path) -> tuple[dict[str, dict], list[dict]]:
     """Read every *.yml in dir_path; key = filename stem, value = raw dict.
 
@@ -105,12 +130,14 @@ def _resolve(raw: dict[str, dict]) -> dict[str, dict]:
             "required_fields": [],
             "field_types": {},
             "required_sections": [],
+            "section_positions": {},
             "allowed_values": {},
             "valid_relations": [],
         }
         if name != "base" and spec.get("extends") == "base":
             merged["required_fields"] = list(base.get("required_fields", []))
             merged["required_sections"] = list(base.get("required_sections", []))
+            merged["section_positions"] = dict(base.get("section_positions", {}))
             merged["field_types"] = dict(base.get("field_types", {}))
             merged["allowed_values"] = dict(base.get("allowed_values", {}))
             merged["valid_relations"] = list(base.get("valid_relations", []))
@@ -121,6 +148,7 @@ def _resolve(raw: dict[str, dict]) -> dict[str, dict]:
         for s in spec.get("required_sections", []):
             if s not in merged["required_sections"]:
                 merged["required_sections"].append(s)
+        merged["section_positions"].update(spec.get("section_positions", {}))
         merged["field_types"].update(spec.get("field_types", {}))
         merged["allowed_values"].update(spec.get("allowed_values", {}))
         for r in spec.get("valid_relations", []):

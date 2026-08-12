@@ -1,3 +1,5 @@
 extends: base
 required_sections:
   - "## Summary"
+section_positions:
+  "## Summary": start

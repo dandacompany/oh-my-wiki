@@ -29,6 +29,45 @@ def test_init_db_is_idempotent(tmp_db, db_connect):
     assert count == 1
 
 
+def test_init_db_enables_wal_and_reads_do_not_start_migrations(tmp_db, monkeypatch):
+    registry.init_db(tmp_db)
+    conn = registry.connect(tmp_db)
+    try:
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    finally:
+        conn.close()
+
+    monkeypatch.setattr(
+        registry, "_migrate_existing",
+        lambda _conn: pytest.fail("current-schema read must not run migrations"),
+    )
+    conn = registry.connect(tmp_db)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM vaults").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_lock_error_includes_omw_writer_pid(tmp_db):
+    registry.init_db(tmp_db)
+    writer = registry.connect(tmp_db)
+    writer.execute("BEGIN IMMEDIATE")
+    writer.execute(
+        "INSERT INTO vaults(name,path,type,mode,is_active,created_at,last_used) "
+        "VALUES ('held','/tmp/held','markdown','wiki',0,'now','now')"
+    )
+    blocked = registry.connect(tmp_db, busy_timeout_ms=25)
+    try:
+        with pytest.raises(sqlite3.OperationalError, match=r"writer PID \d+"):
+            blocked.execute(
+                "INSERT INTO vaults(name,path,type,mode,is_active,created_at,last_used) "
+                "VALUES ('blocked','/tmp/blocked','markdown','wiki',0,'now','now')"
+            )
+    finally:
+        blocked.close()
+        writer.rollback()
+
+
 def test_add_vault_returns_row(tmp_db, tmp_path):
     registry.init_db(tmp_db)
     vault_dir = tmp_path / "myvault"

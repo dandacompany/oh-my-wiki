@@ -4,6 +4,7 @@ One virtual table per registry DB, partitioned by vault_id. Graceful no-op when
 sqlite-vec is not installed — callers fall back to fts. Cosine via vec0 distance."""
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -62,6 +63,18 @@ def _ensure_table(conn, dim: int) -> None:
     _ensure_meta_table(conn)
 
 
+def _write_meta(conn, embedder) -> None:
+    conn.execute(
+        "INSERT INTO vec_meta(id, model, dim, prefix_scheme, fingerprint, distance_metric) "
+        "VALUES (1, ?, ?, ?, ?, 'cosine')"
+        " ON CONFLICT(id) DO UPDATE SET model=excluded.model, dim=excluded.dim, "
+        "prefix_scheme=excluded.prefix_scheme, fingerprint=excluded.fingerprint, "
+        "distance_metric=excluded.distance_metric",
+        (getattr(embedder, "model", None), embedder.dim,
+         embed.prefix_scheme(embedder), embed.embedding_fingerprint(embedder)),
+    )
+
+
 def _table_uses_cosine(conn) -> bool:
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='vec_notes'"
@@ -82,6 +95,83 @@ def reset(db_path) -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+def prepare(db_path, *, embedder) -> None:
+    """Create an empty, query-compatible vector store for *embedder*."""
+    if not available() or embedder is None:
+        return
+    conn = _connect(db_path)
+    try:
+        _ensure_table(conn, embedder.dim)
+        _write_meta(conn, embedder)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def replace_from(db_path, source_db_path) -> None:
+    """Atomically replace only vector tables from another registry database.
+
+    Non-vector registry data stays live. If copying fails, SQLite rolls the
+    vector-table replacement back, preserving the previous working index.
+    """
+    if not available():
+        raise RuntimeError("sqlite-vec is not installed")
+
+    source = _connect(source_db_path)
+    try:
+        table_row = source.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='vec_notes'"
+        ).fetchone()
+        table_sql = (table_row["sql"] if table_row else "") or ""
+        dim_match = re.search(r"FLOAT\[(\d+)\]", table_sql, re.IGNORECASE)
+        dim = int(dim_match.group(1)) if dim_match else None
+        rows = []
+        if table_row:
+            rows = source.execute(
+                "SELECT relpath, vault_id, embedding FROM vec_notes"
+            ).fetchall()
+        meta = None
+        meta_exists = source.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vec_meta'"
+        ).fetchone()
+        if meta_exists:
+            _ensure_meta_table(source)
+            meta = source.execute(
+                "SELECT model, dim, prefix_scheme, fingerprint, distance_metric "
+                "FROM vec_meta WHERE id=1"
+            ).fetchone()
+            if dim is None and meta is not None:
+                dim = int(meta["dim"])
+    finally:
+        source.close()
+
+    target = _connect(db_path)
+    try:
+        target.execute("BEGIN IMMEDIATE")
+        target.execute("DROP TABLE IF EXISTS vec_notes")
+        target.execute("DROP TABLE IF EXISTS vec_meta")
+        if dim is not None:
+            _ensure_table(target, dim)
+            for row in rows:
+                target.execute(
+                    "INSERT INTO vec_notes(relpath, vault_id, embedding) VALUES (?, ?, ?)",
+                    (row["relpath"], row["vault_id"], row["embedding"]),
+                )
+            if meta is not None:
+                target.execute(
+                    "INSERT INTO vec_meta(id, model, dim, prefix_scheme, fingerprint, "
+                    "distance_metric) VALUES (1, ?, ?, ?, ?, ?)",
+                    (meta["model"], meta["dim"], meta["prefix_scheme"],
+                     meta["fingerprint"], meta["distance_metric"]),
+                )
+        target.commit()
+    except Exception:
+        target.rollback()
+        raise
+    finally:
+        target.close()
 
 
 def upsert(db_path, *, vault_id: int, embedder, rows) -> int:
@@ -105,16 +195,7 @@ def upsert(db_path, *, vault_id: int, embedder, rows) -> int:
                 "INSERT INTO vec_notes(relpath, vault_id, embedding) VALUES (?, ?, ?)",
                 (relpath, vault_id, sqlite_vec.serialize_float32(v)))
         # UPSERT meta row: single row tracks model + dim for the whole store
-        model_val = getattr(embedder, "model", None)
-        scheme = embed.prefix_scheme(embedder)
-        fingerprint = embed.embedding_fingerprint(embedder)
-        conn.execute(
-            "INSERT INTO vec_meta(id, model, dim, prefix_scheme, fingerprint, distance_metric) "
-            "VALUES (1, ?, ?, ?, ?, 'cosine')"
-            " ON CONFLICT(id) DO UPDATE SET model=excluded.model, dim=excluded.dim, "
-            "prefix_scheme=excluded.prefix_scheme, fingerprint=excluded.fingerprint, "
-            "distance_metric=excluded.distance_metric",
-            (model_val, embedder.dim, scheme, fingerprint))
+        _write_meta(conn, embedder)
         conn.commit()
     finally:
         conn.close()

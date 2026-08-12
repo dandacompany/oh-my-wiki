@@ -249,6 +249,15 @@ def _cmd_links(args) -> int:
         rows = entity_link.suggest_links(db, vault_id=vault_id, relpath=args.relpath)
         print(json.dumps(rows, ensure_ascii=False, indent=2))
         return 0
+    if args.from_suggestions:
+        out = entity_link.apply_suggestions(
+            db, vault_id=vault_id, limit=args.limit, dry_run=args.dry_run,
+        )
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        return 1 if out["failed"] else 0
+    if not args.relpath or not args.to:
+        print("error: provide RELPATH and --to, or use --from-suggestions", file=sys.stderr)
+        return 2
     try:
         out = entity_link.apply_link(db, vault_id=vault_id, relpath=args.relpath,
                                      target_slug=args.to)
@@ -1289,8 +1298,8 @@ def _cmd_embed(args) -> int:
         print(json.dumps(embed_admin.list_models(db), ensure_ascii=False, indent=2))
         return 0
     if sub == "install":
-        ok = embed_admin.embed_install.ensure_fastembed(assume_yes=True)
-        print("fastembed ready" if ok else "error: fastembed install failed",
+        ok = embed_admin.embed_install.ensure_local_embedding(assume_yes=True)
+        print("fastembed + sqlite-vec ready" if ok else "error: local embedding install failed",
               file=sys.stderr if not ok else sys.stdout)
         if not ok:
             return 1
@@ -1310,6 +1319,11 @@ def _cmd_embed(args) -> int:
         return 0
     if sub == "reindex":
         out = embed_admin.reindex_all(db)
+        if not out["ok"]:
+            for failure in out.get("failures", []):
+                label = failure.get("vault") or "configuration"
+                print(f"error: {label}: {failure['detail']}", file=sys.stderr)
+            return 1
         print(f"reindexed {out['vaults_reindexed']} vault(s)")
         return 0
     if sub == "use":
@@ -1517,8 +1531,12 @@ def build_parser() -> argparse.ArgumentParser:
     pls.add_argument("--vault", default=None, help="vault name (default: active)")
     pls.set_defaults(func=_cmd_links)
     pll = lsub.add_parser("link", help="Insert [[slug]] at the first unlinked mention.")
-    pll.add_argument("relpath")
-    pll.add_argument("--to", required=True, help="target page slug")
+    pll.add_argument("relpath", nargs="?", default=None)
+    pll.add_argument("--to", default=None, help="target page slug")
+    pll.add_argument("--from-suggestions", action="store_true",
+                     help="apply the current suggestion set in one invocation")
+    pll.add_argument("--limit", type=int, default=None, help="cap batch suggestions")
+    pll.add_argument("--dry-run", action="store_true", help="preview batch changes")
     pll.add_argument("--vault", default=None, help="vault name (default: active)")
     pll.set_defaults(func=_cmd_links)
 

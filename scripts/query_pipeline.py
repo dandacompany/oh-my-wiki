@@ -15,7 +15,9 @@ def context(db_path: Path, *, vault_id: int, q: str, limit: int = 8,
             body_cap: int = 4000) -> dict:
     rc = config.load_config().get("recall") or {}
     strat = recall.effective_strategy(rc.get("strategy", "fts"), quiet=True)
-    embedder = embed.get_embedder(rc.get("embedding") or {}) if strat != "fts" else None
+    embedder = embed.active_embedder(
+        db_path, rc.get("embedding") or {}
+    ) if strat != "fts" else None
     hits = search_index.search_strategy(
         db_path, vault_id=vault_id, q=q, limit=limit, strategy=strat,
         embedder=embedder, visibility=None)

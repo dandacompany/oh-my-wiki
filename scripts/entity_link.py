@@ -80,7 +80,8 @@ def suggest_links(db_path: Path, *, vault_id: int, relpath=None) -> list[dict]:
     return out
 
 
-def apply_link(db_path: Path, *, vault_id: int, relpath: str, target_slug: str) -> dict:
+def apply_link(db_path: Path, *, vault_id: int, relpath: str, target_slug: str,
+               reindex_after: bool = True) -> dict:
     root = registry.get_vault_root(db_path, vault_id)
     abs_path = root / relpath
     if not abs_path.exists():
@@ -101,5 +102,56 @@ def apply_link(db_path: Path, *, vault_id: int, relpath: str, target_slug: str) 
         else f"[[{target_slug}|{mention}]]"
     new_body = body[:match.start("name")] + repl + body[match.end("name"):]
     abs_path.write_text(frontmatter.dump(meta, new_body), encoding="utf-8")
-    reindex.incremental(db_path, vault_id=vault_id)
+    if reindex_after:
+        reindex.incremental(db_path, vault_id=vault_id)
     return {"relpath": relpath, "target_slug": target_slug, "mention": mention, "inserted": repl}
+
+
+def apply_suggestions(db_path: Path, *, vault_id: int, limit: int | None = None,
+                      dry_run: bool = False) -> dict:
+    """Apply the current deterministic suggestion set in one process.
+
+    Pages are re-read before each insertion, then the vault is reindexed once at
+    the end. A repeated invocation sees no remaining suggestions and is a no-op.
+    """
+    suggestions = suggest_links(db_path, vault_id=vault_id)
+    if limit is not None:
+        suggestions = suggestions[:max(0, limit)]
+    if dry_run:
+        return {
+            "dry_run": True,
+            "planned": suggestions,
+            "applied": [],
+            "skipped": [],
+            "failed": [],
+            "counts": {"planned": len(suggestions), "applied": 0,
+                       "skipped": 0, "failed": 0},
+        }
+    applied = []
+    skipped = []
+    failed = []
+    seen = set()
+    for suggestion in suggestions:
+        pair = (suggestion["src_relpath"], suggestion["target_slug"])
+        if pair in seen:
+            skipped.append({**suggestion, "reason": "duplicate suggestion"})
+            continue
+        seen.add(pair)
+        try:
+            applied.append(apply_link(
+                db_path, vault_id=vault_id, relpath=pair[0], target_slug=pair[1],
+                reindex_after=False,
+            ))
+        except ValueError as exc:
+            skipped.append({**suggestion, "reason": str(exc)})
+        except Exception as exc:
+            failed.append({**suggestion, "error": str(exc)})
+    if applied:
+        reindex.incremental(db_path, vault_id=vault_id)
+    return {
+        "dry_run": False,
+        "applied": applied,
+        "skipped": skipped,
+        "failed": failed,
+        "counts": {"applied": len(applied), "skipped": len(skipped), "failed": len(failed)},
+    }

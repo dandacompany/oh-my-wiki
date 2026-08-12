@@ -168,7 +168,7 @@ For paste/md/txt, use `ingest.save_raw` with `ext` = `md` or `txt`. For pdf, use
    "
    ```
 
-8. **Propose entity links.** Run `omw links suggest` (Korean-josa-aware). Show the user the suggested `[[slug]]` insertions for the pages just written and any prior pages that now mention the new entities; on confirmation apply with `omw links link <relpath> --to <slug>`. Never insert silently — keep the graph connected, but each link is a confirmed proposal.
+8. **Propose entity links.** Run `omw links suggest` (Korean-josa-aware). Show the user the suggested `[[slug]]` insertions for the pages just written and any prior pages that now mention the new entities. On confirmation, apply one with `omw links link <relpath> --to <slug>` or the confirmed set with `omw links link --from-suggestions`; the batch form reindexes once at the end. Never insert silently — keep the graph connected, but each applied set is a confirmed proposal.
 
 9. **Report** to the user: raw relpath, summary relpath, list of entity/concept relpaths touched (10-15 page touches per ingest is normal — Karpathy convention).
 

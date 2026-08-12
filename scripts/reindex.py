@@ -30,7 +30,9 @@ def incremental(db_path: Path, *, vault_id: int) -> int:
     return res["indexed"]
 
 
-def refresh_embeddings(db_path: Path, *, vault_id: int, relpaths: list[str] | None = None, strict: bool = False) -> int:
+def refresh_embeddings(db_path: Path, *, vault_id: int,
+                       relpaths: list[str] | None = None, strict: bool = False,
+                       embedding_config: dict | None = None) -> int:
     """Re-embed wiki/ pages for a vault. Best-effort: returns 0 on any error.
 
     When *relpaths* is given, only embed those wiki/ pages (filtered to wiki/-prefixed ones).
@@ -38,11 +40,20 @@ def refresh_embeddings(db_path: Path, *, vault_id: int, relpaths: list[str] | No
     """
     try:
         from scripts import config
-        cfg = config.load_config()
-        emb_cfg = (cfg.get("recall") or {}).get("embedding") or {}
+        if embedding_config is None:
+            cfg = config.load_config()
+            emb_cfg = (cfg.get("recall") or {}).get("embedding") or {}
+        else:
+            emb_cfg = embedding_config
         embedder = embed.get_embedder(emb_cfg)
-        if embedder is None or not vector_index.available():
-            return 0  # unconfigured — silent no-op
+        if embedder is None:
+            if strict:
+                raise RuntimeError("embedding provider is not configured")
+            return 0
+        if not vector_index.available():
+            if strict:
+                raise RuntimeError("sqlite-vec is not installed; run `omw embed install`")
+            return 0
         conn = registry.connect(db_path)
         try:
             if relpaths is not None:

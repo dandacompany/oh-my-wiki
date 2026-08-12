@@ -2,20 +2,175 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 SCHEMA_VERSION = 4
 SCHEMA_SQL_PATH = Path(__file__).parent / "db" / "schema.sql"
+DEFAULT_BUSY_TIMEOUT_MS = 30_000
 
 
-def connect(db_path: Path) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path)
+def _writer_path(db_path: Path) -> Path:
+    return Path(f"{db_path}.writer.json")
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _writer_detail(db_path: Path) -> str:
+    """Best-effort owner hint for an OMW-managed write transaction."""
+    marker = _writer_path(db_path)
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8"))
+        pid = int(data.get("pid") or 0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return "writer PID unavailable"
+    if not _pid_alive(pid):
+        try:
+            marker.unlink()
+        except OSError:
+            pass
+        return f"stale writer PID {pid}"
+    return f"writer PID {pid}"
+
+
+class RegistryConnection(sqlite3.Connection):
+    """Connection that records the current OMW writer for lock diagnostics."""
+
+    _db_path: Path
+    _owns_writer_marker: bool
+
+    def _mark_write(self, sql: str) -> None:
+        first = (sql or "").lstrip().split(None, 1)[0].upper() if (sql or "").strip() else ""
+        if first not in {"INSERT", "UPDATE", "DELETE", "REPLACE", "CREATE", "ALTER", "DROP"}:
+            return
+        if getattr(self, "_owns_writer_marker", False):
+            return
+        marker = _writer_path(self._db_path)
+        try:
+            fd = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            # A live marker belongs to the writer ahead of us. A dead marker is
+            # cleaned by _writer_detail and can be claimed on the next attempt.
+            _writer_detail(self._db_path)
+            return
+        except OSError:
+            return
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                json.dump({"pid": os.getpid(), "started_at": time.time()}, stream)
+            self._owns_writer_marker = True
+        except OSError:
+            pass
+
+    def _clear_writer(self) -> None:
+        if not getattr(self, "_owns_writer_marker", False):
+            return
+        marker = _writer_path(self._db_path)
+        try:
+            data = json.loads(marker.read_text(encoding="utf-8"))
+            if int(data.get("pid") or 0) == os.getpid():
+                marker.unlink(missing_ok=True)
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass
+        self._owns_writer_marker = False
+
+    def _locked(self, exc: sqlite3.OperationalError) -> sqlite3.OperationalError:
+        if "locked" not in str(exc).lower() and "busy" not in str(exc).lower():
+            return exc
+        return sqlite3.OperationalError(f"{exc} ({_writer_detail(self._db_path)})")
+
+    def execute(self, sql, parameters=(), /):
+        self._mark_write(sql)
+        try:
+            return super().execute(sql, parameters)
+        except sqlite3.OperationalError as exc:
+            raise self._locked(exc) from exc
+
+    def executemany(self, sql, seq_of_parameters, /):
+        self._mark_write(sql)
+        try:
+            return super().executemany(sql, seq_of_parameters)
+        except sqlite3.OperationalError as exc:
+            raise self._locked(exc) from exc
+
+    def executescript(self, sql_script, /):
+        self._mark_write(sql_script)
+        try:
+            return super().executescript(sql_script)
+        except sqlite3.OperationalError as exc:
+            raise self._locked(exc) from exc
+
+    def commit(self):
+        try:
+            return super().commit()
+        finally:
+            self._clear_writer()
+
+    def rollback(self):
+        try:
+            return super().rollback()
+        finally:
+            self._clear_writer()
+
+    def close(self):
+        try:
+            return super().close()
+        finally:
+            self._clear_writer()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            return super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self._clear_writer()
+
+
+def connect(db_path: Path, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS) -> sqlite3.Connection:
+    db_path = Path(db_path)
+    conn = sqlite3.connect(
+        db_path,
+        timeout=max(0, busy_timeout_ms) / 1000,
+        factory=RegistryConnection,
+    )
+    conn._db_path = db_path
+    conn._owns_writer_marker = False
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    _migrate_existing(conn)
+    conn.execute(f"PRAGMA busy_timeout = {max(0, int(busy_timeout_ms))}")
+    if _migration_needed(conn):
+        _migrate_existing(conn)
     return conn
+
+
+def _migration_needed(conn: sqlite3.Connection) -> bool:
+    """Cheap read-only check; avoid taking a write lock on every normal read."""
+    names = {
+        r["name"] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+    }
+    if "vaults" in names:
+        vault_cols = {r["name"] for r in conn.execute("PRAGMA table_info(vaults)")}
+        if "archived_at" not in vault_cols or "session_captures" not in names:
+            return True
+    if "notes" in names:
+        note_cols = {r["name"] for r in conn.execute("PRAGMA table_info(notes)")}
+        if not {"visibility", "aliases", "type", "status"}.issubset(note_cols):
+            return True
+    return False
 
 
 def _ensure_vault_columns(conn: sqlite3.Connection) -> None:
@@ -108,6 +263,11 @@ def init_db(db_path: Path) -> None:
     sql = SCHEMA_SQL_PATH.read_text()
     conn = connect(db_path)
     try:
+        # Set once during explicit initialization. Reissuing journal_mode on every
+        # connection can itself wait for a writer and turn a read hook into a write.
+        mode = str(conn.execute("PRAGMA journal_mode").fetchone()[0]).lower()
+        if mode != "wal":
+            conn.execute("PRAGMA journal_mode = WAL")
         conn.executescript(sql)
         _ensure_note_columns(conn)
         _ensure_vault_columns(conn)

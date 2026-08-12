@@ -1,4 +1,6 @@
 # tests/test_entity_link.py
+from pathlib import Path
+
 import pytest
 
 from scripts import entity_link, frontmatter, registry, reindex
@@ -103,3 +105,44 @@ def test_apply_link_errors(tmp_path, monkeypatch):
         entity_link.apply_link(db, vault_id=vid, relpath="wiki/entities/nope.md", target_slug="tdd")
     with pytest.raises(ValueError):
         entity_link.apply_link(db, vault_id=vid, relpath="wiki/entities/tdd.md", target_slug="ghost")
+
+
+def test_batch_applies_current_suggestions_and_rerun_is_idempotent(tmp_path, monkeypatch):
+    db, root, vid = _vault(tmp_path, monkeypatch)
+    _page(root, "alpha.md", "---\ntitle: Alpha\ndate: 2026-01-01\ntype: entity\ntags: []\n---\n## Summary\nx\n")
+    _page(root, "beta.md", "---\ntitle: Beta\ndate: 2026-01-01\ntype: entity\ntags: []\n---\n## Summary\nx\n")
+    _page(root, "source.md", "---\ntitle: Source\ndate: 2026-01-01\ntype: concept\ntags: []\n---\nAlpha meets Beta.\n")
+    reindex.full(db, vault_id=vid)
+
+    first = entity_link.apply_suggestions(db, vault_id=vid)
+    second = entity_link.apply_suggestions(db, vault_id=vid)
+
+    assert first["counts"] == {"applied": 2, "skipped": 0, "failed": 0}
+    assert second["counts"] == {"applied": 0, "skipped": 0, "failed": 0}
+    text = (root / "wiki" / "entities" / "source.md").read_text(encoding="utf-8")
+    assert text.count("[[alpha]]") == 1
+    assert text.count("[[beta]]") == 1
+
+
+def test_batch_handles_one_hundred_suggestions_in_one_process(monkeypatch):
+    suggestions = [
+        {"src_relpath": f"wiki/{i}.md", "target_slug": f"target-{i}"}
+        for i in range(100)
+    ]
+    monkeypatch.setattr(entity_link, "suggest_links", lambda *a, **k: suggestions)
+    applied = []
+    monkeypatch.setattr(
+        entity_link, "apply_link",
+        lambda *a, **k: applied.append((k["relpath"], k["target_slug"])) or {
+            "relpath": k["relpath"], "target_slug": k["target_slug"]
+        },
+    )
+    reindexed = []
+    monkeypatch.setattr(entity_link.reindex, "incremental",
+                        lambda *a, **k: reindexed.append(k["vault_id"]))
+
+    out = entity_link.apply_suggestions(Path("unused"), vault_id=7)
+
+    assert out["counts"] == {"applied": 100, "skipped": 0, "failed": 0}
+    assert len(applied) == 100
+    assert reindexed == [7]
