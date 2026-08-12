@@ -959,11 +959,23 @@ SECTIONS: list[dict] = [
                 "bar": "terminal",
                 "text": "omw setup recall",
                 "callout": "<code>omw setup</code> 마법사의 한 섹션이기도 합니다. 모드를 설정하고, "
-                "호스트 지침 파일에 안내 블록을 주입하며, 네이티브 훅"
-                "(<strong>SessionStart + UserPromptSubmit</strong>)을 연결합니다. 호스트 선택지는 규약 단위로 "
+                "호스트 지침 파일에 안내 블록을 주입하며, 호스트가 지원하는 네이티브 훅을 연결합니다. "
+                "Claude Code·Codex는 <strong>SessionStart · UserPromptSubmit · PreToolUse</strong>로 회상하고 "
+                "<strong>PreCompact · Stop</strong>에서 같은 프로젝트의 최소 세션 맥락을 임시 저장합니다. 호스트 선택지는 규약 단위로 "
                 "묶입니다 — <code>claude</code>(CLAUDE.md) · <code>codex·opencode</code>(AGENTS.md, 한 번만) · "
                 "<code>gemini</code>(GEMINI.md) · <code>hermes</code>(프로필) · <code>openclaw</code>(워크스페이스). "
-                "네이티브 훅은 Claude·Codex·Gemini에만, 나머지는 블록 전용입니다.",
+                "Gemini는 SessionStart·BeforeAgent, Hermes는 pre_llm_call, OpenCode·OpenClaw는 TypeScript recall 플러그인을 사용합니다.",
+            },
+            {
+                "label": "세션 임시 캡처 확인·끄기",
+                "bar": "terminal",
+                "text": "omw recall sessions\n"
+                "omw recall sessions --dismiss <id>\n"
+                "omw setup recall --session-capture off",
+                "callout": "마지막 요청·결과·다룬 파일만 일반적인 비밀값 패턴을 가린 뒤 로컬 registry에 저장합니다. "
+                "불러올 때는 실행 지시가 아닌 이스케이프된 JSON 데이터로 구분합니다. "
+                "같은 프로젝트에 최대 5개, 30일 보관하며 위키 페이지로 자동 승격하지 않습니다. "
+                "Codex에서는 설정 뒤 <code>/hooks</code>에서 새 OMW 사용자 훅을 승인해야 합니다.",
             },
             {
                 "label": "설정 두 축 — recall.mode (언제) · recall.strategy (어떻게)",
@@ -995,9 +1007,8 @@ SECTIONS: list[dict] = [
             {
                 "kind": "note",
                 "text": "<span class='star'>★ recall 품질의 비결</span> — "
-                "recall은 좋은 <strong>title·tags·summary</strong> frontmatter에서 나옵니다. "
-                "FTS는 본문이 아니라 이 메타필드로 순위를 매기기 때문입니다. "
-                "<code>autoresearch</code>는 summary를 자동으로 채워 주므로 recall 정확도를 높여 줍니다.",
+                "recall은 좋은 <strong>title·aliases·tags·summary</strong> frontmatter에서 좋아집니다. "
+                "FTS5는 본문도 검색하며, 품질 게이트는 이름·별칭·태그·요약·제한된 본문 근거와 의미 검색의 일치를 함께 확인합니다.",
             },
             {
                 "label": "위키 연결 탐색 · 유지보수 상태 확인",

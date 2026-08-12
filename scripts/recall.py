@@ -29,11 +29,12 @@ STRATEGIES = ("fts", "embedding", "hybrid", "llm")
 LLM_SUBMODES = ("route", "generative")
 _IMPLEMENTED_STRATEGIES = {"fts", "embedding", "hybrid", "llm"}
 
-# min_score=1.0: the FTS scorer ranks on frontmatter (title/tags/summary/relpath),
-# not body — so ~1.0 means at least one meaningful token hit. Pages with a good
-# `summary` rank higher; bump min_score if recall feels noisy.
+# min_score=1.0 keeps weak plain-FTS results out of automatic injection. FTS5
+# searches metadata and body text; embedding/hybrid recall additionally applies
+# the evidence-based quality gate in search_index before this final threshold.
 _DEFAULTS = {"mode": "auto", "strategy": "fts", "llm_submode": "route",
-             "min_score": 1.0, "top_k": 3, "snippet_chars": 280, "capture": True}
+             "min_score": 1.0, "top_k": 3, "snippet_chars": 280,
+             "capture": True, "session_capture": True}
 
 
 def effective_strategy(strategy: str, *, quiet: bool = False) -> str:
@@ -90,6 +91,8 @@ def _cfg() -> dict:
     llm = raw.get("llm")  # harden: a hand-edited non-dict must not raise here
     out["llm_submode"] = (llm if isinstance(llm, dict) else {}).get("submode", _DEFAULTS["llm_submode"])
     out["capture"] = _as_bool(raw.get("capture", _DEFAULTS["capture"]))
+    out["session_capture"] = _as_bool(
+        raw.get("session_capture", _DEFAULTS["session_capture"]))
     return out
 
 
@@ -207,6 +210,27 @@ def _prompt_from_stdin(raw: str) -> str:
     return raw
 
 
+_FILE_SIGNAL_RE = __import__("re").compile(
+    r"(?i)([A-Za-z0-9_./-]+\.(?:py|ts|tsx|js|jsx|rs|go|rb|java|sh|ya?ml|json|toml|md|sql))")
+_ERROR_SIGNAL_RE = __import__("re").compile(
+    r"(?i)\b([A-Za-z_][A-Za-z0-9_]*(?:Error|Exception)|Traceback|panic|fatal)\b")
+
+
+def _signal_queries(text: str) -> list[str]:
+    """One focused follow-up query for error/file prompts, like mem0's trigger rubric."""
+    signals: list[str] = []
+    signals.extend(_ERROR_SIGNAL_RE.findall(text or ""))
+    for path in _FILE_SIGNAL_RE.findall(text or ""):
+        signals.extend(__import__("re").findall(r"[A-Za-z0-9가-힣_-]+", path))
+    generic = {"src", "scripts", "tests", "test", "py", "ts", "tsx", "js", "md"}
+    focused = []
+    for token in signals:
+        if token.lower() not in generic and token not in focused:
+            focused.append(token)
+    query = " ".join(focused[:6]).strip()
+    return [query] if query and query.lower() != (text or "").strip().lower() else []
+
+
 def _recall_body(cfg: dict, text: str) -> str:
     """The read-side recall output (extracted verbatim from the old prompt()). Empty
     string means 'no recall injection' (mode=off, auto-miss, or no strong hit)."""
@@ -219,7 +243,18 @@ def _recall_body(cfg: dict, text: str) -> str:
     # grounding regardless of mode (mode=off and is_trivial are handled by prompt()). No Python search here.
     if strat == "llm":
         return render_llm_guidance(cfg.get("llm_submode", "route"))
-    hits = _hits(text, int(cfg["top_k"]))
+    top_k = int(cfg["top_k"])
+    hits = _hits(text, top_k)
+    if followups := _signal_queries(text):
+        by_path = {h["relpath"]: h for h in hits}
+        for query in followups[:1]:
+            for hit in _hits(query, top_k):
+                old = by_path.get(hit["relpath"])
+                if old is None or float(hit.get("score") or 0) > float(old.get("score") or 0):
+                    by_path[hit["relpath"]] = hit
+        hits = sorted(
+            by_path.values(), key=lambda h: float(h.get("score") or 0), reverse=True
+        )[:top_k]
     strong = [h for h in hits if (h.get("score") or 0) >= float(cfg["min_score"])]
     if strong:  # Tier 2 — concrete grounding
         _record_use([h["relpath"] for h in strong])
@@ -242,7 +277,54 @@ def _recall_body(cfg: dict, text: str) -> str:
     return ""  # auto + no strong hit → stay silent
 
 
-def prompt(text: str | None) -> str:
+_RESUME_RE = __import__("re").compile(
+    r"(?i)(where (?:did )?(?:we|i) (?:leave|left) off|pick up where|resume (?:from|where)|"
+    r"continue from (?:where|last)|what were we (?:working|doing)|"
+    r"어디까지|이어서 (?:진행|작업|해|구현)|지난 (?:작업|세션)|하던 (?:작업|일)|맥락.*복구)"
+)
+
+
+def _is_resume_prompt(text: str) -> bool:
+    return bool(_RESUME_RE.search(text or ""))
+
+
+def _read_hook_payload() -> dict:
+    import json
+    try:
+        raw = sys.stdin.read() if not sys.stdin.isatty() else ""
+    except (OSError, ValueError):
+        # Library callers and pytest capture may expose a non-readable stdin.
+        raw = ""
+    try:
+        obj = json.loads(raw) if raw.strip().startswith("{") else {}
+        return obj if isinstance(obj, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
+def _session_context(payload: dict | None) -> str:
+    try:
+        from pathlib import Path
+        from scripts import session_capture
+        from scripts.paths import registry_path
+        cfg = _cfg()
+        if not cfg.get("session_capture"):
+            return ""
+        db = registry_path()
+        if not Path(db).exists():
+            return ""
+        payload = payload if isinstance(payload, dict) else {}
+        row = session_capture.latest_context(
+            db,
+            project_root=payload.get("cwd") or str(Path.cwd()),
+            session_id=payload.get("session_id"),
+        )
+        return session_capture.render_context(row)
+    except Exception:
+        return ""
+
+
+def prompt(text: str | None, payload: dict | None = None) -> str:
     """Per-prompt recall + optional capture cue. Returns injectable context (maybe empty).
 
     is_trivial gates BOTH sides. The `capture` toggle (ON by default) is independent of
@@ -255,12 +337,19 @@ def prompt(text: str | None) -> str:
     # reading stdin when recall is fully off (mode=off short-circuited before stdin).
     if cfg["mode"] == "off" and not cfg.get("capture"):
         return ""
+    if payload is None and text is None:
+        payload = _read_hook_payload()
     if text is None:
-        text = _prompt_from_stdin(sys.stdin.read()) if not sys.stdin.isatty() else ""
+        text = _prompt_from_stdin(__import__("json").dumps(payload or {}, ensure_ascii=False))
     text = text or ""
-    if is_trivial(text):
+    resume = _is_resume_prompt(text)
+    if is_trivial(text) and not resume:
         return ""
     body = _recall_body(cfg, text)
+    if resume:
+        session = _session_context(payload)
+        if session:
+            body = f"{body}\n{session}" if body else session
     if not cfg.get("capture"):
         return body
     if not _has_active_vault():
@@ -272,8 +361,8 @@ def prompt(text: str | None) -> str:
     return f"{body}\n{cue}" if body else cue
 
 
-def preamble() -> str:
-    """Session-start context: active vault + recent pages."""
+def _base_preamble() -> str:
+    """Session-start wiki context: active vault + recent pages."""
     from scripts.paths import registry_path
     db = registry_path()
     if not db.exists():
@@ -312,6 +401,14 @@ def preamble() -> str:
         pass
     lines.append("</omw-wiki>")
     return "\n".join(lines)
+
+
+def preamble(payload: dict | None = None) -> str:
+    """Session-start wiki context plus the latest same-project staged session."""
+    if payload is None:
+        payload = _read_hook_payload()
+    parts = [part for part in (_base_preamble(), _session_context(payload)) if part]
+    return "\n".join(parts)
 
 
 def render_llm_guidance(submode: str) -> str:
@@ -406,50 +503,129 @@ def upsert_block(md_path, block: str, marker: str = MARKER) -> None:
 
 
 #: tools whose target we inspect for a raw/ read so we can nudge toward the wiki.
-_READ_TOOLS = {"read", "grep", "glob", "cat", "search"}
+_READ_TOOLS = {
+    "read", "grep", "glob", "cat", "search",
+    # Codex and some Claude-compatible hosts expose shell reads under these names.
+    "bash", "shell", "exec", "exec_command", "functions.exec",
+}
+
+_PRETOOL_INPUT_KEYS = ("path", "file_path", "pattern", "glob", "query", "command", "cmd")
 
 
 def _targets_raw(tool_input: dict) -> bool:
     """True if a read/grep payload points into the vault's raw/ sources."""
-    for key in ("path", "file_path", "pattern", "glob", "query"):
+    for key in _PRETOOL_INPUT_KEYS:
         val = tool_input.get(key)
         if isinstance(val, str) and "raw/" in val:
             return True
     return False
 
 
+def _pretool_path_query(payload: dict) -> str:
+    import re
+    tool_input = payload.get("tool_input") or payload.get("input") or {}
+    if not isinstance(tool_input, dict):
+        return ""
+    values = [tool_input.get(k) for k in _PRETOOL_INPUT_KEYS]
+    text = " ".join(v for v in values if isinstance(v, str))
+    tokens = [t for t in re.findall(r"[A-Za-z0-9가-힣_-]+", text) if
+              t.lower() not in {"raw", "wiki", "src", "scripts", "tests", "test", "md", "py",
+                                "ts", "tsx", "js", "json", "yaml", "yml"}]
+    return " ".join(tokens[-6:])
+
+
+def _pretool_path_hits(payload: dict) -> list[dict]:
+    """Fast FTS-only lookup for a file target; never cold-start an embedder."""
+    query = _pretool_path_query(payload)
+    if not query:
+        return []
+    try:
+        from scripts import search_index
+        from scripts.paths import registry_path
+        db = registry_path()
+        v = _active(db)
+        if not v:
+            return []
+        hits = search_index.query(db, vault_id=v["id"], query=normalize_query(query), limit=3)
+        return [h for h in hits if float(h.get("score") or 0) >= 3.0]
+    except Exception:
+        return []
+
+
 def pretool(payload: dict | None) -> str:
-    """PreToolUse nudge: if the agent is about to read/grep raw/ and a wiki exists,
-    suggest `omw find` first. Best-effort, non-blocking, empty when not applicable."""
+    """Inject relevant wiki pages before file reads, plus the stronger raw/ nudge."""
     try:
         if not isinstance(payload, dict):
             payload = _read_pretool_stdin()
         tool = str(payload.get("tool_name") or payload.get("tool") or "").lower()
         if tool not in _READ_TOOLS:
             return ""
-        if not _targets_raw(payload.get("tool_input") or payload.get("input") or {}):
+        if not _has_active_vault():
             return ""
-        from scripts.paths import registry_path
-        db = registry_path()
-        if not db.exists() or not _active(db):
-            return ""
-        return (
-            f"<{MARKER}> Before reading `raw/` directly, try "
-            f"`omw find \"<key nouns>\"` first; the wiki may already organize the same material "
-            f"and is the primary source of context. </{MARKER}>"
-        )
+        parts = []
+        tool_input = payload.get("tool_input") or payload.get("input") or {}
+        if _targets_raw(tool_input):
+            parts.append(
+                "Before reading `raw/` directly, try `omw find \"<key nouns>\"` first; "
+                "the wiki may already organize the same material and is the primary source of context.")
+        hits = _pretool_path_hits(payload)
+        if hits:
+            lines = ["Related wiki pages for this file operation:"]
+            lines.extend(f"- {h.get('title') or h['relpath']} — `{h['relpath']}`"
+                         for h in hits)
+            lines.append("Use these only when they are genuinely relevant to the operation.")
+            parts.append("\n".join(lines))
+        return f"<{MARKER}> " + "\n".join(parts) + f" </{MARKER}>" if parts else ""
     except Exception:
         return ""
 
 
 def _read_pretool_stdin() -> dict:
+    return _read_hook_payload()
+
+
+def _capture_debug(result: dict) -> dict:
+    """Opt-in reason-only diagnostics; never prints captured session content."""
     import json
-    raw = sys.stdin.read() if not sys.stdin.isatty() else ""
+    import os
+    if os.environ.get("OMW_CAPTURE_DEBUG"):
+        print(json.dumps(result), file=sys.stderr)
+    return result
+
+
+def capture_session(*, host: str, source: str, payload: dict | None = None) -> dict:
+    """Store a bounded local snapshot and never promote it into a vault."""
     try:
-        obj = json.loads(raw) if raw.strip().startswith("{") else {}
-        return obj if isinstance(obj, dict) else {}
-    except (ValueError, TypeError):
-        return {}
+        from scripts import registry, session_capture
+        from scripts.paths import registry_path
+        if not _cfg().get("session_capture"):
+            return _capture_debug({"stored": False, "reason": "disabled"})
+        if payload is None:
+            payload = _read_hook_payload()
+        db = registry_path()
+        registry.init_db(db)
+        return _capture_debug(
+            session_capture.capture(db, payload, host=host, source=source))
+    except Exception:
+        return _capture_debug({"stored": False, "reason": "error"})
+
+
+def session_captures(*, limit: int = 20) -> list[dict]:
+    try:
+        from scripts import session_capture
+        from scripts.paths import registry_path
+        return session_capture.list_captures(registry_path(), limit=limit)
+    except Exception:
+        return []
+
+
+def dismiss_session(capture_id: int) -> bool:
+    try:
+        from scripts import session_capture
+        from scripts.paths import registry_path
+        return session_capture.dismiss(registry_path(), capture_id)
+    except Exception:
+        return False
 
 
 #: Each supported host reads command hooks from this JSON file, all sharing the
@@ -520,6 +696,7 @@ _RECALL_VERBS = {
 # Cold starts need more headroom than ordinary tool hooks. Prompt recall may
 # open the search index, while the session preamble and pre-tool nudge are small.
 _RECALL_TIMEOUTS = {"session": 10, "prompt": 15, "pretool": 5}
+_CAPTURE_SOURCES = {"precompact": "precompact", "turnend": "stop"}
 
 
 def _recall_hook_specs(host: str = "claude") -> dict:
@@ -555,8 +732,31 @@ def _recall_hook_specs(host: str = "claude") -> dict:
     return specs
 
 
+def _capture_hook_specs(host: str) -> dict:
+    """Observation-only lifecycle hooks. They always return a valid JSON no-op."""
+    from scripts import hosts
+    omw = _omw_bin()
+    specs = {}
+    for abstract in hosts.hook_capture_events(host):
+        event = hosts.hook_event(host, abstract)
+        source = _CAPTURE_SOURCES.get(abstract)
+        if not event or not source:
+            continue
+        fmt = hosts.hook_event_fmt(host, abstract)
+        cmd = (
+            f'out=$("{omw}" recall capture --host {host} --source {source} '
+            f'--format {fmt} --event {event}); rc=$?; '
+            'if [ "$rc" -eq 0 ] && [ -n "$out" ] '
+            '&& printf \'%s\' "$out" | jq -e . >/dev/null 2>&1; then '
+            'printf \'%s\\n\' "$out"; else printf \'{"continue":true}\\n\'; fi'
+        )
+        specs[event] = (cmd, "omw local session capture", 10)
+    return specs
+
+
 def _is_omw_recall_cmd(cmd: str) -> bool:
-    return "recall" in cmd and ("preamble" in cmd or "prompt" in cmd or "pretool" in cmd)
+    return "recall" in cmd and any(
+        verb in cmd for verb in ("preamble", "prompt", "pretool", "capture"))
 
 
 def _strip_omw_recall(hooks: dict) -> bool:
@@ -619,7 +819,8 @@ def wire_host(host: str, *, config_path=None) -> tuple[bool, str]:
     hooks = data.setdefault("hooks", {})
     _strip_omw_recall(hooks)  # migration: clear all omw-recall hooks first
     added = []
-    for event, (command, status, timeout) in _recall_hook_specs(host).items():
+    specs = {**_recall_hook_specs(host), **_capture_hook_specs(host)}
+    for event, (command, status, timeout) in specs.items():
         hooks.setdefault(event, []).append(
             {"hooks": [{"type": "command", "command": command,
                         "timeout": timeout, "statusMessage": status}]})
@@ -800,25 +1001,10 @@ def wire_ts_plugin(host: str, *, dest=None, config_path=None,
 
 
 def main(argv=None) -> int:
-    import argparse
-    ap = argparse.ArgumentParser(prog="omw recall")
-    ap.add_argument("action", choices=["preamble", "prompt", "pretool"])
-    ap.add_argument("--text", default=None, help="prompt text (else read stdin)")
-    ap.add_argument("--format", dest="fmt", default="plain",
-                    choices=["plain", "claude-json", "gemini-json", "hermes-json"],
-                    help="stdout shape for the calling host's hook system")
-    ap.add_argument("--event", default="", help="concrete host event name (for json formats)")
-    args = ap.parse_args(argv)
-    if args.action == "preamble":
-        out = preamble()
-    elif args.action == "pretool":
-        out = pretool(None)
-    else:
-        out = prompt(args.text)
-    rendered = _format_output(out or "", args.fmt, args.event)
-    if rendered:
-        print(rendered)
-    return 0
+    """Compatibility entrypoint; the top-level CLI owns the recall argument schema."""
+    from scripts import omw_cli
+    args = list(sys.argv[1:] if argv is None else argv)
+    return omw_cli.main(["recall", *args])
 
 
 if __name__ == "__main__":

@@ -14,21 +14,9 @@ This skill is a **thin alias** for [`oh-my-wiki`](../SKILL.md). It exists so tha
 1. Load `../SKILL.md` (the canonical oh-my-wiki dispatcher) and follow its Step 1 — Read registry state procedure.
 2. From that point on, behave exactly as if `oh-my-wiki` had been invoked. The user sees no difference.
 
-The canonical skill provides:
-
-- Multi-vault sqlite registry (`scripts/wizard.py`, `scripts/registry.py`)
-- memo-mode and wiki-mode dual ops
-- vault subcommands: list / create / use / forget / info / current / rename / move / set / archive / unarchive / delete
-  > `omw vault info <name>` (single-vault JSON card: path/type/mode/active/archived + note counts),
-  > `omw vault current [--json]` (print the active vault's name),
-  > `omw vault rename <old> <new>` (rename the registry label; index preserved),
-  > `omw vault move <name> <new-path>` (relocate the vault folder on disk + update its path),
-  > `omw vault set <name> [--mode M] [--config k=v]` (edit mode/config only; type/path/name are owned by move/rename),
-  > `omw vault archive <name>` / `omw vault unarchive <name>` (hide/restore a vault; `omw vault list --all` shows archived),
-  > `omw vault delete <name>` (soft-delete to trash by default; `--hard --yes` to purge irreversibly),
-- other ops: create / find / open / edit / move / delete / ingest / query / lint
-- embedding: `omw embed status|list|use <model>|add <model>|install|reindex` (manage the local fastembed model; default `intfloat/multilingual-e5-small`; configure via `omw setup recall` or `omw embed use`)
-- v2 in progress (hot cache, autoresearch, writing-agent personas, Obsidian/Logseq viewers, URL fetch + inbox, per-prompt recall)
+The canonical skill owns the complete, current capability list and safety rules.
+Do not repeat that list in this alias: loading `../SKILL.md` prevents this small
+forwarder from going stale when vault, recall, persona, or lifecycle features change.
 
 ## Why this stub exists
 

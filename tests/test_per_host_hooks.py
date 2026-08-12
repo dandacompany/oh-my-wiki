@@ -1,7 +1,7 @@
 """Per-platform hook wiring — each host's event names + stdout inject format differ.
 
 Verified against local Codex 0.144.5 hook behavior (2026-07):
-  claude/codex: SessionStart/UserPromptSubmit/PreToolUse/Stop require JSON stdout.
+  claude/codex: SessionStart/UserPromptSubmit/PreToolUse/lifecycle hooks require JSON stdout.
   gemini:       SessionStart/BeforeAgent/BeforeTool/AfterAgent, JSON-envelope inject.
   hermes:       on_session_start/pre_llm_call/pre_tool_call/post_llm_call (YAML), {"context"}.
 """
@@ -57,18 +57,22 @@ def test_gemini_wire_uses_gemini_event_names_and_json_format(tmp_path):
     assert "recall prompt" in cmd and "gemini-json" in cmd
 
 
-def test_codex_wire_session_prompt_json_no_pretool(tmp_path):
+def test_codex_wire_session_prompt_pretool_and_capture_hooks(tmp_path):
     cfg = tmp_path / "hooks.json"
     recall.wire_host("codex", config_path=cfg)
     data = json.loads(cfg.read_text())
     events = set(data["hooks"])
-    assert {"SessionStart", "UserPromptSubmit"} <= events
-    assert "PreToolUse" not in events  # codex doesn't inject on pre-tool → not wired
+    assert {"SessionStart", "UserPromptSubmit", "PreToolUse", "PreCompact", "Stop"} <= events
     cmd = data["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
     assert "recall prompt" in cmd and "codex-json" in cmd
     assert 'printf \'{\"continue\":true}' in cmd
     assert data["hooks"]["SessionStart"][0]["hooks"][0]["timeout"] == 10
     assert data["hooks"]["UserPromptSubmit"][0]["hooks"][0]["timeout"] == 15
+    assert "recall pretool" in data["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+    assert any("recall capture" in h["command"]
+               for g in data["hooks"]["Stop"] for h in g["hooks"])
+    assert any("recall capture" in h["command"]
+               for g in data["hooks"]["PreCompact"] for h in g["hooks"])
 
 
 def test_claude_wire_session_and_prompt_use_claude_json(tmp_path):
@@ -90,6 +94,21 @@ def test_claude_wires_pretool_as_claude_json(tmp_path):
     cmd = data["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
     assert "recall pretool" in cmd and "claude-json" in cmd
     assert data["hooks"]["PreToolUse"][0]["hooks"][0]["timeout"] == 5
+
+
+def test_claude_wires_local_session_capture_without_replacing_other_stop_hooks(tmp_path):
+    cfg = tmp_path / "settings.json"
+    cfg.write_text(json.dumps({"hooks": {"Stop": [
+        {"hooks": [{"type": "command", "command": "keep-stop.sh"}]},
+    ]}}))
+
+    recall.wire_host("claude", config_path=cfg)
+    data = json.loads(cfg.read_text())
+    stop_cmds = [h["command"] for g in data["hooks"]["Stop"] for h in g["hooks"]]
+
+    assert "keep-stop.sh" in stop_cmds
+    assert sum("recall capture" in cmd for cmd in stop_cmds) == 1
+    assert "PreCompact" in data["hooks"]
 
 
 def test_wire_migrates_stale_wrong_event_hooks(tmp_path):

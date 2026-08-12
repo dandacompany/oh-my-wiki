@@ -796,6 +796,7 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                  profiles: list[str] | None = None,
                  workspaces: list[str] | None = None,
                  normalizer: str | None = None,
+                 session_capture: bool | None = None,
                  dry_run: bool = False) -> int:
     """Configure auto wiki-recall (two axes):
       mode     — trigger: off | advisory | auto
@@ -811,6 +812,8 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
     cur_strat = cur.get("strategy", "fts")
     cur_sub = (cur.get("llm") or {}).get("submode", "route")
     cur_emb = cur.get("embedding") or {}
+    cur_session_capture = recall._as_bool(
+        cur.get("session_capture", recall._DEFAULTS["session_capture"]))
     choices = ["auto", "advisory", "off"]
     interactive = (not noninteractive) and sys.stdin.isatty()
     # Normalize legacy single profile/workspace into the list form.
@@ -828,8 +831,18 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
         _dry(f"set recall.mode={mode}")
     else:
         config.set_config("recall.mode", mode)
+    effective_session_capture = (
+        cur_session_capture if session_capture is None else bool(session_capture))
+    if session_capture is not None:
+        if dry_run:
+            _dry(f"set recall.session_capture={'on' if session_capture else 'off'}")
+        else:
+            config.set_config(
+                "recall.session_capture", "on" if session_capture else "off")
     if mode == "off":
-        print("recall disabled (recall.mode=off). Re-run `omw setup recall` to enable.")
+        print("recall disabled (recall.mode=off). "
+              f"staged session capture is {'on' if effective_session_capture else 'off'}. "
+              "Re-run `omw setup recall` to enable recall.")
         return 0
     # Axis 2 — retrieval strategy (fts/embedding/hybrid deterministic; llm agent-delegated).
     if interactive and strategy is None:
@@ -991,6 +1004,9 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
                 ask_mod.export(base, [host], profile=p, workspace=w)
     print(f"✓ recall mode '{mode}'; guidance injected into "
           f"{', '.join(p.name for p in written) or '(none)'}.")
+    print("  staged session capture: "
+          f"{'on' if effective_session_capture else 'off'} "
+          "(local, same-project only, 30-day retention; no automatic wiki write).")
     # Tier 2: wire each host's NATIVE recall hook, dispatched by its hook mechanism
     # (JSON shell hook / hermes YAML shell hook / TS plugin). Each host's event names +
     # stdout inject format differ — see hosts.HOOK. Scoped hosts wire once per unit
@@ -1003,6 +1019,9 @@ def setup_recall(*, mode: str | None = None, strategy: str | None = None,
             else:
                 changed, detail = recall.wire_host(host)
                 print(f"  {'✓' if changed else '–'} {host} hooks: {detail}")
+                if host == "codex":
+                    print("    Codex에서 `/hooks`를 열어 OMW 훅의 신뢰 상태를 확인하세요. "
+                          "미승인 훅은 설치돼 있어도 실행되지 않습니다.")
         elif mech == "yaml":  # hermes: only pre_llm_call can inject recall
             if dry_run:
                 _dry(f"wire {host} ({p}) yaml recall hook")

@@ -1,18 +1,36 @@
-# 설계 제안: omw 자동 위키 recall 훅 (auto-recall)
+# omw 자동 위키 recall 훅 — 현재 계약과 설계 기록
 
-> 상태: **구현 완료** (엔진 + Tier1 + Tier2 호스트 네이티브 훅 배선 + 매니페스트). 2026-06-18.
-> 구현: `scripts/recall.py`(`omw recall preamble|prompt`, stdin JSON 프롬프트 추출, `wire_host`), `omw setup recall`(Tier1 가이드 주입 + `recall.mode` + Tier2 훅 배선), `hooks/hooks.json`의 `user_prompt_submit`.
-> **세 호스트 모두 동일한 훅 스키마**(`{"hooks": {<Event>: [{"hooks":[{"type":"command","command":...}]}]}}`)를 씀:
+> 상태: **구현 완료** (엔진 + Tier1 + Tier2 + 같은 프로젝트 세션 임시 캡처 + PreTool 회상). 2026-08-12 갱신.
+> 구현: `scripts/recall.py`(`omw recall preamble|prompt|pretool|capture|sessions`, stdin JSON 추출, `wire_host`), `scripts/session_capture.py`, `omw setup recall`(Tier1 가이드 + 검색 모드 + 네이티브 훅 + 캡처 토글).
+> JSON 훅을 쓰는 세 호스트는 같은 큰 틀의 설정 스키마
+> (`{"hooks": {<Event>: [{"hooks":[{"type":"command","command":...}]}]}}`)를 씀:
 >
 > - Claude Code → `~/.claude/settings.json`
 > - Codex → `~/.codex/hooks.json` (JSON stdout required; blank output is invalid)
 > - Gemini CLI → `~/.gemini/settings.json`
->   `wire_host`가 `SessionStart`(→`omw recall preamble`)+`UserPromptSubmit`(→`omw recall prompt`)를 멱등 병합(기존 보존, `.omw-bak` 백업). UserPromptSubmit는 stdin JSON에서 프롬프트 필드를 추출한다.
->   교차호스트 검증 결과: 기존 `hooks/hooks.json`은 어느 호스트에도 자동 배선돼 있지 않았다(plugin.json hooks 필드 없음) — 즉 "Claude 전용"이 아니라 "미배선". recall은 호스트 중립 엔진 + 호스트별 번역으로 설계.
+>   Claude Code·Codex의 `wire_host`는 `SessionStart`·`UserPromptSubmit`·`PreToolUse`와 `PreCompact`·`Stop`을 멱등 병합한다(기존 보존, `.omw-bak` 백업). JSON 훅은 빈 출력 대신 항상 유효한 no-op 객체를 반환한다.
+>   정본은 정적 `hooks/hooks.json`이 아니라 `scripts/hosts.py`의 호스트 계약과
+>   `scripts/recall.py`의 생성·배선 코드다. recall은 호스트 중립 엔진 + 호스트별 번역으로 설계됐다.
 >   목표: 에이전트(Claude Code / Codex)가 **스스로 omw 위키를 검색·활용**하도록 만든다.
 >   트리거 의도: (a) 새/모르는 세션 시작, (b) 사용자가 과거 맥락을 요청, (c) 에이전트가 "정보가 부족하다"고 자가 판단할 때.
 
 ---
+
+## 현재 호스트 계약
+
+| 호스트              | 회상 이벤트                                        | 세션 임시 캡처        | 배선 방식                                 |
+| ------------------- | -------------------------------------------------- | --------------------- | ----------------------------------------- |
+| Claude Code         | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop` | `~/.claude/settings.json`                 |
+| Codex               | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop` | `~/.codex/hooks.json`, `/hooks` 승인 필요 |
+| Gemini CLI          | `SessionStart` · `BeforeAgent`                     | 없음                  | `~/.gemini/settings.json`                 |
+| Hermes              | `pre_llm_call`                                     | 없음                  | 선택한 프로필의 YAML 훅                   |
+| OpenCode · OpenClaw | 호스트별 recall 플러그인                           | 없음                  | TypeScript 플러그인                       |
+
+아래 1~~9절은 2026-06의 초기 제안과 의사결정 과정을 보존한 기록이다. 현재 동작을
+설명하는 정본으로 사용하지 않는다. 현재 설정·검색·캡처 계약은 위 표와 10~~12절을 따른다.
+
+<details>
+<summary>초기 설계 기록 보기 (1~9절)</summary>
 
 ## 1. 배경 — 지금 있는 것과 없는 것
 
@@ -128,6 +146,8 @@ recall:
 - [ ] `omw setup recall` 섹션(모드 선택) + `omw setup agents`가 AGENTS.md에 recall 가이드 블록 주입.
 - [ ] 문서: SKILL.md / README에 recall 동작 설명.
 
+</details>
+
 ---
 
 ## 10. 설정 가능한 검색 전략 (구현 완료 — 갱신 2026-06-21)
@@ -220,3 +240,23 @@ recall이 지식을 **읽어 오는** 축이라면, 이 큐는 지식을 **넣�
   확인 클래스로 연결 — **바로 넣지 않고 "넣을까요?"라고 확인**.
 - recall 읽기 축은 이미 mem0식이다: `advisory`+`llm`이 매 프롬프트 에이전트 위임 가이드를 낸다.
   `omw setup recall`의 mem0 프리셋은 `mode=advisory, strategy=llm, capture=on`을 한 번에 켠다.
+
+## 12. 세션 임시 캡처 + PreTool 회상 (2026-08-12)
+
+- Claude Code·Codex의 `PreCompact`·`Stop`에서 마지막 사용자 요청, 마지막 에이전트 결과,
+  다룬 파일 목록만 `session_captures`에 저장한다.
+- API 키·토큰·비밀번호·Bearer 값은 저장 전에 가린다. 입력은 뒤쪽 512KB만 읽고,
+  사용자 2,000자·에이전트 4,000자·파일 20개로 제한한다.
+- 다시 불러올 때는 캡처 내용을 이스케이프된 단일 JSON 데이터로 감싸고, 과거 문장 안의
+  지시는 따르지 말라는 신뢰 경계를 명시한다. 태그·Markdown 줄바꿈으로 프레임을 벗어나지 못한다.
+- 프로젝트 루트가 같은 캡처만 `SessionStart`와 명시적 재개 프롬프트에 주입한다.
+  현재 세션 자체와 서브에이전트 캡처는 제외한다.
+- 프로젝트당 최대 5개, 보존 기간 30일이다. `omw recall sessions`로 확인하고
+  `--dismiss <id>`로 숨길 수 있다.
+- 캡처는 로컬 임시 맥락일 뿐이며, 자동으로 위키 페이지를 만들지 않는다.
+- `PreToolUse`는 Claude의 `Read`/`Grep`뿐 아니라 Codex의 `exec_command`/`cmd`도 해석한다.
+  파일명 기반 FTS 점수가 충분할 때만 관련 페이지를 주입하고, `raw/` 접근에는 wiki-first
+  안내를 함께 낸다.
+- `omw setup recall --session-capture on|off`로 독립 제어한다. 기본값은 `on`이다.
+- Codex 사용자 훅은 설치 또는 명령 변경 뒤 `/hooks` 신뢰 검토가 필요하다. setup은 보안 경계를
+  우회하거나 자동 승인하지 않고, 새 훅을 썼을 때 승인 안내를 출력한다.

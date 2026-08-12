@@ -676,8 +676,30 @@ omw setup recall
 ```
 
 This sets a mode, writes a short guidance block into your host instruction files,
-and wires each host's native hooks (`SessionStart` + `UserPromptSubmit`).
-omw is host-neutral here: one engine, translated into each host's hook format.
+and wires each host's native hooks. On Claude Code and Codex, OMW recalls through
+`SessionStart`, `UserPromptSubmit`, and `PreToolUse`, then stages the minimum useful
+context at `PreCompact` and `Stop` for the next session. omw is host-neutral here:
+one engine, translated into each host's hook format.
+
+The staged session capture is not a wiki page. OMW redacts secrets and stores only
+the last request, result, and touched files in the local registry, scoped to the
+same project (at most five captures, retained for 30 days). A new session or a
+resume prompt such as "pick up where we left off" receives that context. OMW never
+promotes it into a vault automatically.
+
+```
+omw recall sessions                         # inspect staged captures
+omw recall sessions --dismiss <id>          # hide a consumed capture
+omw setup recall --session-capture off      # disable staged capture
+```
+
+Codex requires trust review when a user hook is first installed or its command
+changes. After setup, open `/hooks` in Codex and approve the new OMW entries;
+until then they are present but will not run.
+
+`PreToolUse` also looks for wiki pages related to a file just before the agent
+reads it. When the target is under `raw/`, it nudges the agent to check whether
+the compiled wiki already organizes the same source.
 
 Host choices group by **instruction file (convention)** — `claude` (CLAUDE.md) ·
 `codex·opencode` (AGENTS.md, written once) · `gemini` (GEMINI.md) · `hermes`
@@ -687,8 +709,20 @@ profile / workspace pickers are **multi-select** (check as many as you want; the
 active profile / default workspace is pre-checked) — the guidance block + native
 hook are written into every selected target. Set them non-interactively with
 `--profile` / `--workspace`, **comma-separated for multiple**
-(e.g. `--profile iris,mark`). Native hooks are wired for Claude Code, Codex, and
-Gemini only; OpenCode, Hermes, and OpenClaw get the guidance block only.
+(e.g. `--profile iris,mark`). The exact native-hook coverage depends on each host;
+Claude Code and Codex use the full recall and staged-capture flow described above.
+
+| Host                | Native recall coverage                             | Staged session capture                      |
+| ------------------- | -------------------------------------------------- | ------------------------------------------- |
+| Claude Code         | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop`                       |
+| Codex               | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop` — approve in `/hooks` |
+| Gemini CLI          | `SessionStart` · `BeforeAgent`                     | Not enabled                                 |
+| Hermes              | `pre_llm_call` for each selected profile           | Not enabled                                 |
+| OpenCode · OpenClaw | Host-specific TypeScript recall plugin             | Not enabled                                 |
+
+Session capture is independent of `recall.mode` and defaults to on. Turning recall
+off does not silently delete prior captures; use the inspection and dismissal
+commands above when you want to manage them.
 
 Two axes you can configure:
 
@@ -725,15 +759,19 @@ and Prophet for demand forecasting") and the agent receives:
 
 so its answer cites your own vetted, sourced page instead of guessing.
 
-> Recall quality rides on good `title` / `tags` / `summary` frontmatter — the FTS
-> index ranks on those, not full body text. `autoresearch` fills `summary`
-> automatically; add tags to important pages to make them easy to surface.
+> Recall quality benefits from good `title` / `aliases` / `tags` / `summary`
+> frontmatter. FTS5 also searches page bodies, and hybrid/embedding recall applies a
+> conservative quality gate that checks exact names, aliases, tags, summaries,
+> bounded body evidence, and semantic agreement before injecting a result.
 
 ---
 
 ## Part 5 — Reference
 
-### CLI subcommands
+### Selected CLI subcommands
+
+This table highlights common commands. Run `omw help` for the complete,
+lifecycle-grouped list generated from the operation registry.
 
 | Subcommand        | Surface | One-line description                                                                                                                                                                                                                                                                                                                   |
 | ----------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -764,6 +802,7 @@ so its answer cites your own vetted, sourced page instead of guessing.
 | `omw export`      | CLI     | Export a vault slice to a self-contained Markdown dir (or `--zip`) + `EXPORT_MANIFEST.md`; writes only outside the vault                                                                                                                                                                                                               |
 | `omw merge`       | CLI     | Consolidate two near-duplicate pages into one (frontmatter union + `## Merged from` body + winner `aliases` + source tombstone); staged as `.proposed.md` → `--apply`                                                                                                                                                                  |
 | `omw next`        | CLI     | Recommend the next lifecycle action; `--after <op>` returns the state-endorsed next op after a pipeline op (deterministic; safe default = stop)                                                                                                                                                                                        |
+| `omw recall`      | CLI     | Agent-hook recall: `preamble` · `prompt` · `pretool` · `capture` · `sessions`; `sessions --dismiss <id>` hides staged context and `omw setup recall --session-capture on/off` controls future capture                                                                                                                                  |
 
 Reasoning-ops (`ingest`, `query`, `summary`, `synthesis`, `find`, `edit`,
 `autoresearch`, personas) require a Claude / Codex / Gemini session — invoke them by
@@ -1026,24 +1065,31 @@ cp ~/.omw/vaults/legacy/.trash/20260601-pre-import-meeting-notes.md \
 To roll back the entire batch, restore every file with the same timestamp
 prefix at once.
 
-### Q. How does the hot cache / session continuity work?
+### Q. How does staged session continuity work?
 
-Each session, oh-my-wiki reads a small `hot.md` cache file at session start
-and refreshes it at session end so you don't have to recap context across
-sessions:
+On Claude Code and Codex, `PreCompact` and `Stop` stage the last request, last
+result, and touched files in the local `~/.omw/registry.db`. A later
+`SessionStart` or an explicit resume prompt receives only the newest pending
+capture from the same project.
 
-- wiki-mode vaults: `<vault>/wiki/hot.md`
-- memo-mode and other modes: `<vault>/hot.md`
+- Common secret patterns are redacted before storage.
+- Recalled text is escaped and framed as untrusted JSON data, not executable instructions.
+- Text and transcript reads are bounded; at most five captures are kept per
+  project for 30 days.
+- Captures never become wiki pages automatically.
+- `omw recall sessions` lists them; `--dismiss <id>` prevents one from being
+  recalled again; `omw setup recall --session-capture off` disables future
+  capture.
 
-Cap: 2000 characters. Manual refresh: `python3 -m scripts.hot_cache --refresh`.
-Manual inspect: `python3 -m scripts.hot_cache --on-session-start`.
+The old `hot.md` utility is not the native session-continuity path and is not
+wired by `omw setup recall`.
 
 ---
 
 ## More
 
 - **Command reference**: `commands/*.md` covers every op.
-- **Script API**: `scripts/*.py` is callable from Python; a subset is also exposed as CLI subcommands.
+- **Command interface**: use `omw help` and `omw <command> --help`; `scripts/*.py` is internal implementation, not the user interface.
 - **Design docs**: `docs/superpowers/specs/` (local-only, not published — for contributors).
 - **Tests**: `pytest -v` runs the full test suite.
 

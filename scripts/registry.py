@@ -6,7 +6,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 SCHEMA_SQL_PATH = Path(__file__).parent / "db" / "schema.sql"
 
 
@@ -59,6 +59,32 @@ def _ensure_note_columns(conn: sqlite3.Connection) -> None:
         _add("ALTER TABLE notes ADD COLUMN status TEXT")
 
 
+def _ensure_session_capture_table(conn: sqlite3.Connection) -> None:
+    """Create the local staged-session table for databases made before v4."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS session_captures (
+          id             INTEGER PRIMARY KEY,
+          vault_id       INTEGER REFERENCES vaults(id) ON DELETE SET NULL,
+          project_root   TEXT NOT NULL,
+          host           TEXT NOT NULL,
+          session_id     TEXT NOT NULL,
+          source         TEXT NOT NULL CHECK (source IN ('stop', 'precompact')),
+          captured_at    TEXT NOT NULL,
+          content_hash   TEXT NOT NULL,
+          last_user      TEXT,
+          last_assistant TEXT,
+          files          TEXT NOT NULL DEFAULT '[]',
+          status         TEXT NOT NULL DEFAULT 'pending'
+                           CHECK (status IN ('pending', 'dismissed')),
+          UNIQUE(host, session_id, source, content_hash)
+        );
+        CREATE INDEX IF NOT EXISTS idx_session_captures_project
+          ON session_captures(project_root, status, id DESC);
+        """
+    )
+
+
 def _migrate_existing(conn: sqlite3.Connection) -> None:
     """Apply idempotent column migrations to tables that already exist, so every
     connection self-heals a DB created by an older schema version (read paths like
@@ -70,6 +96,8 @@ def _migrate_existing(conn: sqlite3.Connection) -> None:
         _ensure_vault_columns(conn)
     if "notes" in names:
         _ensure_note_columns(conn)
+    if "vaults" in names:
+        _ensure_session_capture_table(conn)
     conn.commit()
 
 
@@ -83,6 +111,7 @@ def init_db(db_path: Path) -> None:
         conn.executescript(sql)
         _ensure_note_columns(conn)
         _ensure_vault_columns(conn)
+        _ensure_session_capture_table(conn)
         existing = conn.execute(
             "SELECT 1 FROM schema_migrations WHERE version = ?",
             (SCHEMA_VERSION,),

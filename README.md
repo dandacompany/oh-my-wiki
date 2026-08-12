@@ -24,6 +24,9 @@ oh-my-wiki exposes exactly two surfaces. The **`omw` CLI** handles deterministic
 - **Entity-linking** — `omw links suggest` / `omw links link` auto-inserts `[[slug|Name]]` references
 - **Inline fields** — `omw fields` reads `key::` inline syntax alongside frontmatter
 - **Korean matching** — Korean entity names with josa (`카르파시가`) are suggested and linked correctly
+- **High-precision recall** — `omw setup recall` combines FTS5, optional local embeddings, Korean normalization, exact-name evidence, bounded body evidence, and conservative relevance filtering before injecting wiki context
+- **Cross-session continuity** — Claude Code and Codex recall at `SessionStart`, `UserPromptSubmit`, and `PreToolUse`, then stage a small same-project snapshot at `PreCompact` and `Stop`; common secret patterns are redacted and nothing is promoted into a vault automatically
+- **Local embeddings** — `omw embed status/list/use/add/install/reindex` manages the local FastEmbed model used by embedding and hybrid recall
 - **Note viewers** — `omw view` opens the active vault, a page, or a search in Obsidian or Logseq (URI schemes, no plugin needed); `omw setup viewer` scaffolds the viewer config
 - **Visibility (secure-by-default)** — `omw visibility get/set` marks pages `public`/`private`; `omw serve` exposes only public pages
 - **URL inbox + fetch** — `omw fetch <url>` saves a web page or YouTube transcript to `raw/` (tiered urllib → chromium → cloud, SSRF-guarded); `omw inbox add/list/run/remove` queues URLs for batch fetch
@@ -98,7 +101,9 @@ registry:   /Users/you/.omw/registry.db  ok
 omw setup
 ```
 
-Follow the prompts to configure your first vault, search provider, and persona preferences. Accept the defaults for a fast start.
+Follow the prompts to configure your first vault, search provider, persona preferences,
+and recall hooks. Accept the defaults for a fast start. On Codex, open `/hooks` after
+setup and approve the new OMW user hooks; installed but untrusted hooks do not run.
 
 **Step 2 — Check status**
 
@@ -193,10 +198,13 @@ omw lint
 ```
 SKILL.md dispatcher → commands/<op>.md (LLM procedure) → scripts/<op>.py (deterministic I/O)
                                                        └─ registry.py → ~/.omw/registry.db (sqlite)
+                                                       └─ recall/session capture → registry.db
                                                        └─ adapters.py → filesystem (markdown / obsidian)
 ```
 
-The 18 CLI subcommands:
+Selected top-level commands are shown below. Run `omw help` for the authoritative,
+lifecycle-grouped list; it is generated from the same operation registry used by the
+agent integrations, so it does not drift when commands are added.
 
 | Subcommand   | Purpose                                                                                              |
 | ------------ | ---------------------------------------------------------------------------------------------------- |
@@ -204,6 +212,9 @@ The 18 CLI subcommands:
 | `vault`      | Create, list, use, forget vaults                                                                     |
 | `lint`       | Structural health check (frontmatter + links)                                                        |
 | `search`     | Web search via the configured external provider (brave/tavily/exa/…)                                 |
+| `find`       | Deterministic full-text search over the active vault                                                 |
+| `context`    | Retrieve cited hits with page bodies and citations as JSON                                           |
+| `embed`      | Manage the local embedding model and its index                                                       |
 | `serve`      | Local retrieve-only HTTP query API (port 8765) — public pages only                                   |
 | `view`       | Open the vault / a page / a search in Obsidian or Logseq                                             |
 | `visibility` | Get / set a page's public/private visibility (`get` / `set`)                                         |
@@ -215,6 +226,7 @@ The 18 CLI subcommands:
 | `import`     | Import an existing folder as a vault                                                                 |
 | `fetch`      | Fetch one URL (web page / YouTube transcript) into `raw/`                                            |
 | `inbox`      | Queue URLs and batch-fetch them into `raw/` (add/list/run/remove)                                    |
+| `recall`     | Wiki recall and staged-session inspection for agent hooks                                            |
 | `next`       | Recommend the next lifecycle action; `--after <op>` gives the state-endorsed next op (deterministic) |
 | `setup`      | Interactive setup wizard                                                                             |
 | `doctor`     | Verify install health                                                                                |
@@ -272,6 +284,8 @@ shortcuts that skip the "which op?" step.
 - The vault registry lives at `~/.omw/registry.db` (override with `OMW_HOME`) as a per-user sqlite database.
 - The note index is regenerated by `scripts/reindex.py` after every mutation.
 - Your files stay in the vault path you chose. oh-my-wiki never touches them outside the op you explicitly invoked.
+- When staged session capture is enabled (the default), Claude Code and Codex hooks store only the last request, last result, and up to 20 touched file paths in `session_captures` inside the local registry. OMW reads at most the trailing 512 KB of a transcript, caps text at 2,000/4,000 characters, redacts common API-key/token/password/Bearer patterns, keeps at most five captures per project for 30 days, and recalls only the same project. Recalled capture text is framed as escaped, untrusted JSON data so an old message cannot break the session marker. This is local resume context, not a wiki page.
+- Inspect staged captures with `omw recall sessions`, hide one from future recall with `omw recall sessions --dismiss <id>`, or disable future capture with `omw setup recall --session-capture off`. Dismissal hides a row; automatic retention removes old rows.
 
 ---
 

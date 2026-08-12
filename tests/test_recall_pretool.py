@@ -30,3 +30,24 @@ def test_pretool_silent_on_unrelated_tool(monkeypatch):
     out = recall.pretool({"tool_name": "Bash",
                           "tool_input": {"command": "ls"}})
     assert out == ""
+
+
+def test_pretool_supports_codex_exec_command(monkeypatch):
+    _has_active(monkeypatch, True)
+    monkeypatch.setattr(recall, "_pretool_path_hits", lambda payload: [{
+        "relpath": "wiki/recall-hooks.md", "title": "Recall hooks", "score": 8.0}])
+    out = recall.pretool({
+        "tool_name": "exec_command",
+        "tool_input": {"cmd": "sed -n '1,80p' scripts/recall.py"},
+    })
+    assert "Related wiki pages" in out and "wiki/recall-hooks.md" in out
+
+
+def test_pretool_codex_command_detects_raw(monkeypatch):
+    _has_active(monkeypatch, True)
+    monkeypatch.setattr(recall, "_pretool_path_hits", lambda payload: [])
+    out = recall.pretool({
+        "tool_name": "exec_command",
+        "tool_input": {"cmd": "rg hook raw/claude-code.md"},
+    })
+    assert "omw find" in out

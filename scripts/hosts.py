@@ -36,29 +36,31 @@ _CONV_ORDER = ["claude", "agents", "gemini", "hermes", "openclaw"]
 #   session  → inject preamble at session start
 #   prompt   → recall on the user's prompt (the primary injection point)
 #   pretool  → nudge before a tool reads raw/
-#   turnend  → maintenance gate at turn end (a control hook, no injection)
+#   precompact → stage local session state before context compaction
+#   turnend    → stage local session state / run the maintenance gate
 # `mech` selects the writer; `fmt` selects the stdout shape `omw recall` must emit:
 #   plain        → bare text (only hosts that explicitly allow it)
 #   claude-json  → Claude Code's hookSpecificOutput envelope
 #   codex-json   → Codex's compatible hookSpecificOutput envelope
 #   gemini-json  → {"hookSpecificOutput": {"hookEventName", "additionalContext"}}
 #   hermes-json  → {"context": "..."}
-# `recall` lists the abstract events omw auto-wires for context injection on each host —
-# ONLY events whose stdout actually reaches the model (verified per docs). E.g. codex/gemini
-# do NOT inject on pre-tool, so `pretool` is omitted there (it would be a silent no-op). gate
-# (turn-end) is handled separately and stays Claude-only — no other host injects at turn-end.
+# `recall` lists context-injection events. `capture` lists observation events that only
+# write a bounded local staged snapshot and return a JSON no-op.  Codex 0.147 exposes
+# PreToolUse as a stable hook and represents hook context as model-visible HookPrompt items.
 HOOK: dict[str, dict] = {
     "claude": {
         "mech": "json", "fmt": "claude-json", "path": "~/.claude/settings.json",
         "events": {"session": "SessionStart", "prompt": "UserPromptSubmit",
-                   "pretool": "PreToolUse", "turnend": "Stop"},
+                   "pretool": "PreToolUse", "precompact": "PreCompact", "turnend": "Stop"},
         "recall": ["session", "prompt", "pretool"],
+        "capture": ["precompact", "turnend"],
     },
     "codex": {
         "mech": "json", "fmt": "codex-json", "path": "~/.codex/hooks.json",
         "events": {"session": "SessionStart", "prompt": "UserPromptSubmit",
-                   "pretool": "PreToolUse", "turnend": "Stop"},
-        "recall": ["session", "prompt"],  # Codex injects only on Session/Prompt
+                   "pretool": "PreToolUse", "precompact": "PreCompact", "turnend": "Stop"},
+        "recall": ["session", "prompt", "pretool"],
+        "capture": ["precompact", "turnend"],
     },
     "gemini": {
         "mech": "json", "fmt": "gemini-json", "path": "~/.gemini/settings.json",
@@ -84,6 +86,10 @@ _HOOK_FMT_OVERRIDE = {("claude", "pretool"): "claude-json"}
 
 def hook_recall_events(host: str) -> list[str]:
     return list((HOOK.get(host) or {}).get("recall") or [])
+
+
+def hook_capture_events(host: str) -> list[str]:
+    return list((HOOK.get(host) or {}).get("capture") or [])
 
 
 def hook_event_fmt(host: str, abstract: str) -> str:

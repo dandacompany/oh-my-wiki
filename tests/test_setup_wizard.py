@@ -465,6 +465,29 @@ def test_setup_recall_llm_persists_submode(tmp_path):
     assert cfg["strategy"] == "llm" and cfg["llm"]["submode"] == "generative"
 
 
+def test_setup_recall_persists_session_capture_toggle(tmp_path):
+    from scripts import setup_wizard, config
+    rc = setup_wizard.setup_recall(
+        mode="auto", strategy="fts", hosts=[], base_dir=str(tmp_path),
+        noninteractive=True, session_capture=False)
+    assert rc == 0
+    assert config.load_config()["recall"]["session_capture"] == "off"
+
+
+def test_setup_recall_discloses_codex_hook_trust_even_when_already_wired(
+        tmp_path, monkeypatch, capsys):
+    from scripts import recall, setup_wizard
+    monkeypatch.setattr(recall, "wire_host", lambda host: (False, "already wired"))
+
+    rc = setup_wizard.setup_recall(
+        mode="auto", strategy="fts", hosts=["codex"], base_dir=str(tmp_path),
+        noninteractive=True)
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "`/hooks`" in out and "미승인 훅" in out
+
+
 def _wsl_prompt_router(answers, calls):
     """Build a fake _prompt that answers by message prefix and records calls."""
     def fake(kind, message, **kw):

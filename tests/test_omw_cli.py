@@ -570,6 +570,28 @@ def test_cli_recall_pretool_accepts_hook_format_flags(monkeypatch, capsys):
     assert out["hookSpecificOutput"]["additionalContext"] == "ctx"
 
 
+def test_cli_recall_capture_stores_and_always_emits_json_noop(monkeypatch, capsys):
+    from scripts import omw_cli
+    seen = {}
+    monkeypatch.setattr("scripts.recall.capture_session", lambda **kwargs: seen.update(kwargs) or {"stored": True})
+    rc = omw_cli.main(["recall", "capture", "--format", "codex-json",
+                       "--event", "Stop", "--source", "stop", "--host", "codex"])
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out) == {"continue": True}
+    assert seen["host"] == "codex" and seen["source"] == "stop"
+
+
+def test_cli_recall_sessions_lists_and_dismisses(monkeypatch, capsys):
+    from scripts import omw_cli
+    monkeypatch.setattr("scripts.recall.session_captures", lambda limit=20: [{"id": 7}])
+    monkeypatch.setattr("scripts.recall.dismiss_session", lambda capture_id: capture_id == 7)
+
+    assert omw_cli.main(["recall", "sessions", "--limit", "3"]) == 0
+    assert json.loads(capsys.readouterr().out) == [{"id": 7}]
+    assert omw_cli.main(["recall", "sessions", "--dismiss", "7"]) == 0
+    assert json.loads(capsys.readouterr().out) == {"dismissed": 7}
+
+
 def test_require_vault_row_consistent_errors(tmp_path, monkeypatch, capsys):
     from scripts import omw_cli, registry
     monkeypatch.setenv("OMW_HOME", str(tmp_path / ".omw"))

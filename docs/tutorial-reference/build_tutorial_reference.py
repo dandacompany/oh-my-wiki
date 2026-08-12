@@ -235,9 +235,9 @@ SECTIONS: list[dict] = [
                 "prose": "<strong>프롬프트별 recall</strong>은 물어보는 순간 AI 에이전트가 활성 위키를 "
                 "자동으로 참고하게 만듭니다. <code>omw find</code>를 직접 실행하지 않아도 됩니다. "
                 "<code>omw setup</code> 마법사의 한 섹션이기도 합니다.",
-                "callout": "모드를 설정하고, 호스트 지침 파일에 안내 블록을 주입하며, 네이티브 훅"
-                "(<strong>SessionStart + UserPromptSubmit</strong>)을 Claude Code·Codex·Gemini CLI에 "
-                "연결합니다. host-neutral — 엔진 하나를 호스트별로 번역합니다.",
+                "callout": "모드를 설정하고, 호스트 지침 파일에 안내 블록을 주입하며, 호스트별 네이티브 훅을 연결합니다. "
+                "Claude Code·Codex는 <strong>SessionStart · UserPromptSubmit · PreToolUse</strong> 회상과 "
+                "<strong>PreCompact · Stop</strong> 세션 임시 캡처를 사용합니다. host-neutral — 엔진 하나를 호스트별로 번역합니다.",
             },
             {
                 "kind": "note",
@@ -248,8 +248,8 @@ SECTIONS: list[dict] = [
                 "<code>gemini</code>(GEMINI.md) · <code>hermes</code>(프로필 선택 → "
                 "<code>~/.hermes/profiles/&lt;프로필&gt;/SOUL.md</code>) · <code>openclaw</code>(워크스페이스 선택 → "
                 "<code>&lt;워크스페이스&gt;/AGENTS.md</code>). 프로필/워크스페이스는 <code>--profile</code>·"
-                "<code>--workspace</code>로 비대화형 지정합니다. 네이티브 훅은 Claude Code·Codex·Gemini에만, "
-                "OpenCode·Hermes·OpenClaw는 지침 블록만(블록 전용) 들어갑니다. 스킬 설치"
+                "<code>--workspace</code>로 비대화형 지정합니다. Gemini는 SessionStart·BeforeAgent, "
+                "Hermes는 pre_llm_call, OpenCode·OpenClaw는 TypeScript recall 플러그인을 사용합니다. 스킬 설치"
                 "(<code>omw setup agents</code>)는 <strong>에이전트 단위</strong>로 6종 모두 각자 디렉토리에 깝니다.",
             },
             {
@@ -281,21 +281,32 @@ SECTIONS: list[dict] = [
             {
                 "kind": "note",
                 "text": "<span class='star'>★ recall 품질의 비결</span> — "
-                "recall은 좋은 <strong>title·tags·summary</strong> frontmatter에서 나옵니다. "
-                "FTS는 본문이 아니라 이 메타필드로 순위를 매기기 때문입니다. "
-                "<code>autoresearch</code>는 summary를 자동으로 채워 주므로 recall 정확도를 높여 줍니다.",
+                "recall은 좋은 <strong>title·aliases·tags·summary</strong> frontmatter에서 좋아집니다. "
+                "FTS5는 본문도 검색하며, 품질 게이트는 이름·별칭·태그·요약·제한된 본문 근거와 의미 검색의 일치를 함께 확인합니다.",
+            },
+            {
+                "label": "세션 임시 캡처 — 확인·숨김·끄기",
+                "bar": "terminal",
+                "text": "omw recall sessions\n"
+                "omw recall sessions --dismiss <id>\n"
+                "omw setup recall --session-capture off",
+                "callout": "Claude Code·Codex에서 같은 프로젝트의 마지막 요청·결과·다룬 파일만 로컬 registry에 저장합니다. "
+                "일반적인 비밀값 패턴을 가리고, 불러올 때는 이스케이프된 JSON 데이터로 구분합니다. "
+                "최대 5개·30일 보관하며 위키로 자동 승격하지 않습니다. "
+                "Codex는 <code>/hooks</code>에서 새 사용자 훅 승인이 필요합니다.",
             },
             {
                 "label": "호스트 훅 출력 형식 — omw recall --format / --event",
                 "bar": "terminal",
                 "text": "omw recall prompt --format claude-json --event UserPromptSubmit\n"
-                "omw recall pretool --format gemini-json --event before_tool_call\n"
-                "omw recall preamble --format hermes-json",
-                "callout": "<code>omw recall</code>은 세 서브커맨드(<code>prompt</code> · "
-                "<code>pretool</code> · <code>preamble</code>)와 두 플래그로 호스트 네이티브 훅 출력을 생성합니다. "
+                "omw recall pretool --format codex-json --event PreToolUse\n"
+                "omw recall capture --host codex --source stop --format codex-json --event Stop\n"
+                "omw recall sessions",
+                "callout": "<code>omw recall</code>은 다섯 동작(<code>preamble</code> · <code>prompt</code> · "
+                "<code>pretool</code> · <code>capture</code> · <code>sessions</code>)과 호스트별 플래그를 제공합니다. "
                 "<code>--format</code>은 <code>plain</code>(기본) · "
                 "<code>claude-json</code>(→ <code>{\"hookSpecificOutput\": {…}}</code>) · "
-                "<code>gemini-json</code> · <code>hermes-json</code> 중 하나입니다. "
+                "<code>codex-json</code> · <code>gemini-json</code> · <code>hermes-json</code> 중 하나입니다. "
                 "<code>--event &lt;EventName&gt;</code>는 훅 이벤트 이름(<code>UserPromptSubmit</code> 등)을 "
                 "봉투에 포함합니다. <code>omw setup recall</code>이 훅 설정 파일에 이 명령을 자동으로 주입하므로 "
                 "보통 직접 실행할 필요는 없습니다 — 훅 출력을 디버깅하거나 커스텀 훅을 구성할 때 사용합니다.",

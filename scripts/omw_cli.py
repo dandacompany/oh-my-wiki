@@ -754,6 +754,18 @@ def _cmd_recall(args) -> int:
         out = recall.preamble()
     elif args.action == "pretool":
         out = recall.pretool(None)
+    elif args.action == "capture":
+        recall.capture_session(host=args.host, source=args.source)
+        out = ""
+    elif args.action == "sessions":
+        if args.dismiss is not None:
+            if not recall.dismiss_session(args.dismiss):
+                print(json.dumps({"error": f"capture {args.dismiss} not found"}))
+                return 1
+            print(json.dumps({"dismissed": args.dismiss}))
+        else:
+            print(json.dumps(recall.session_captures(limit=args.limit), ensure_ascii=False))
+        return 0
     else:
         out = recall.prompt(args.text)
     rendered = recall._format_output(out or "", args.fmt, args.event)
@@ -902,6 +914,8 @@ def _cmd_setup(args) -> int:
             hosts=hosts, base_dir=args.base_dir, noninteractive=args.noninteractive,
             provider=args.embed_provider, model=args.embed_model, dim=args.embed_dim,
             profiles=profiles, workspaces=workspaces,
+            session_capture=(None if args.session_capture is None
+                             else args.session_capture == "on"),
             dry_run=args.dry_run,
         )
     if args.section == "gate":
@@ -1738,13 +1752,19 @@ def build_parser() -> argparse.ArgumentParser:
     pvw.add_argument("--print", action="store_true", help="print the URI instead of launching")
     pvw.set_defaults(func=_cmd_view)
 
-    prc = sub.add_parser("recall", help="Wiki recall for agent hooks (preamble/prompt). See setup recall.")
-    prc.add_argument("action", choices=["preamble", "prompt", "pretool"])
+    prc = sub.add_parser("recall", help="Wiki and staged-session recall for agent hooks.")
+    prc.add_argument("action", choices=["preamble", "prompt", "pretool", "capture", "sessions"])
     prc.add_argument("--text", default=None, help="prompt text (default: read stdin)")
     prc.add_argument("--format", dest="fmt", default="plain",
                      choices=["plain", "claude-json", "codex-json", "gemini-json", "hermes-json"],
                      help="stdout shape for the calling host's hook system")
     prc.add_argument("--event", default="", help="concrete host event name (for json formats)")
+    prc.add_argument("--host", default="claude", choices=["claude", "codex", "gemini"],
+                     help="calling host for session capture")
+    prc.add_argument("--source", default="stop", choices=["stop", "precompact"],
+                     help="capture lifecycle source")
+    prc.add_argument("--limit", type=int, default=20, help="session capture list limit")
+    prc.add_argument("--dismiss", type=int, default=None, help="dismiss a staged session capture")
     prc.set_defaults(func=_cmd_recall)
 
     pm = sub.add_parser("maint", help="Knowledge-maintenance status (cron-friendly).")
@@ -1814,6 +1834,8 @@ def build_parser() -> argparse.ArgumentParser:
                       help="embedding model name for `omw setup recall`")
     pset.add_argument("--embed-dim", dest="embed_dim", type=int, default=None,
                       help="embedding dimension for `omw setup recall`")
+    pset.add_argument("--session-capture", choices=["on", "off"], default=None,
+                      help="local same-project Stop/PreCompact capture for `omw setup recall`")
     pset.add_argument("--profile", default=None,
                       help="hermes profile name(s) for `omw setup personas/recall` "
                            "(comma-separated for multiple)")

@@ -654,11 +654,39 @@ build a glossary for my vault
 omw setup recall
 ```
 
-이 명령은 모드를 설정하고, 호스트 지침 파일에 짧은 가이드 블록을 넣고, 네이티브 훅
-(`SessionStart` + `UserPromptSubmit`)을 배선합니다. 여기서 omw는 호스트 중립적입니다.
-하나의 엔진을 각 호스트의 훅 포맷으로 번역할 뿐입니다.
+이 명령은 모드를 설정하고, 호스트 지침 파일에 짧은 가이드 블록을 넣고, 네이티브 훅을
+배선합니다. Claude Code와 Codex에서는 `SessionStart`·`UserPromptSubmit`·`PreToolUse`로
+회상하고, `PreCompact`·`Stop`에서 다음 세션에 필요한 최소 맥락을 임시 저장합니다.
+여기서 omw는 호스트 중립적입니다. 하나의 엔진을 각 호스트의 훅 포맷으로 번역할 뿐입니다.
 
-호스트 선택지는 **지침 파일(규약) 단위**로 묶입니다 — `claude`(CLAUDE.md) · `codex·opencode`(AGENTS.md, 한 번만 기록) · `gemini`(GEMINI.md) · `hermes`(프로필 **여러 개 선택** → `~/.hermes/profiles/<프로필>/SOUL.md`) · `openclaw`(워크스페이스 **여러 개 선택** → `<워크스페이스>/AGENTS.md`). 프로필/워크스페이스 선택은 **멀티 셀렉트(체크박스)** 입니다 — 원하는 만큼 체크하면(활성 프로필·기본 워크스페이스는 기본 체크) 선택한 **모든** 대상에 가이드 블록과 네이티브 훅이 기록됩니다. 비대화형으로는 `--profile` / `--workspace`에 **콤마로 여러 개**를 줄 수 있습니다(예: `--profile iris,mark`). 네이티브 훅은 Claude Code·Codex·Gemini에만 배선되고, OpenCode·Hermes·OpenClaw는 지침 블록만 들어갑니다(블록 전용).
+임시 세션 캡처는 위키 페이지가 아닙니다. 마지막 요청·결과·다룬 파일만 비밀값을 가린 뒤
+같은 프로젝트 범위에 최대 5개, 30일 동안 로컬 레지스트리에 보관합니다. 새 세션을 시작하거나
+"이어서 진행해"처럼 재개를 요청하면 이 맥락을 함께 보여 줍니다. 위키로 자동 승격하지 않습니다.
+
+```
+omw recall sessions                         # 임시 캡처 확인
+omw recall sessions --dismiss <id>          # 사용한 캡처 숨기기
+omw setup recall --session-capture off      # 임시 캡처 끄기
+```
+
+Codex는 새 사용자 훅을 처음 설치하거나 명령이 바뀌면 신뢰 확인을 요구합니다. 설정 후 Codex에서
+`/hooks`를 열어 OMW의 새 훅을 검토·승인해야 실제로 실행됩니다.
+
+`PreToolUse`는 에이전트가 파일을 읽기 직전에 파일명과 관련된 위키 페이지를 찾아 줍니다.
+특히 `raw/`를 바로 읽으려 할 때는 이미 정리된 `wiki/`가 있는지 먼저 확인하도록 안내합니다.
+
+호스트 선택지는 **지침 파일(규약) 단위**로 묶입니다 — `claude`(CLAUDE.md) · `codex·opencode`(AGENTS.md, 한 번만 기록) · `gemini`(GEMINI.md) · `hermes`(프로필 **여러 개 선택** → `~/.hermes/profiles/<프로필>/SOUL.md`) · `openclaw`(워크스페이스 **여러 개 선택** → `<워크스페이스>/AGENTS.md`). 프로필/워크스페이스 선택은 **멀티 셀렉트(체크박스)** 입니다 — 원하는 만큼 체크하면(활성 프로필·기본 워크스페이스는 기본 체크) 선택한 **모든** 대상에 가이드 블록과 네이티브 훅이 기록됩니다. 비대화형으로는 `--profile` / `--workspace`에 **콤마로 여러 개**를 줄 수 있습니다(예: `--profile iris,mark`). 호스트가 제공하는 훅 종류에 따라 실제 배선 범위는 달라지며, Claude Code와 Codex가 위의 전체 회상·임시 캡처 흐름을 사용합니다.
+
+| 호스트              | 네이티브 회상 범위                                 | 세션 임시 캡처                             |
+| ------------------- | -------------------------------------------------- | ------------------------------------------ |
+| Claude Code         | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop`                      |
+| Codex               | `SessionStart` · `UserPromptSubmit` · `PreToolUse` | `PreCompact` · `Stop` — `/hooks` 승인 필요 |
+| Gemini CLI          | `SessionStart` · `BeforeAgent`                     | 사용하지 않음                              |
+| Hermes              | 선택한 프로필별 `pre_llm_call`                     | 사용하지 않음                              |
+| OpenCode · OpenClaw | 호스트별 TypeScript recall 플러그인                | 사용하지 않음                              |
+
+세션 캡처는 `recall.mode`와 독립적이며 기본값은 켜짐입니다. recall을 꺼도 이전 캡처가
+자동 삭제되지는 않습니다. 위의 확인·숨김 명령으로 관리하세요.
 
 설정 가능한 두 축:
 
@@ -691,15 +719,18 @@ omw setup recall
 
 그래서 추측 대신 단테님이 검증·출처를 단 페이지를 인용해 답합니다.
 
-> recall 품질은 좋은 `title` / `tags` / `summary` frontmatter에 달려 있습니다 — FTS 인덱스는
-> 본문 전체가 아니라 그 필드들로 랭킹합니다. `autoresearch`는 `summary`를 자동으로 채우니,
-> 중요한 페이지엔 태그를 달아 잘 떠오르게 하세요.
+> recall 품질은 좋은 `title` / `aliases` / `tags` / `summary` frontmatter에서 좋아집니다.
+> FTS5는 페이지 본문도 검색합니다. 하이브리드·임베딩 recall은 결과를 주입하기 전에 정확한
+> 이름, 별칭, 태그, 요약, 제한된 본문 근거, 의미 검색의 일치 정도를 함께 확인합니다.
 
 ---
 
 ## Part 5 — 레퍼런스
 
-### CLI 서브커맨드
+### 주요 CLI 서브커맨드
+
+아래 표는 자주 쓰는 명령을 추린 것입니다. 전체 정본은 작업 단계별로 자동 생성되는
+`omw help`에서 확인하세요.
 
 | 서브커맨드        | 인터페이스 | 한 줄 설명                                                                                                                                                                                                                                                                                     |
 | ----------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -730,6 +761,7 @@ omw setup recall
 | `omw export`      | CLI        | vault 슬라이스를 자족 Markdown 폴더(또는 `--zip`) + `EXPORT_MANIFEST.md`로 내보내기; 볼트 밖에만 기록                                                                                                                                                                                          |
 | `omw merge`       | CLI        | 두 유사 페이지를 하나로 통합 (frontmatter union + `## Merged from` 본문 + winner `aliases` + source tombstone); `.proposed.md` 스테이징 → `--apply`                                                                                                                                            |
 | `omw next`        | CLI        | 다음 라이프사이클 액션 추천; `--after <op>`는 파이프라인 op 완료 후 상태가 승인한 다음 op을 반환(결정론적; 안전 기본값=중단)                                                                                                                                                                   |
+| `omw recall`      | CLI        | 에이전트 훅 회상: `preamble` · `prompt` · `pretool` · `capture` · `sessions`; `sessions --dismiss <id>`는 임시 맥락을 숨기고 `omw setup recall --session-capture on/off`는 이후 캡처를 제어                                                                                                    |
 
 추론 작업(`ingest`, `query`, `summary`, `synthesis`, `find`, `edit`, `autoresearch`,
 persona)은 Claude / Codex / Gemini 세션이 필요합니다. 자연어로 말하거나, `/omw <op>`,
@@ -981,23 +1013,28 @@ cp ~/.omw/vaults/legacy/.trash/20260601-pre-import-meeting-notes.md \
 전체 배치를 되돌리려면 동일한 타임스탬프 접두사를 가진 모든 백업 파일을 한꺼번에
 복원하세요.
 
-### Q. hot cache / 세션 연속성은 어떻게 작동하나요?
+### Q. 세션 임시 맥락은 어떻게 이어지나요?
 
-각 세션에서 oh-my-wiki는 세션 시작 시 작은 `hot.md` 캐시 파일을 읽고 세션 종료 시
-갱신하므로, 세션 간에 컨텍스트를 다시 설명할 필요가 없습니다:
+Claude Code와 Codex에서는 `PreCompact`와 `Stop`이 마지막 요청·결과·다룬 파일을 로컬
+`~/.omw/registry.db`에 임시 저장합니다. 이후 `SessionStart` 또는 명시적인 재개 요청에서
+같은 프로젝트의 최신 대기 캡처 하나만 불러옵니다.
 
-- wiki 모드 vault: `<vault>/wiki/hot.md`
-- memo 모드 및 기타 모드: `<vault>/hot.md`
+- 저장 전에 일반적인 비밀값 패턴을 가립니다.
+- 불러온 문장은 실행할 지시가 아닌, 이스케이프된 신뢰할 수 없는 JSON 데이터로 구분합니다.
+- 텍스트와 transcript 읽기 크기를 제한하고 프로젝트당 최대 5개를 30일 보관합니다.
+- 캡처는 위키 페이지로 자동 승격되지 않습니다.
+- `omw recall sessions`로 확인하고, `--dismiss <id>`로 다음 회상에서 숨기며,
+  `omw setup recall --session-capture off`로 이후 캡처를 끕니다.
 
-상한: 2000자. 수동 갱신: `python3 -m scripts.hot_cache --refresh`.
-수동 확인: `python3 -m scripts.hot_cache --on-session-start`.
+예전 `hot.md` 유틸리티는 현재 네이티브 세션 연속성 경로가 아니며 `omw setup recall`이
+자동 배선하지 않습니다.
 
 ---
 
 ## 더 알아보기
 
 - **커맨드 레퍼런스**: `commands/*.md`는 모든 작업을 다룹니다.
-- **스크립트 API**: `scripts/*.py`는 Python에서 직접 호출 가능하며, 일부는 CLI 서브커맨드로도 제공됩니다.
+- **명령 인터페이스**: `omw help`와 `omw <command> --help`를 사용하세요. `scripts/*.py`는 내부 구현이며 사용자 인터페이스가 아닙니다.
 - **설계 문서**: `docs/superpowers/specs/` (로컬 전용, 미공개 — 기여자용).
 - **테스트**: `pytest -v`로 전체 테스트 스위트를 실행합니다.
 

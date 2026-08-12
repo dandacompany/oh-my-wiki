@@ -29,7 +29,6 @@ _BUNDLE_DIRS = [
     "commands",
     "omw",
     "references",
-    "hooks",
     "scripts",
 ]
 # Root files the skill tree needs (SKILL.md is the discoverable entry point;

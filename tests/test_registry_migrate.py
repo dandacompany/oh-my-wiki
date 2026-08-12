@@ -24,8 +24,15 @@ def test_connect_automigrates_pre3_vaults(tmp_path):
     rows = registry.list_vaults(db)
     assert [r["name"] for r in rows] == ["v"]
 
-    cols = {r["name"] for r in registry.connect(db).execute("PRAGMA table_info(vaults)")}
-    assert "archived_at" in cols
+    conn = registry.connect(db)
+    try:
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(vaults)")}
+        assert "archived_at" in cols
+        tables = {r["name"] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        assert "session_captures" in tables
+    finally:
+        conn.close()
 
 
 def test_connect_automigrates_pre_note_columns(tmp_path):

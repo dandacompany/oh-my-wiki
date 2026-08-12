@@ -83,3 +83,106 @@ def test_embedding_recall_also_uses_quality_gate(tmp_path, monkeypatch):
     )
     recall._hits("프로젝트 의미 검색 질문", 3)
     assert seen["quality_gate"] is True
+
+
+def test_preamble_includes_same_project_staged_session(monkeypatch):
+    monkeypatch.setattr(recall, "_base_preamble", lambda: "<omw-wiki>active</omw-wiki>")
+    monkeypatch.setattr(recall, "_session_context", lambda payload: "<omw-session>resume</omw-session>")
+
+    out = recall.preamble({"cwd": "/project", "session_id": "new"})
+
+    assert "<omw-wiki>active" in out
+    assert "<omw-session>resume" in out
+
+
+def test_resume_prompt_includes_session_context_but_ordinary_prompt_does_not(monkeypatch):
+    monkeypatch.setattr(recall, "_cfg", lambda: {
+        "mode": "auto", "strategy": "fts", "top_k": 3, "min_score": 1.0,
+        "capture": False,
+    })
+    monkeypatch.setattr(recall, "_recall_body", lambda cfg, text: "")
+    monkeypatch.setattr(recall, "_session_context", lambda payload: "<omw-session>unfinished</omw-session>")
+
+    resumed = recall.prompt(None, payload={"prompt": "지난 작업 어디까지 했는지 이어서 진행해", "cwd": "/p"})
+    ordinary = recall.prompt(None, payload={"prompt": "새로운 정렬 알고리즘을 설명해줘", "cwd": "/p"})
+
+    assert "unfinished" in resumed
+    assert ordinary == ""
+
+
+def test_pretool_injects_high_confidence_file_context(monkeypatch):
+    monkeypatch.setattr(recall, "_has_active_vault", lambda: True)
+    monkeypatch.setattr(recall, "_pretool_path_hits", lambda payload: [
+        {"title": "Recall hooks", "relpath": "wiki/recall-hooks.md", "score": 7.2},
+    ])
+    payload = {"tool_name": "Read", "tool_input": {"file_path": "scripts/recall.py"}}
+
+    out = recall.pretool(payload)
+
+    assert "Recall hooks" in out and "wiki/recall-hooks.md" in out
+    assert "primary source" not in out
+
+
+def test_pretool_combines_raw_nudge_and_related_file_context(monkeypatch):
+    monkeypatch.setattr(recall, "_has_active_vault", lambda: True)
+    monkeypatch.setattr(recall, "_pretool_path_hits", lambda payload: [
+        {"title": "Raw source policy", "relpath": "wiki/raw-policy.md", "score": 8.0},
+    ])
+    payload = {"tool_name": "Read", "tool_input": {"file_path": "raw/source.md"}}
+
+    out = recall.pretool(payload)
+
+    assert "Before reading `raw/`" in out
+    assert "Raw source policy" in out
+
+
+def test_pretool_stays_silent_for_unrelated_file(monkeypatch):
+    monkeypatch.setattr(recall, "_has_active_vault", lambda: True)
+    monkeypatch.setattr(recall, "_pretool_path_hits", lambda payload: [])
+    payload = {"tool_name": "Read", "tool_input": {"file_path": "src/unrelated.py"}}
+    assert recall.pretool(payload) == ""
+
+
+def test_error_and_file_signals_run_one_focused_followup_search(monkeypatch):
+    calls = []
+    monkeypatch.setattr(recall, "_hits", lambda query, top_k: calls.append(query) or [])
+    cfg = {"mode": "auto", "strategy": "fts", "top_k": 3, "min_score": 1.0}
+
+    recall._recall_body(cfg, "auth/session.py failed with ConnectionError")
+
+    assert calls[0] == "auth/session.py failed with ConnectionError"
+    assert len(calls) == 2
+    assert "ConnectionError" in calls[1] and "auth" in calls[1] and "session" in calls[1]
+
+
+def test_signal_followup_never_exceeds_configured_top_k(monkeypatch):
+    primary = [
+        {"relpath": f"wiki/p{i}.md", "title": f"P{i}", "score": 10 - i}
+        for i in range(3)
+    ]
+    followup = [
+        {"relpath": f"wiki/f{i}.md", "title": f"F{i}", "score": 20 - i}
+        for i in range(3)
+    ]
+    monkeypatch.setattr(
+        recall, "_hits", lambda query, top_k: followup if query == "ConnectionError" else primary)
+    monkeypatch.setattr(recall, "_signal_queries", lambda text: ["ConnectionError"])
+    monkeypatch.setattr(recall, "_record_use", lambda relpaths: None)
+    cfg = {"mode": "auto", "strategy": "fts", "top_k": 3, "min_score": 1.0}
+
+    out = recall._recall_body(cfg, "failed with ConnectionError")
+
+    assert out.count("\n- ") == 3
+
+
+def test_standalone_recall_main_delegates_to_top_level_cli(monkeypatch):
+    seen = {}
+
+    def fake_main(argv):
+        seen["argv"] = argv
+        return 0
+
+    monkeypatch.setattr("scripts.omw_cli.main", fake_main)
+
+    assert recall.main(["capture", "--host", "codex"]) == 0
+    assert seen["argv"] == ["recall", "capture", "--host", "codex"]

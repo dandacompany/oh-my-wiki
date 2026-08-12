@@ -98,3 +98,24 @@ CREATE TABLE IF NOT EXISTS interactions (
 );
 CREATE INDEX IF NOT EXISTS idx_interactions_vault ON interactions(vault_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_interactions_type  ON interactions(vault_id, request_type);
+
+-- Local, staged session snapshots written by lifecycle hooks.  These rows are
+-- recall context only: hooks never promote them into a vault page automatically.
+CREATE TABLE IF NOT EXISTS session_captures (
+  id             INTEGER PRIMARY KEY,
+  vault_id       INTEGER REFERENCES vaults(id) ON DELETE SET NULL,
+  project_root   TEXT NOT NULL,
+  host           TEXT NOT NULL,
+  session_id     TEXT NOT NULL,
+  source         TEXT NOT NULL CHECK (source IN ('stop', 'precompact')),
+  captured_at    TEXT NOT NULL,
+  content_hash   TEXT NOT NULL,
+  last_user      TEXT,
+  last_assistant TEXT,
+  files          TEXT NOT NULL DEFAULT '[]',
+  status         TEXT NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending', 'dismissed')),
+  UNIQUE(host, session_id, source, content_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_session_captures_project
+  ON session_captures(project_root, status, id DESC);

@@ -48,8 +48,8 @@ def strip_marker_block(text: str, marker: str) -> tuple[str, bool]:
 
 
 def _is_omw_recall_cmd(cmd: str) -> bool:
-    """Mirror recall._event_has_recall: an omw recall hook invocation."""
-    return "recall" in cmd and ("preamble" in cmd or "prompt" in cmd or "pretool" in cmd)
+    """Use recall's owner-side matcher so setup and uninstall cannot drift."""
+    return recall._is_omw_recall_cmd(cmd)
 
 
 def _strip_omw_hooks(config_path) -> tuple[int, bool]:

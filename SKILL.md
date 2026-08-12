@@ -39,7 +39,8 @@ A storage-agnostic LLM Wiki skill. Implements Andrej Karpathy's three-layer patt
 
 The current release supports seven vault modes, graph-backed lint, autoresearch,
 six wiki-maintenance personas, Obsidian/Logseq viewers, URL fetch + inbox,
-per-prompt recall hooks, local embeddings, and deterministic lifecycle guidance.
+high-precision per-prompt recall, same-project staged session continuity for
+Claude Code and Codex, local embeddings, and deterministic lifecycle guidance.
 See `README.md`, `TUTORIAL.md`, and `TUTORIAL.ko.md` for usage.
 
 ## Step 1 — Read registry state
@@ -90,12 +91,13 @@ Always invoke this before doing anything else:
 >    page's frontmatter + inline fields. Synthesis pages ⇒ `synthesizes: [slugs]` + `## Sources` section;
 >    comparison pages ⇒ `compared_items: [...]`; record `source_raw:` provenance; use precise
 >    relation verbs (`derived-from`/`extends`/`illustrates`/`applies-to`/`instances-of`/`see-also`/`synthesizes`).
-> 2. **Reasoning ops** (ingest, query, autoresearch, personas, …): read the exact
->    procedure in `commands/<op>.md` and run its inline `python3 -c` snippet /
->    `python3 -m scripts.<module>` commands verbatim. Never guess a script path.
+> 2. **Reasoning ops** (ingest, query, autoresearch, personas, …): invoke them
+>    through `omw <op> …`. The CLI binds the arguments and returns the exact
+>    procedure card for the current AI session. Follow that card; do not invent or
+>    substitute a `scripts.*` entrypoint.
 
 ```bash
-python3 -m scripts.wizard status
+omw status
 ```
 
 Parse the JSON output. Fields:
@@ -241,9 +243,10 @@ Every omw op is one of two kinds — know which before you act:
 - **run** (deterministic command): shell it and trust the JSON/text result —
   e.g. `omw status`, `omw lint`, `omw reindex`, `omw connections`, `omw find <query>`,
   `omw fetch <url>`, `omw search <query>`, `omw gate …`, `omw inbox …`.
-- **procedure** (needs this session): execute `commands/<op>.md` yourself; the CLI
-  only prints a procedure card binding your args — do NOT expect a result from
-  shelling it. Procedures: `ingest`, `query`, `open`, `edit`, `move`, `delete`,
+- **procedure** (needs this session): invoke `omw <op> …`; the CLI prints a
+  procedure card with bound arguments for this host session. Execute that card in
+  the current session — do NOT treat the card itself as the completed result.
+  Procedures: `ingest`, `query`, `open`, `edit`, `move`, `delete`,
   `autoresearch`, `persona-factcheck`, `persona-consistency`, `persona-terminology`.
 
 The authoritative per-op table (args + hints) is the generated
