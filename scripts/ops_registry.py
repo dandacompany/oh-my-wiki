@@ -78,6 +78,12 @@ OPS: tuple[OpSpec, ...] = (
          args=(ArgSpec("url", True, "page URL to fetch"),
                ArgSpec("--backend", False, "fetch backend", ("auto", "urllib", "chromium", "cloud"))),
          triggers=("fetch", "url 가져와", "페이지 가져와")),
+    _det("capture", "Save one local source into raw/ and reindex.",
+         "omw capture <path> --title T --date YYYY-MM-DD"),
+    _det("page", "Write a schema-aware structured page and update its index/log.",
+         "omw page write --layer L --title T --body-file F --date YYYY-MM-DD"),
+    _det("research", "Manage deterministic autoresearch session state.",
+         "omw research {init|record|should-stop|status|file-back} …"),
     _det("schema", "Show page-type schemas.", "omw schema {list|show} …"),
     _det("search", "Web search via the configured provider. Auto-falls back across keyed providers.", "omw search <query> [--provider P] [--limit N]",
          args=(ArgSpec("query", True, "web search query"),
@@ -224,14 +230,14 @@ OPS: tuple[OpSpec, ...] = (
 
 _PHASE = {
     # capture — bring sources in
-    "inbox": "capture", "fetch": "capture", "import": "capture", "ingest": "capture",
+    "inbox": "capture", "fetch": "capture", "capture": "capture", "import": "capture", "ingest": "capture",
     "candidates": "capture",
     # structure — organize into the graph
-    "reindex": "structure", "links": "structure", "fields": "structure",
+    "reindex": "structure", "links": "structure", "fields": "structure", "page": "structure",
     "connections": "structure", "open": "structure", "edit": "structure",
     "move": "structure", "delete": "structure", "summary": "structure",
     # synthesize — combine into new knowledge
-    "query": "synthesize", "context": "synthesize", "autoresearch": "synthesize",
+    "query": "synthesize", "context": "synthesize", "autoresearch": "synthesize", "research": "synthesize",
     "synthesis": "synthesize",
     # retrieve — find what's stored
     "search": "retrieve", "find": "retrieve", "serve": "retrieve", "embed": "retrieve",
@@ -258,6 +264,7 @@ _BY_NAME = {op.name: op for op in OPS}
 _NO_TRIGGER_OK = frozenset({
     "status", "reindex", "fields", "schema", "serve", "recall", "maint",
     "gate", "setup", "doctor", "update", "help", "version", "persona-run",
+    "capture", "page", "research",
 })
 
 

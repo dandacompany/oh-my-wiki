@@ -5,7 +5,7 @@
 
 ## Preconditions
 
-Call `python3 -m scripts.wizard status` first. Refuse if `active.mode != "wiki"`. Suggest `vault-use <wiki-vault>` or `vault-setup` if not.
+Call `omw status` first. Refuse if `active.mode != "wiki"`. Suggest `omw vault use <wiki-vault>` or `omw vault create` if not.
 
 If `confirm_target` is `true` (2+ vaults registered), confirm the destination with the user before writing — "N개 vault 중 `<name>` (`<path>`)에 씁니다 — 진행할까요?" — unless this vault was already confirmed in this session (see SKILL.md Multi-vault write guard).
 
@@ -24,71 +24,28 @@ For a URL, prefer `omw fetch <url>` (deterministic, handles YouTube + SPA) over 
 
 **Scout first:** If the target URL is unknown, run `omw search "<query>"` (auto-falls back across providers) to find candidate URLs, then collect them with `omw fetch` (native fetch first — see `commands/fetch.md`). Do not hand-scrape search-engine HTML.
 
-For paste/md/txt, use `ingest.save_raw` with `ext` = `md` or `txt`. For pdf, use `ingest.save_raw_pdf` (returns extracted text for the next step).
+For a local md/txt/pdf file, use `omw capture <path> --title "<title>" --date <YYYY-MM-DD>`.
 
 ## Flow
 
 1. **Save the raw source.**
 
-   For paste/md/txt:
+   Save pasted text to a temporary UTF-8 `.md` file, then run:
 
    ```bash
-   python3 -c "
-   from scripts.paths import registry_path
-   from scripts import ingest, registry
-   db = registry_path()
-   vault = registry.get_active(db)
-   rel = ingest.save_raw(
-       db, vault_id=vault['id'],
-       content='''<body>''',
-       ext='md', title='<title>', date_str='2026-05-25',
-   )
-   print(rel)
-   "
-   ```
-
-   For PDF (body is bytes — use stdin or a temp file):
-
-   ```bash
-   python3 -c "
-   import sys
-   from pathlib import Path
-   from scripts.paths import registry_path
-   from scripts import ingest, registry
-   db = registry_path()
-   vault = registry.get_active(db)
-   pdf_bytes = Path('<input.pdf>').read_bytes()
-   rel, text = ingest.save_raw_pdf(
-       db, vault_id=vault['id'],
-       pdf_bytes=pdf_bytes,
-       title='<title>', date_str='2026-05-25',
-   )
-   print(rel)
-   print('---EXTRACTED---')
-   print(text)
-   "
+   omw capture <input.md|input.txt|input.pdf> --title "<title>" --date <YYYY-MM-DD>
    ```
 
 2. **Discuss takeaways with the user.** Read the body. Propose: a one-paragraph summary, 2-5 key entities (people, orgs, papers), and 2-5 key concepts (ideas, techniques). Show the proposal and get the user's confirmation.
 
 3. **Write the summary page.**
 
+   Save the approved body to a temporary UTF-8 file, then run:
+
    ```bash
-   python3 -c "
-   from scripts.paths import registry_path
-   from scripts import ingest, registry
-   db = registry_path()
-   vault = registry.get_active(db)
-   rel = ingest.write_wiki_page(
-       db, vault_id=vault['id'],
-       layer='summaries',
-       title='<source title>',
-       body='<summary body>',
-       tags=['<t1>','<t2>'],
-       date_str='2026-05-25',
-   )
-   print(rel)
-   "
+   omw page write --layer summaries --title "<source title>" --body-file <body.md> \
+     --tags <t1>,<t2> --date <YYYY-MM-DD> --source-raw <raw-relpath> \
+     --index "<oneliner>" --log-op ingest
    ```
 
    - **Provenance.** When you write a wiki page from a raw source, set
@@ -103,70 +60,24 @@ For paste/md/txt, use `ingest.save_raw` with `ext` = `md` or `txt`. For pdf, use
 4. **Write entity / concept pages.** For each new entity:
 
    ```bash
-   python3 -c "
-   from scripts.paths import registry_path
-   from scripts import ingest, registry
-   db = registry_path()
-   vault = registry.get_active(db)
-   rel = ingest.write_wiki_page(
-       db, vault_id=vault['id'],
-       layer='entities',
-       title='<entity name>',
-       body='<one-paragraph description>',
-       tags=['person'],
-       date_str='2026-05-25',
-   )
-   print(rel)
-   "
+   omw page write --layer entities --title "<entity name>" --body-file <body.md> \
+     --tags person --date <YYYY-MM-DD> --source-raw <raw-relpath> --index "<oneliner>"
    ```
 
    For an existing entity that needs patching, use `scripts.frontmatter.edit_field` for metadata or rewrite the body via standard file write. Then call `reindex.incremental`.
 
 5. **Update the index.** Aggregate all touched (layer, slug, oneliner) entries:
 
-   ```bash
-   python3 -c "
-   from scripts.paths import registry_path
-   from scripts import ingest, registry
-   db = registry_path()
-   vault = registry.get_active(db)
-   ingest.update_index(
-       db, vault_id=vault['id'],
-       entries=[
-           ('summaries', '<slug>', '<oneliner>'),
-           ('entities', '<slug>', '<oneliner>'),
-           ('concepts', '<slug>', '<oneliner>'),
-       ],
-   )
-   "
-   ```
+   `omw page write --index "<oneliner>"` updates the matching section.
 
 6. **Append to the log.**
 
-   ```bash
-   python3 -c "
-   from scripts.paths import registry_path
-   from scripts import ingest, registry
-   db = registry_path()
-   vault = registry.get_active(db)
-   ingest.append_log(
-       db, vault_id=vault['id'],
-       op='ingest', title='<source title>', date_str='2026-05-25',
-   )
-   "
-   ```
+   `omw page write --log-op ingest` appends the log entry.
 
 7. **Reindex.**
 
-   ```bash
-   python3 -c "
-   from scripts.paths import registry_path
-   from scripts import reindex, registry
-   db = registry_path()
-   vault = registry.get_active(db)
-   reindex.incremental(db, vault_id=vault['id'])
-   "
-   ```
+   `omw page write` and `omw capture` reindex automatically. After any direct
+   file edit, run `omw reindex`.
 
 8. **Propose entity links.** Run `omw links suggest` (Korean-josa-aware). Show the user the suggested `[[slug]]` insertions for the pages just written and any prior pages that now mention the new entities. On confirmation, apply one with `omw links link <relpath> --to <slug>` or the confirmed set with `omw links link --from-suggestions`; the batch form reindexes once at the end. Never insert silently — keep the graph connected, but each applied set is a confirmed proposal.
 

@@ -37,43 +37,17 @@ Active vault must exist.
 
 5. **Offer to file the answer back** (wiki-mode only). Ask: "File this as a new synthesis page? [Yes / No]". If Yes:
 
+   Save the approved answer to a UTF-8 file and run:
+
    ```bash
-   python3 -c "
-   from scripts.paths import registry_path
-   from scripts import query, ingest, registry
-   db = registry_path()
-   vault = registry.get_active(db)
-   rel = query.write_synthesis(
-       db, vault_id=vault['id'],
-       title='<synthesis title>',
-       body='<answer body, lightly edited for standalone reading>',
-       citations=['<rel1>', '<rel2>'],
-       tags=['<t1>','<t2>'],
-       date_str='2026-05-25',
-   )
-   ingest.update_index(
-       db, vault_id=vault['id'],
-       entries=[('syntheses', '<slug>', '<oneliner>')],
-   )
-   ingest.append_log(
-       db, vault_id=vault['id'],
-       op='synthesis', title='<synthesis title>', date_str='2026-05-25',
-   )
-   print(rel)
-   "
+   omw page write --layer syntheses --title "<synthesis title>" --body-file <body.md> \
+     --tags <t1>,<t2> --date <YYYY-MM-DD> --citation <rel1> --citation <rel2> \
+     --index "<oneliner>" --log-op synthesis
    ```
 
 6. **Reindex** if a synthesis was filed:
 
-   ```bash
-   python3 -c "
-   from scripts.paths import registry_path
-   from scripts import reindex, registry
-   db = registry_path()
-   vault = registry.get_active(db)
-   reindex.incremental(db, vault_id=vault['id'])
-   "
-   ```
+   `omw page write` reindexes automatically.
 
 ## Post-conditions
 

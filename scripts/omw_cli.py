@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from scripts import adapters, lint, nextstep, registry, reindex, vault_ops, wizard
 from scripts import history as _history
@@ -1422,6 +1423,76 @@ def _cmd_agentic(args) -> int:
     return 0
 
 
+def _cmd_capture(args) -> int:
+    from scripts import ingest, reindex
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    source = Path(args.source)
+    if not source.is_file():
+        print(f"error: source file not found: {source}", file=sys.stderr)
+        return 1
+    if source.suffix.lower() == ".pdf":
+        relpath, extracted = ingest.save_raw_pdf(
+            db, vault_id=vault["id"], pdf_bytes=source.read_bytes(),
+            title=args.title, date_str=args.date,
+        )
+        result = {"relpath": relpath, "extracted_text": extracted}
+    else:
+        ext = source.suffix.lower().lstrip(".") or "md"
+        relpath = ingest.save_raw(
+            db, vault_id=vault["id"], content=source.read_text(encoding="utf-8"),
+            ext=ext, title=args.title, date_str=args.date,
+        )
+        result = {"relpath": relpath}
+    reindex.incremental(db, vault_id=vault["id"])
+    print(json.dumps(result, ensure_ascii=False))
+    return 0
+
+
+def _cmd_page(args) -> int:
+    from scripts import ingest, query, reindex
+    db = registry_path()
+    vault = _require_vault_row(db, args.vault)
+    if vault is None:
+        return 1
+    if args.page_cmd != "write":
+        print(f"error: unknown page subcommand {args.page_cmd!r}", file=sys.stderr)
+        return 1
+    body = Path(args.body_file).read_text(encoding="utf-8")
+    tags = [tag.strip() for tag in args.tags.split(",") if tag.strip()]
+    if args.layer == "syntheses":
+        relpath = query.write_synthesis(
+            db, vault_id=vault["id"], title=args.title, body=body,
+            citations=args.citation, tags=tags, date_str=args.date,
+        )
+    else:
+        extra_meta = {"source_raw": args.source_raw} if args.source_raw else None
+        relpath = ingest.write_wiki_page(
+            db, vault_id=vault["id"], layer=args.layer, title=args.title, body=body,
+            tags=tags, date_str=args.date, extra_meta=extra_meta,
+        )
+    slug = Path(relpath).stem
+    if args.index:
+        ingest.update_index(
+            db, vault_id=vault["id"], entries=[(args.layer, slug, args.index)]
+        )
+    if args.log_op:
+        ingest.append_log(
+            db, vault_id=vault["id"], op=args.log_op,
+            title=args.title, date_str=args.date,
+        )
+    reindex.incremental(db, vault_id=vault["id"])
+    print(json.dumps({"relpath": relpath}, ensure_ascii=False))
+    return 0
+
+
+def _cmd_research(args) -> int:
+    from scripts import autoresearch
+    return autoresearch.main([args.research_cmd, *args.research_args])
+
+
 def _cmd_report(args) -> int:
     from datetime import date
     from scripts import report
@@ -2058,6 +2129,37 @@ def build_parser() -> argparse.ArgumentParser:
     pf.add_argument("--assignee", default=None,
                     help="Hermes profile to assign cards to (hermes-kanban; default = current session profile)")
     pf.set_defaults(func=_cmd_persona_fanout)
+
+    pcap = sub.add_parser("capture", help="Save one local source into raw/ and reindex.")
+    pcap.add_argument("source")
+    pcap.add_argument("--title", required=True)
+    pcap.add_argument("--date", required=True)
+    pcap.add_argument("--vault", default=None)
+    pcap.set_defaults(func=_cmd_capture)
+
+    ppage = sub.add_parser("page", help="Deterministic structured-page writes.")
+    pagesub = ppage.add_subparsers(dest="page_cmd", required=True)
+    ppwrite = pagesub.add_parser("write", help="Write one schema-aware wiki page.")
+    ppwrite.add_argument("--layer", required=True, choices=[
+        "summaries", "entities", "concepts", "comparisons", "syntheses"
+    ])
+    ppwrite.add_argument("--title", required=True)
+    ppwrite.add_argument("--body-file", required=True)
+    ppwrite.add_argument("--tags", default="")
+    ppwrite.add_argument("--date", required=True)
+    ppwrite.add_argument("--source-raw", action="append", default=[])
+    ppwrite.add_argument("--citation", action="append", default=[])
+    ppwrite.add_argument("--index", default=None, help="one-line index description")
+    ppwrite.add_argument("--log-op", default=None)
+    ppwrite.add_argument("--vault", default=None)
+    ppwrite.set_defaults(func=_cmd_page)
+
+    pres = sub.add_parser("research", help="Deterministic autoresearch session state.")
+    pres.add_argument("research_cmd", choices=[
+        "init", "record", "should-stop", "status", "file-back"
+    ])
+    pres.add_argument("research_args", nargs=argparse.REMAINDER)
+    pres.set_defaults(func=_cmd_research)
 
     from scripts import ops_registry as _reg
     for _name in _reg.PROCEDURE_NAMES:

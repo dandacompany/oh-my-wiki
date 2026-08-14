@@ -6,7 +6,7 @@
 
 ## Preconditions
 
-Active vault must be wiki-mode. Run `python3 -m scripts.wizard status` first. If active vault is memo-mode, suggest `vault-use <wiki-vault>` or `vault-setup` to create one.
+Active vault must be wiki-mode. Run `omw status` first. If active vault is memo-mode, suggest `omw vault use <wiki-vault>` or `omw vault create`.
 
 If `confirm_target` is `true` (2+ vaults registered), confirm the destination with the user before any file-back — "N개 vault 중 `<name>` (`<path>`)에 씁니다 — 진행할까요?" — unless this vault was already confirmed in this session (see SKILL.md Multi-vault write guard). (Collect-only / `--no-synthesis` runs write only to `raw/` and never trigger this.)
 
@@ -17,7 +17,7 @@ If `confirm_target` is `true` (2+ vaults registered), confirm the destination wi
 Get the user's research question. Then:
 
 ```bash
-python3 -m scripts.autoresearch init \
+omw research init \
   --query "<the user's question>"
 ```
 
@@ -60,7 +60,7 @@ Parse its JSON output (`{text, title, backend, source_url, raw_relpath}`) and re
 **(f) Record the round** — each source is an object carrying `url`/`title`/`raw_relpath` (a bare string still works and is normalized to `{"label": ...}`):
 
 ```bash
-python3 -m scripts.autoresearch record \
+omw research record \
   --session-dir <session_dir> \
   --round <round_num> \
   --claims-json '[{"claim":"...","confidence":"high","sources":[{"url":"https://...","title":"...","raw_relpath":"raw/2026-06-29-...md"}]}, ...]' \
@@ -73,7 +73,7 @@ python3 -m scripts.autoresearch record \
 **(g) Check stop:**
 
 ```bash
-python3 -m scripts.autoresearch should-stop --session-dir <session_dir>
+omw research should-stop --session-dir <session_dir>
 ```
 
 If `{"stop": true, ...}` → break loop. Otherwise continue to round_num+1.
@@ -89,7 +89,7 @@ Read the bound CLI card.
 - raw files collected — the `raw_relpaths` from:
 
   ```bash
-  python3 -m scripts.autoresearch status --session-dir <session_dir>
+  omw research status --session-dir <session_dir>
   ```
 
 - unresolved gaps, if any
@@ -119,7 +119,7 @@ cat > "$tmp_body" <<'BODY'
 <the synthesis body>
 BODY
 
-python3 -m scripts.autoresearch file-back \
+omw research file-back \
   --session-dir <session_dir> \
   --title "<synthesis title>" \
   --body-file "$tmp_body" \
@@ -131,13 +131,7 @@ python3 -m scripts.autoresearch file-back \
 Output is the synthesis page relpath (e.g. `wiki/syntheses/why-attention-beats-rnn.md`). Then incremental reindex so search picks it up:
 
 ```bash
-python3 -c "
-from scripts.paths import registry_path
-from scripts import reindex, registry
-db = registry_path()
-vault = registry.get_active(db)
-reindex.incremental(db, vault_id=vault['id'])
-"
+omw reindex
 ```
 
 ### Step 5 — Report

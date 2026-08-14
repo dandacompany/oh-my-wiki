@@ -135,9 +135,28 @@ def replace_links(db_path: Path, *, vault_id: int, src_note_id: int, body: str,
         conn.close()
 
 
+def _target_ids_by_slug(conn, vault_id: int) -> tuple[dict[str, list[int]],
+                                                      dict[str, list[int]]]:
+    """Return non-raw relpath and alias owners keyed by normalized slug."""
+    relpath_to_ids: dict[str, list[int]] = {}
+    alias_to_ids: dict[str, list[int]] = {}
+    for row in conn.execute(
+        "SELECT id, relpath, aliases FROM notes "
+        "WHERE vault_id = ? AND layer != 'raw'", (vault_id,)
+    ):
+        relpath_to_ids.setdefault(_slugify(row["relpath"]), []).append(row["id"])
+        raw = row["aliases"] if "aliases" in row.keys() else None
+        for alias in (json.loads(raw) if raw else []):
+            alias_to_ids.setdefault(_slugify(str(alias)), []).append(row["id"])
+    return relpath_to_ids, alias_to_ids
+
+
 def resolve(db_path: Path, vault_id: int) -> None:
-    """Set links.dst_note_id. A unique alias-owner wins over a unique relpath-owner
-    (aliases are authoritative redirects); other collisions resolve to NULL."""
+    """Set links.dst_note_id for structured pages.
+
+    Raw notes are provenance rather than link targets. A unique alias-owner wins
+    over a unique relpath-owner; other structured-page collisions resolve to NULL.
+    """
     conn = registry.connect(db_path)
     try:
         with conn:
@@ -147,15 +166,7 @@ def resolve(db_path: Path, vault_id: int) -> None:
                 "(SELECT id FROM notes WHERE vault_id = ? AND layer = 'raw')",
                 (vault_id, vault_id),
             )
-            relpath_to_ids: dict[str, list[int]] = {}
-            alias_to_ids: dict[str, list[int]] = {}
-            for row in conn.execute(
-                "SELECT id, relpath, aliases FROM notes WHERE vault_id = ?", (vault_id,)
-            ):
-                relpath_to_ids.setdefault(_slugify(row["relpath"]), []).append(row["id"])
-                raw = row["aliases"] if "aliases" in row.keys() else None
-                for a in (json.loads(raw) if raw else []):
-                    alias_to_ids.setdefault(_slugify(str(a)), []).append(row["id"])
+            relpath_to_ids, alias_to_ids = _target_ids_by_slug(conn, vault_id)
             for row in conn.execute(
                 "SELECT DISTINCT dst_slug FROM links WHERE vault_id = ?", (vault_id,)
             ):
@@ -234,16 +245,26 @@ def orphans(db_path: Path, vault_id: int) -> list[dict]:
 
 
 def broken_links(db_path: Path, vault_id: int) -> list[dict]:
-    """Links whose target slug resolves to no (unique) note."""
+    """Links whose target is missing or has multiple structured-page owners."""
     conn = registry.connect(db_path)
     try:
-        return [dict(r) for r in conn.execute(
+        relpath_to_ids, alias_to_ids = _target_ids_by_slug(conn, vault_id)
+        rows = [dict(r) for r in conn.execute(
             "SELECT n.relpath AS src_relpath, l.dst_slug, l.link_type, l.position "
             "FROM links l JOIN notes n ON n.id = l.src_note_id "
             "WHERE l.vault_id = ? AND l.dst_note_id IS NULL AND n.layer != 'raw' "
             "ORDER BY n.relpath, l.position",
             (vault_id,),
         )]
+        for row in rows:
+            slug = row["dst_slug"]
+            row["reason"] = (
+                "collision"
+                if len(alias_to_ids.get(slug, [])) > 1
+                or len(relpath_to_ids.get(slug, [])) > 1
+                else "missing"
+            )
+        return rows
     finally:
         conn.close()
 

@@ -1,6 +1,8 @@
 import unicodedata
 
-from scripts import registry
+import pytest
+
+from scripts import links, registry, reindex
 
 
 def test_links_table_exists_after_init_db(tmp_db):
@@ -25,9 +27,6 @@ def test_init_db_idempotent_with_links(tmp_db):
         conn.close()
     assert cols == {"id", "vault_id", "src_note_id", "dst_slug",
                     "dst_note_id", "link_type", "position"}
-
-
-from scripts import links
 
 
 def test_extract_wikilink_simple():
@@ -61,9 +60,6 @@ def test_extract_preserves_document_order_across_kinds():
 
 def test_extract_skips_empty_targets():
     assert links.extract_links("[[ ]] and [x]()") == []
-
-
-import pytest
 
 
 @pytest.fixture
@@ -138,6 +134,37 @@ def test_resolve_leaves_ambiguous_slug_unresolved(vault):
     assert rows["dup"] is None  # ambiguous -> unresolved
 
 
+def test_resolve_prefers_wiki_page_over_same_named_raw_source(vault):
+    db, vid = vault
+    ref = _add_note(db, vid, "wiki/ref.md", "[[dup]]")
+    _add_note(db, vid, "wiki/concepts/dup.md")
+    registry.upsert_note(
+        db, vault_id=vid, relpath="raw/import/dup.md", layer="raw",
+        title="raw/import/dup.md", summary=None, mtime=0.0, size_bytes=0, tags=[],
+    )
+    links.replace_links(db, vault_id=vid, src_note_id=ref, body="[[dup]]")
+
+    links.resolve(db, vid)
+
+    assert [r["relpath"] for r in links.backlinks(
+        db, vid, "wiki/concepts/dup.md"
+    )] == ["wiki/ref.md"]
+
+
+def test_broken_links_distinguishes_wiki_collision_from_missing_target(vault):
+    db, vid = vault
+    ref = _add_note(db, vid, "wiki/ref.md", "[[dup]] [[ghost]]")
+    _add_note(db, vid, "wiki/x/dup.md")
+    _add_note(db, vid, "wiki/y/dup.md")
+    links.replace_links(db, vault_id=vid, src_note_id=ref, body="[[dup]] [[ghost]]")
+
+    links.resolve(db, vid)
+
+    assert {
+        row["dst_slug"]: row["reason"] for row in links.broken_links(db, vid)
+    } == {"dup": "collision", "ghost": "missing"}
+
+
 def test_resolve_repairs_after_target_added(vault):
     db, vid = vault
     a = _add_note(db, vid, "wiki/a.md", "[[late]]")
@@ -196,9 +223,6 @@ def test_graph(linked_vault):
     by_slug = {r["dst_slug"]: r for r in edges}
     assert by_slug["b"]["dst_relpath"] == "wiki/b.md" and by_slug["b"]["resolved"]
     assert by_slug["ghost"]["dst_relpath"] is None and not by_slug["ghost"]["resolved"]
-
-
-from scripts import reindex
 
 
 def _write(vroot, relpath, body):

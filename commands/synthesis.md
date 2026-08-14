@@ -28,26 +28,12 @@ Active wiki-mode vault. There should be structured pages to weave — run
 
 5. **On Yes, write it** (reuses `query.write_synthesis`):
 
+   Save the approved prose to a UTF-8 file and run:
+
    ```bash
-   python3 -c "
-   from scripts.paths import registry_path
-   from scripts import query, ingest, registry
-   db = registry_path()
-   vault = registry.get_active(db)
-   rel = query.write_synthesis(
-       db, vault_id=vault['id'],
-       title='<synthesis title>',
-       body='<synthesized prose>',
-       citations=['<member rel1>', '<member rel2>'],
-       tags=['<t1>','<t2>'],
-       date_str='<YYYY-MM-DD>',
-   )
-   ingest.update_index(db, vault_id=vault['id'],
-       entries=[('syntheses', '<slug>', '<oneliner>')])
-   ingest.append_log(db, vault_id=vault['id'],
-       op='synthesis', title='<synthesis title>', date_str='<YYYY-MM-DD>')
-   print(rel)
-   "
+   omw page write --layer syntheses --title "<synthesis title>" --body-file <body.md> \
+     --tags <t1>,<t2> --date <YYYY-MM-DD> --citation <member-rel1> \
+     --citation <member-rel2> --index "<oneliner>" --log-op synthesis
    ```
 
 ## After

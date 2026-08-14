@@ -13,15 +13,7 @@ Active vault must exist.
 2. Open:
 
 ```bash
-python3 -c "
-from pathlib import Path
-from scripts.paths import registry_path
-from scripts import adapters, registry
-db = registry_path()
-vault = registry.get_active(db)
-a = adapters.get_adapter(vault['type'], vault_name=vault['name'])
-a.open(Path(vault['path']) / '<relpath>')
-"
+omw view <relpath>
 ```
 
 - For `vault.type == 'markdown'`: opens via OS default (`open` on macOS, `xdg-open` on Linux, `start` on Windows).

@@ -9,13 +9,7 @@
 2. Run:
 
 ```bash
-python3 -c "
-from scripts.paths import registry_path
-from scripts import registry
-db = registry_path()
-row = registry.set_active(db, '<name>')
-print(dict(row))
-"
+omw vault use <name>
 ```
 
 3. Confirm: "Active vault: `<name>` (`<mode>`, `<type>`) at `<path>`."

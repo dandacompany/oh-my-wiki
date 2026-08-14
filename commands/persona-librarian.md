@@ -17,18 +17,7 @@ with the persona spec as its system prompt. Show the user the result.
 
 Before dispatching, gather the deterministic link graph for the active vault:
 
-```bash
-python3 -c "
-from scripts.paths import registry_path
-from scripts import links, registry
-import json
-db = registry_path(); vid = registry.get_active(db)['id']
-print(json.dumps({'orphans': links.orphans(db, vid), 'graph': links.graph(db, vid)}))
-"
-```
-
-(If that one-liner is awkward, run `omw lint` and read its `links` section,
-which already contains `orphans`/`broken`.)
+Run `omw lint` and read its `links` section. Run `omw connections` for the graph.
 
 Pass this JSON as `--text` input to the subagent. The subagent produces JSON
 proposals (add cross-links, move orphans, merge candidates).

@@ -15,12 +15,7 @@
 3. Run:
 
 ```bash
-python3 -c "
-from scripts.paths import registry_path
-from scripts import registry
-db = registry_path()
-registry.forget_vault(db, '<name>')
-"
+omw vault forget <name>
 ```
 
 4. Confirm: "Removed `<name>` from registry. Files at `<path>` are preserved."

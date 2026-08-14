@@ -17,17 +17,7 @@ persona spec as its system prompt. Show the user the result.
 
 Before dispatching, compute drift for the active vault:
 
-```bash
-python3 -c "
-from scripts.paths import registry_path
-from scripts import links, registry
-import json
-db = registry_path(); vid = registry.get_active(db)['id']
-print(json.dumps(links.index_drift(db, vid)))
-"
-```
-
-(Or read `omw lint`'s `links.index_drift`.)
+Run `omw lint` and read its `links.index_drift` value.
 
 Pass the drift JSON plus the current `wiki/index.md` content as `--text`
 input to the subagent. The subagent produces a proposed full rewrite of

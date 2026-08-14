@@ -15,7 +15,7 @@
 3. On **Import**, run:
 
    ```bash
-   python3 -m scripts.wizard migrate --from "<legacy_path>"
+   omw setup vault
    ```
 
    Then report the result (`vault_count`, new `registry` path). The legacy file

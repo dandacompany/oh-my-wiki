@@ -22,7 +22,7 @@ an isolated one-shot subagent on any backend (claude/codex/gemini/opencode)
 with the persona spec as its system prompt. Show the user the result.
 
 Pass the source as input. In vault-wide mode, first gather the candidate
-list (`python3 -m scripts.wiki_lint --vault-id <id>`) and feed the
+list (`omw lint`) and feed the
 `contradiction_candidates` output to the subagent. In single-doc mode,
 pass the source directly.
 
