@@ -615,6 +615,124 @@ _READ_TOOLS = {
 
 _PRETOOL_INPUT_KEYS = ("path", "file_path", "pattern", "glob", "query", "command", "cmd")
 
+#: payload keys holding a whole shell command line rather than a target.
+_PRETOOL_SHELL_KEYS = ("command", "cmd")
+
+#: path segments that carry no topic (layer/type directories, file extensions).
+_PRETOOL_STOPWORDS = {
+    "raw", "wiki", "src", "scripts", "tests", "test", "md", "py",
+    "ts", "tsx", "js", "json", "yaml", "yml",
+    # vault layers and page types — structure, not subject. Kept literal rather
+    # than derived from ingest.WIKI_LAYERS: importing ingest costs 0.08s, over
+    # half this hook's fast path. tests/test_recall_pretool.py pins the two
+    # lists together so a new layer fails loudly instead of drifting.
+    "concepts", "summaries", "syntheses", "comparisons", "entities",
+    "notes", "import", "docs", "index", "log",
+}
+
+#: file suffixes that make a bare (slash-less) argument path-shaped.
+_PATHY_SUFFIXES = (
+    ".md", ".py", ".ts", ".tsx", ".js", ".jsx", ".json", ".yaml", ".yml",
+    ".toml", ".txt", ".sh", ".rs", ".go", ".sql", ".css", ".html", ".ipynb",
+)
+
+#: shortest word specific enough to name a page. ASCII words match on word
+#: boundaries, so 'db' would still catch dbt/mariadb/sandbox — hold those to 3.
+#: Hangul has no boundaries to match on, but 2 syllables is already a word.
+_MIN_WORD_ASCII = 3
+_MIN_WORD_CJK = 2
+
+#: candidates to fetch before gating, and pages to inject after it. Score does
+#: not rank relevance here, so the qualifying page is often outside the top few.
+_PRETOOL_CANDIDATES = 15
+_PRETOOL_MAX_HITS = 3
+
+
+def _fold(text: str) -> str:
+    """Case- and unicode-normalized form for name comparison (NFD vaults on SMB)."""
+    import unicodedata
+    return unicodedata.normalize("NFC", text).casefold()
+
+
+def _term_words(term: str) -> list[str]:
+    """Words of a search term, or [] when it is too weak to name a page.
+
+    Separators are not meaningful — the index splits `key-rotation` into `key`
+    and `rotation`, so a page titled "Key rotation" must still match. Purely
+    numeric words (dates, versions) are dropped: they name this vault's file
+    naming convention rather than any subject.
+    """
+    import re
+    words = []
+    for word in re.split(r"[-_.\s]+", _fold(term)):
+        if not word or word.isdigit():
+            return []
+        if len(word) < (_MIN_WORD_ASCII if word.isascii() else _MIN_WORD_CJK):
+            return []
+        words.append(word)
+    return words
+
+
+def _names_a_term(hit: dict, term_words: list[list[str]]) -> bool:
+    """True if the hit's own title or path names one of the search terms.
+
+    Takes terms pre-split by `_term_words` — this runs once per candidate hit.
+
+    FTS scores cannot rank relevance for these queries: measured on a live
+    vault, an apt query ('페르소나 번들') peaked at 5.7 while a junk one
+    ('packages db key-rotation') reached 11.5, because a common word matching
+    often in long documents outscores a real topical match. A page that *names*
+    a term, on the other hand, is about it. Body-only matches are dropped —
+    pretool injects into every tool call, so precision beats recall.
+    """
+    import re
+    haystack = _fold(f"{hit.get('relpath') or ''} {hit.get('title') or ''}")
+
+    def _present(word: str) -> bool:
+        if not word.isascii():
+            return word in haystack
+        # a bare substring would let 'box' match 'sandbox'
+        return re.search(rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])", haystack) is not None
+
+    return any(all(_present(w) for w in words) for words in term_words)
+
+
+def _shell_path_args(command: str) -> list[str]:
+    """Path-shaped arguments of a shell command line.
+
+    A shell command is mostly vocabulary of the shell, not of the wiki: utility
+    names, flags, subcommands and line ranges. Only arguments that look like a
+    file path name something the vault could plausibly know about, so they are
+    the only part worth searching on. `ls -la`, `date` and `git status` yield
+    nothing and are never looked up.
+    """
+    args = []
+    for token in command.replace("|", " ").split():
+        arg = token.strip("'\"`()<>;&")
+        if not arg or arg.startswith("-"):
+            continue
+        if "/" in arg or arg.lower().endswith(_PATHY_SUFFIXES):
+            args.append(arg)
+    return args
+
+
+def _query_terms(text: str) -> list[str]:
+    """Topic-bearing terms of a path or free-text target."""
+    import re
+    terms = []
+    for token in re.findall(r"[A-Za-z0-9가-힣_.-]+", text):
+        stem, dot, ext = token.rpartition(".")
+        if dot and f".{ext.lower()}" in _PATHY_SUFFIXES:
+            token = stem
+        token = token.strip(".")
+        # digits and separators only: dates, versions, line ranges — never a subject
+        if not token or re.fullmatch(r"[\d._-]+", token):
+            continue
+        if token.lower() in _PRETOOL_STOPWORDS:
+            continue
+        terms.append(token)
+    return terms
+
 
 def _targets_raw(tool_input: dict) -> bool:
     """True if a read/grep payload points into the vault's raw/ sources."""
@@ -626,22 +744,32 @@ def _targets_raw(tool_input: dict) -> bool:
 
 
 def _pretool_path_query(payload: dict) -> str:
-    import re
+    """Search terms for a tool payload, or "" when there is nothing to recall on.
+
+    Shell payloads contribute only their path arguments; a direct target
+    (`path`/`pattern`/`glob`/`query`) is already a chosen term and is kept whole.
+    """
     tool_input = payload.get("tool_input") or payload.get("input") or {}
     if not isinstance(tool_input, dict):
         return ""
-    values = [tool_input.get(k) for k in _PRETOOL_INPUT_KEYS]
-    text = " ".join(v for v in values if isinstance(v, str))
-    tokens = [t for t in re.findall(r"[A-Za-z0-9가-힣_-]+", text) if
-              t.lower() not in {"raw", "wiki", "src", "scripts", "tests", "test", "md", "py",
-                                "ts", "tsx", "js", "json", "yaml", "yml"}]
-    return " ".join(tokens[-6:])
+    targets = []
+    for key in _PRETOOL_INPUT_KEYS:
+        val = tool_input.get(key)
+        if not isinstance(val, str) or not val:
+            continue
+        targets.extend(_shell_path_args(val) if key in _PRETOOL_SHELL_KEYS else [val])
+    terms = dict.fromkeys(t for target in targets for t in _query_terms(target))
+    return " ".join(list(terms)[-6:])
 
 
 def _pretool_path_hits(payload: dict) -> list[dict]:
     """Fast FTS-only lookup for a file target; never cold-start an embedder."""
     query = _pretool_path_query(payload)
     if not query:
+        return []
+    # Nothing can survive the name gate, so skip the lookup (and Kiwi with it).
+    term_words = [words for t in query.split() if (words := _term_words(t))]
+    if not term_words:
         return []
     try:
         from scripts import search_index
@@ -650,8 +778,9 @@ def _pretool_path_hits(payload: dict) -> list[dict]:
         v = _active(db)
         if not v:
             return []
-        hits = search_index.query(db, vault_id=v["id"], query=normalize_query(query), limit=3)
-        return [h for h in hits if float(h.get("score") or 0) >= 3.0]
+        hits = search_index.query(db, vault_id=v["id"], query=normalize_query(query),
+                                  limit=_PRETOOL_CANDIDATES)
+        return [h for h in hits if _names_a_term(h, term_words)][:_PRETOOL_MAX_HITS]
     except Exception:
         return []
 
