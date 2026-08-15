@@ -257,3 +257,64 @@ def test_quality_gate_checks_bounded_body_across_distant_matches(tmp_path, monke
         limit=3, strategy="hybrid", embedder=None, quality_gate=True,
     )
     assert out and out[0]["relpath"] == "raw/hostinger.md"
+
+
+# --- shared name gate -------------------------------------------------------
+# One rule, one home. recall's pretool hook and the fts recall path both need
+# "is this hit actually about the query", and two copies would drift.
+
+def test_names_query_keeps_a_hit_that_names_a_term():
+    hits = [{"relpath": "wiki/concepts/hybrid-search.md", "title": "Hybrid search"}]
+    assert search_index.names_query(hits, "hybrid-search") == hits
+
+
+def test_names_query_drops_a_hit_that_names_nothing():
+    hits = [{"relpath": "raw/2026-07-08-hermes-plugins.md", "title": "Hermes plugins"}]
+    assert search_index.names_query(hits, "key-rotation") == []
+
+
+def test_names_query_matches_a_spaced_title_for_a_hyphenated_term():
+    hits = [{"relpath": "wiki/concepts/n1.md", "title": "Key rotation"}]
+    assert len(search_index.names_query(hits, "key-rotation")) == 1
+
+
+def test_names_query_requires_word_boundaries_for_latin_terms():
+    hits = [{"relpath": "wiki/concepts/sandbox.md", "title": "Sandbox"}]
+    assert search_index.names_query(hits, "box") == []
+
+
+def test_names_query_accepts_two_syllable_hangul():
+    hits = [{"relpath": "wiki/concepts/번들-구성.md", "title": ""}]
+    assert len(search_index.names_query(hits, "번들")) == 1
+
+
+def test_a_date_shaped_term_cannot_qualify_a_hit_on_its_own():
+    """Dates name a filename convention, not a subject — only 'kiwi' may match."""
+    hits = [{"relpath": "raw/2026-07-08-anything.md", "title": ""},
+            {"relpath": "wiki/concepts/kiwi.md", "title": "Kiwi"}]
+    assert [h["relpath"] for h in search_index.names_query(hits, "2026-07-08 kiwi")] == [
+        "wiki/concepts/kiwi.md"]
+
+
+def test_names_query_returns_everything_when_no_term_can_qualify():
+    """A query with nothing specific enough must not silently drop every hit."""
+    hits = [{"relpath": "wiki/concepts/x.md", "title": "X"}]
+    assert search_index.names_query(hits, "db") == hits
+
+
+def test_a_hangul_term_matches_through_its_josa():
+    """Prompts carry postpositions ('번들을'); the page title does not. Dropping
+    the hit would make Korean prompt recall go silent."""
+    hits = [{"relpath": "wiki/summaries/persona.md", "title": "페르소나 번들"}]
+    assert len(search_index.names_query(hits, "번들을 실행")) == 1
+
+
+def test_name_terms_is_public_for_callers_that_pre_check():
+    assert search_index.name_terms("key-rotation") == [["key", "rotation"]]
+    assert search_index.name_terms("db 2026-07-08") == []
+
+
+def test_on_vague_drop_returns_nothing_when_no_term_qualifies():
+    hits = [{"relpath": "wiki/concepts/x.md", "title": "X"}]
+    assert search_index.names_query(hits, "db", on_vague="drop") == []
+    assert search_index.names_query(hits, "db", on_vague="keep") == hits

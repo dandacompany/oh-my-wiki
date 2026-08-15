@@ -70,3 +70,14 @@ def make_vault_with_pages(tmp_path, monkeypatch, pages: dict) -> tuple:
 
     reindex.full(db, vault_id=v["id"])
     return db, v["id"]
+
+
+@pytest.fixture(autouse=True)
+def _reset_normalizer_cache():
+    """The analyzer provider is resolved once and cached in a module global, so
+    a test that selects 'kiwi' silently changes how later tests normalize text.
+    Clear it on both sides of every test."""
+    from scripts import text_normalize
+    text_normalize._reset_provider_cache()
+    yield
+    text_normalize._reset_provider_cache()

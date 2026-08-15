@@ -39,6 +39,25 @@ def test_strip_josa_still_callable():
     assert recall._strip_josa("평가지표를") == "평가지표"
 
 
+def test_fts_recall_gates_hits_that_name_nothing(tmp_path, monkeypatch):
+    """The fts arm had no precision filter, so it injected its top hits on every
+    prompt regardless of what the prompt was about."""
+    from scripts import config, search_index
+    from scripts import paths
+
+    db = tmp_path / "registry.db"
+    db.touch()
+    monkeypatch.setattr(paths, "registry_path", lambda: db)
+    monkeypatch.setattr(config, "load_config", lambda: {"recall": {"strategy": "fts"}})
+    monkeypatch.setattr(recall, "_active", lambda _db: {"id": 7})
+    monkeypatch.setattr(search_index, "query", lambda *a, **k: [
+        {"relpath": "raw/import/hermes-top-10-skills.md", "title": "Hermes skills"},
+        {"relpath": "wiki/concepts/에이전트-메모리.md", "title": "에이전트 메모리"},
+    ])
+    hits = recall._hits("에이전트 메모리 3층 구조가 뭐였지", 3)
+    assert [h["relpath"] for h in hits] == ["wiki/concepts/에이전트-메모리.md"]
+
+
 def test_hybrid_recall_uses_quality_gate(tmp_path, monkeypatch):
     """Only hook-side hybrid recall opts into strict relevance filtering."""
     from scripts import config, embed, search_index

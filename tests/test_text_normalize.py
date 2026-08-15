@@ -102,6 +102,61 @@ def test_provider_falls_back_to_heuristic_when_kiwi_unavailable(monkeypatch):
     assert tn.normalize_text("학교에서") == "학교"  # heuristic still runs
 
 
+# --- script routing: Hangul goes to Kiwi, everything else does not ----------
+# Kiwi mangles Latin identifiers ('recall.py' -> 'r ecall.py'). That used to be
+# survivable only because index and query were mangled identically. Routing by
+# script keeps identifiers intact on BOTH sides and lets an ASCII-only query
+# skip the 1.4s Kiwi model load entirely.
+
+def _real_kiwi_provider(monkeypatch):
+    """Select the kiwi provider with a stand-in that is obvious in output."""
+    monkeypatch.setattr(kiwi_install, "kiwi_available", lambda: True)
+    from scripts import config
+    monkeypatch.setattr(config, "load_config",
+                        lambda: {"recall": {"normalizer": "kiwi"}})
+    tn._reset_provider_cache()
+
+
+def test_ascii_only_text_never_loads_kiwi(monkeypatch):
+    _real_kiwi_provider(monkeypatch)
+    def boom(_):
+        raise AssertionError("Kiwi loaded for ASCII-only text")
+    monkeypatch.setattr(tn, "_kiwi_text", boom)
+    assert tn.normalize_text("recall.py key-rotation") == "recall.py key-rotation"
+
+
+def test_latin_identifiers_survive_inside_korean_text(monkeypatch):
+    _real_kiwi_provider(monkeypatch)
+    monkeypatch.setattr(tn, "_kiwi_text", lambda t: "KIWI(" + t + ")")
+    out = tn.normalize_text("omw의 recall.py 훅은 node_modules 없이")
+    assert "recall.py" in out.split() and "node_modules" in out.split()
+
+
+def test_hangul_tokens_still_reach_kiwi(monkeypatch):
+    _real_kiwi_provider(monkeypatch)
+    seen = []
+    monkeypatch.setattr(tn, "_kiwi_text", lambda t: seen.append(t) or t)
+    tn.normalize_text("omw의 recall.py 훅은 node_modules 없이")
+    assert seen and "훅은" in seen[0] and "recall.py" not in seen[0]
+
+
+def test_a_document_and_a_query_share_tokens_for_the_same_identifier(monkeypatch):
+    """The IR invariant, stated as the behaviour that actually matters."""
+    _real_kiwi_provider(monkeypatch)
+    monkeypatch.setattr(tn, "_kiwi_text", lambda t: " ".join(t.split()))
+    doc = tn.normalize_text("omw의 recall.py 훅은 key-rotation 로직을 처리한다")
+    query = tn.normalize_text("recall.py")
+    assert set(query.split()) <= set(doc.split())
+
+
+def test_analyzer_version_encodes_the_routing_rule(monkeypatch):
+    """A rule change must invalidate existing indexes, not silently mismatch."""
+    _real_kiwi_provider(monkeypatch)
+    version = tn.analyzer_version()
+    assert version.startswith("kiwi-")
+    assert version != "kiwi-" + tn._kiwipiepy_version()
+
+
 def test_kiwi_text_failure_falls_back_to_heuristic(monkeypatch):
     # if the real _kiwi_text raises, the call must not raise — fall back
     monkeypatch.setattr(kiwi_install, "kiwi_available", lambda: True)
@@ -115,3 +170,50 @@ def test_kiwi_text_failure_falls_back_to_heuristic(monkeypatch):
     # normalize_text must swallow and not raise
     out = tn.normalize_text("학교에서")
     assert isinstance(out, str)
+
+
+def test_latin_survives_a_token_that_also_has_korean(monkeypatch):
+    """Korean technical prose is full of 'recall.py에서' — routing per whitespace
+    token would send the whole thing to Kiwi and split the identifier again."""
+    _real_kiwi_provider(monkeypatch)
+    monkeypatch.setattr(tn, "_kiwi_text", lambda t: "<" + t + ">")
+    for token, latin in [("recall.py에서", "recall.py"),
+                         ("node_modules를", "node_modules"),
+                         ("AGENTS.md에", "AGENTS.md")]:
+        assert latin in tn.normalize_text(token).split(), token
+
+
+def test_decomposed_hangul_normalizes_like_composed(monkeypatch):
+    """NFD filenames (macOS SMB vaults) contain no [가-힣] — without folding at
+    the seam they would route to the heuristic while NFC text routes to Kiwi."""
+    import unicodedata
+    _real_kiwi_provider(monkeypatch)
+    monkeypatch.setattr(tn, "_kiwi_text", lambda t: " ".join(t.split()))
+    composed = "페르소나 번들"
+    decomposed = unicodedata.normalize("NFD", composed)
+    assert tn.normalize_text(decomposed) == tn.normalize_text(composed)
+
+
+def test_a_latin_identifier_wearing_a_postposition_keeps_its_shape(monkeypatch):
+    """'node_modules를' must not hand a bare '를' to Kiwi, which turns that lone
+    postposition into a spurious token."""
+    _real_kiwi_provider(monkeypatch)
+    monkeypatch.setattr(tn, "_kiwi_text", lambda t: "<" + t + ">")
+    for token, expected in [("recall.py에서", "recall.py"),
+                            ("node_modules를", "node_modules"),
+                            ("AGENTS.md에", "AGENTS.md")]:
+        assert tn.normalize_text(token) == expected
+
+
+def test_a_genuinely_mixed_word_splits_by_script(monkeypatch):
+    _real_kiwi_provider(monkeypatch)
+    monkeypatch.setattr(tn, "_kiwi_text", lambda t: t)
+    assert set(tn.normalize_text("AI기반").split()) == {"AI", "기반"}
+
+
+def test_strip_josa_is_provider_independent(monkeypatch):
+    """Callers need the bare stem, not a morpheme analysis — even under kiwi."""
+    _real_kiwi_provider(monkeypatch)
+    assert tn.strip_josa("번들을") == "번들"
+    assert tn.strip_josa("ARIMA와") == "ARIMA"
+    assert tn.strip_josa("") == ""

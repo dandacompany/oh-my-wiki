@@ -202,6 +202,87 @@ def _coverage(query_tokens: set[str], text: str) -> tuple[float, int, set[str]]:
     )
 
 
+#: shortest word specific enough to name a page. Latin words match on word
+#: boundaries, so 'db' would still catch dbt/mariadb/sandbox — hold those to 3.
+#: Hangul has no boundaries to match on, but 2 syllables is already a word.
+_MIN_NAME_WORD_LATIN = 3
+_MIN_NAME_WORD_HANGUL = 2
+
+
+def _fold(text: str) -> str:
+    """Case- and unicode-normalized form for name comparison (NFD vaults on SMB)."""
+    import unicodedata
+    return unicodedata.normalize("NFC", text).casefold()
+
+
+def _name_words(term: str) -> list[str]:
+    """Words of a search term, or [] when it is too weak to name a page.
+
+    Separators are not meaningful — the analyzer splits `key-rotation` into
+    `key` and `rotation`, so a page titled "Key rotation" must still match.
+    Purely numeric words (dates, versions) are dropped: they name a file naming
+    convention rather than any subject.
+    """
+    words = []
+    for word in re.split(r"[-_.\s]+", _fold(term)):
+        if not word or word.isdigit():
+            return []
+        if len(word) < (_MIN_NAME_WORD_LATIN if word.isascii() else _MIN_NAME_WORD_HANGUL):
+            return []
+        words.append(word)
+    return words
+
+
+def name_terms(query: str) -> list[list[str]]:
+    """Query terms specific enough to judge a hit by name, each split into words.
+    Empty when nothing in the query is specific enough — callers decide what
+    that means for them (see `names_query`'s `on_vague`)."""
+    return [words for term in (query or "").split() if (words := _name_words(term))]
+
+
+def _word_present(word: str, haystack: str) -> bool:
+    if not word.isascii():
+        if word in haystack:
+            return True
+        # A prompt carries postpositions its target page does not: '번들을' must
+        # still find "페르소나 번들".
+        from scripts import text_normalize
+        stripped = text_normalize.strip_josa(word)
+        return stripped != word and len(stripped) >= _MIN_NAME_WORD_HANGUL \
+            and stripped in haystack
+    # a bare substring would let 'box' match 'sandbox'
+    return re.search(rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])", haystack) is not None
+
+
+def names_query(hits: list[dict], query: str, *,
+                on_vague: str = "keep") -> list[dict]:
+    """Keep only hits whose own title or relpath names a term of the query.
+
+    A precision gate for callers that must not inject noise — the recall hooks
+    fire on every prompt and every tool call. Scores cannot do this job:
+    measured on a live vault, the apt query '페르소나 번들' peaked at 5.73 with
+    entirely correct hits while 'packages db key-rotation' reached 11.49 with
+    entirely wrong ones, because a common word matching often in a long
+    document outscores a real topical match. A page that *names* a term is
+    about it; body-only matches are dropped — which does mean a page that
+    discusses a topic without naming it in its title or path cannot surface
+    through this gate. That trade is deliberate for auto-injection.
+
+    `on_vague` decides what happens when no query term is specific enough:
+    "keep" falls back to the caller's own ranking, "drop" returns nothing (for
+    callers whose whole query was noise, like a shell command with no paths).
+    """
+    terms = name_terms(query)
+    if not terms:
+        return [] if on_vague == "drop" else hits
+    kept = []
+    for hit in hits:
+        haystack = _fold(f"{hit.get('relpath') or ''} {hit.get('title') or ''}")
+        if any(all(_word_present(w, haystack) for w in words) for words in terms):
+            kept.append(hit)
+    return kept
+
+
 def _relative_prune(ranked: list[tuple[float, dict]], *, limit: int,
                     ratio: float = 0.80) -> list[dict]:
     """Keep only candidates reasonably close to the best supported result."""

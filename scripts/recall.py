@@ -218,9 +218,18 @@ def _hits(text: str, top_k: int) -> list[dict]:
         visibility = rc.get("visibility", None)
 
         if strat == "fts":
-            return search_index.query(db, vault_id=v["id"],
+            # The hybrid/embedding arms below get quality_gate; the fts arm had
+            # no precision filter at all, so every prompt injected its top hits
+            # whether or not they were about the prompt. Note the two arms judge
+            # relevance differently — this one on title/path, quality_gate on
+            # body coverage.
+            # Over-fetch before gating: BM25 rank does not track relevance here,
+            # so the page that names the topic is regularly outside the top few.
+            hits = search_index.query(db, vault_id=v["id"],
                                       query=normalize_query(text),
-                                      limit=top_k, visibility=visibility)
+                                      limit=max(top_k * 5, _PRETOOL_CANDIDATES),
+                                      visibility=visibility)
+            return search_index.names_query(hits, text)[:top_k]
         else:
             embedder = embed.active_embedder(
                 db, (cfg.get("recall") or {}).get("embedding") or {}
@@ -636,65 +645,11 @@ _PATHY_SUFFIXES = (
     ".toml", ".txt", ".sh", ".rs", ".go", ".sql", ".css", ".html", ".ipynb",
 )
 
-#: shortest word specific enough to name a page. ASCII words match on word
-#: boundaries, so 'db' would still catch dbt/mariadb/sandbox — hold those to 3.
-#: Hangul has no boundaries to match on, but 2 syllables is already a word.
-_MIN_WORD_ASCII = 3
-_MIN_WORD_CJK = 2
-
 #: candidates to fetch before gating, and pages to inject after it. Score does
 #: not rank relevance here, so the qualifying page is often outside the top few.
+#: The gate itself lives in search_index.names_query — one rule, one home.
 _PRETOOL_CANDIDATES = 15
 _PRETOOL_MAX_HITS = 3
-
-
-def _fold(text: str) -> str:
-    """Case- and unicode-normalized form for name comparison (NFD vaults on SMB)."""
-    import unicodedata
-    return unicodedata.normalize("NFC", text).casefold()
-
-
-def _term_words(term: str) -> list[str]:
-    """Words of a search term, or [] when it is too weak to name a page.
-
-    Separators are not meaningful — the index splits `key-rotation` into `key`
-    and `rotation`, so a page titled "Key rotation" must still match. Purely
-    numeric words (dates, versions) are dropped: they name this vault's file
-    naming convention rather than any subject.
-    """
-    import re
-    words = []
-    for word in re.split(r"[-_.\s]+", _fold(term)):
-        if not word or word.isdigit():
-            return []
-        if len(word) < (_MIN_WORD_ASCII if word.isascii() else _MIN_WORD_CJK):
-            return []
-        words.append(word)
-    return words
-
-
-def _names_a_term(hit: dict, term_words: list[list[str]]) -> bool:
-    """True if the hit's own title or path names one of the search terms.
-
-    Takes terms pre-split by `_term_words` — this runs once per candidate hit.
-
-    FTS scores cannot rank relevance for these queries: measured on a live
-    vault, an apt query ('페르소나 번들') peaked at 5.7 while a junk one
-    ('packages db key-rotation') reached 11.5, because a common word matching
-    often in long documents outscores a real topical match. A page that *names*
-    a term, on the other hand, is about it. Body-only matches are dropped —
-    pretool injects into every tool call, so precision beats recall.
-    """
-    import re
-    haystack = _fold(f"{hit.get('relpath') or ''} {hit.get('title') or ''}")
-
-    def _present(word: str) -> bool:
-        if not word.isascii():
-            return word in haystack
-        # a bare substring would let 'box' match 'sandbox'
-        return re.search(rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])", haystack) is not None
-
-    return any(all(_present(w) for w in words) for words in term_words)
 
 
 def _shell_path_args(command: str) -> list[str]:
@@ -767,12 +722,13 @@ def _pretool_path_hits(payload: dict) -> list[dict]:
     query = _pretool_path_query(payload)
     if not query:
         return []
-    # Nothing can survive the name gate, so skip the lookup (and Kiwi with it).
-    term_words = [words for t in query.split() if (words := _term_words(t))]
-    if not term_words:
+    from scripts import search_index
+    # Decided before the try, and before normalize_query: nothing here can pass
+    # the name gate, so skip the lookup and Kiwi's model load with it. Outside
+    # the try on purpose — a fault here is a bug, not a missing vault.
+    if not search_index.name_terms(query):
         return []
     try:
-        from scripts import search_index
         from scripts.paths import registry_path
         db = registry_path()
         v = _active(db)
@@ -780,7 +736,9 @@ def _pretool_path_hits(payload: dict) -> list[dict]:
             return []
         hits = search_index.query(db, vault_id=v["id"], query=normalize_query(query),
                                   limit=_PRETOOL_CANDIDATES)
-        return [h for h in hits if _names_a_term(h, term_words)][:_PRETOOL_MAX_HITS]
+        # on_vague="drop": a command whose only terms are noise gets no injection.
+        return search_index.names_query(
+            hits, query, on_vague="drop")[:_PRETOOL_MAX_HITS]
     except Exception:
         return []
 
