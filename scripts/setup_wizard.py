@@ -1263,6 +1263,28 @@ def doctor_checks() -> dict:
     items.append({"name": "wizard UI", "ok": wizard_ok, "detail": "",
                   "hint": "" if wizard_ok else " ".join(_pe.pip_install_argv("oh-my-wiki[wizard]")) + " — arrow-key setup UI; falls back to plain text"})
 
+    # A vector-contract mismatch disables vector search outright, and the only
+    # notice it gives is a line on stderr that the recall hooks discard. doctor
+    # is where someone looks when retrieval "feels worse" — it has to say so.
+    try:
+        from scripts import config as _cfg, embed as _embed, vector_index as _vi
+        if _vi.available():
+            _emb_cfg = ((_cfg.load_config() or {}).get("recall") or {}).get("embedding") or {}
+            # active_embedder, not get_embedder — see embed_admin.status.
+            _report = _vi.contract_report(db, _embed.active_embedder(db, _emb_cfg))
+            if not _report["matches"]:
+                _fields = ", ".join(sorted(_report["mismatched"]))
+                items.append({
+                    "name": "vector contract", "ok": False,
+                    "detail": f"index and embedder disagree on {_fields}",
+                    "hint": "vector search returns nothing until you run: omw embed reindex",
+                })
+    except Exception as exc:
+        # doctor's job is saying what it could not verify — swallowing this
+        # would reproduce the very silence this check exists to remove.
+        items.append({"name": "vector contract", "ok": True,
+                      "detail": f"could not check ({type(exc).__name__})", "hint": ""})
+
     ok = all(i["ok"] for i in items if i["name"] in ("omw home", "registry"))
     return {"ok": ok, "items": items, "vaults": [dict(v) for v in vaults],
             "sandbox_warning": sandbox_warning, "home": str(home), "registry": str(db)}
@@ -1311,4 +1333,11 @@ def doctor() -> int:
     if not ca:
         print("  hint: behind a corporate proxy that inspects HTTPS? if fetch/search "
               "fail with a certificate error, export SSL_CERT_FILE=/path/to/corporate-ca.pem")
+    # Rendered last so it is the line left on screen. This renderer names each
+    # item explicitly, so a check absent from here is invisible no matter what
+    # doctor_checks() reports.
+    for item in d["items"]:
+        if item["name"] == "vector contract" and not item["ok"]:
+            print(f"vector index:  MISMATCH — {item['detail']}")
+            print(f"  {item['hint']}")
     return 0

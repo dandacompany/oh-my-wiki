@@ -213,6 +213,75 @@ def upsert(db_path, *, vault_id: int, embedder, rows) -> int:
     return len(rows)
 
 
+#: contract fields that must agree between the stored index and the live
+#: embedder. Any disagreement means the stored vectors answer a different
+#: question than the query does, so search fails closed.
+_CONTRACT_FIELDS = ("model", "dim", "prefix_scheme", "fingerprint", "distance_metric")
+
+CONTRACT_HINT = "run `omw embed reindex`"
+
+
+def contract_from_meta(stored: "dict | None", embedder) -> dict:
+    """Compare a already-read vec_meta row against the live embedder — pure.
+
+    Returns {matches, compared, mismatched: {field: {indexed, current}},
+    indexed, current}. `compared` distinguishes "checked and equal" from
+    "nothing stored to check against"; `matches` alone cannot.
+
+    Kept free of I/O so `query()` can pass the row it already selected on its
+    open connection instead of reopening the database mid-query.
+    """
+    from scripts import embed as _embed
+    current = {}
+    if embedder is not None:
+        current = {
+            "model": getattr(embedder, "model", None),
+            "dim": getattr(embedder, "dim", None),
+            "prefix_scheme": _embed.prefix_scheme(embedder),
+            "fingerprint": _embed.embedding_fingerprint(embedder),
+            "distance_metric": "cosine",
+        }
+    if embedder is None or not stored:
+        return {"matches": True, "compared": False, "mismatched": {},
+                "indexed": dict(stored) if stored else {}, "current": current}
+    indexed = {
+        "model": stored.get("model"),
+        "dim": stored.get("dim"),
+        "prefix_scheme": stored.get("prefix_scheme") or "none",
+        "fingerprint": stored.get("fingerprint") or "",
+        "distance_metric": stored.get("distance_metric") or "unknown",
+    }
+    mismatched = {}
+    for field in _CONTRACT_FIELDS:
+        was, now = indexed[field], current[field]
+        # model is advisory when either side does not know its own name
+        if field == "model" and (was is None or now is None):
+            continue
+        if was != now:
+            mismatched[field] = {"indexed": was, "current": now}
+    return {"matches": not mismatched, "compared": True, "mismatched": mismatched,
+            "indexed": indexed, "current": current}
+
+
+def contract_report(db_path, embedder) -> dict:
+    """`contract_from_meta` against the stored contract, reading it from disk.
+
+    The diagnostic surfaces (`omw embed status`, `omw doctor`, the recall hook)
+    call this. Pass the embedder the query path would actually use —
+    `embed.active_embedder`, not `embed.get_embedder` — or the report will flag
+    an interrupted model switch that `active_embedder` already recovers from.
+    """
+    return contract_from_meta(meta(db_path), embedder)
+
+
+def describe_mismatch(report: dict) -> str:
+    """One line naming which contract fields disagree, for humans."""
+    fields = ", ".join(sorted(report.get("mismatched") or {}))
+    if not fields:
+        return ""
+    return f"vector index was built with a different {fields}; {CONTRACT_HINT}"
+
+
 def query(db_path, *, vault_id: int, embedder, text: str, limit: int = 5) -> list[dict]:
     """Return [{relpath, score}] nearest to `text` (score = 1/(1+distance), higher=better).
     Returns [] (fail-closed) when the stored model/dim differs from the embedder."""
@@ -229,38 +298,18 @@ def query(db_path, *, vault_id: int, embedder, text: str, limit: int = 5) -> lis
                 file=sys.stderr,
             )
             return []
-        # Fail-closed: reject if dim or model differs from stored meta
+        # Fail-closed: the stored vectors must come from this exact runtime.
+        # Read on THIS connection — going through contract_report() would reopen
+        # the database mid-query and, because meta() swallows read errors, turn
+        # a corrupt vec_meta from "fail closed" into "skip the check".
         meta_row = conn.execute(
             "SELECT model, dim, prefix_scheme, fingerprint, distance_metric "
             "FROM vec_meta WHERE id=1"
         ).fetchone()
-        if meta_row is not None:
-            stored_dim = meta_row["dim"]
-            stored_model = meta_row["model"]
-            query_model = getattr(embedder, "model", None)
-            stored_scheme = meta_row["prefix_scheme"] or "none"
-            query_scheme = embed.prefix_scheme(embedder)
-            stored_fingerprint = meta_row["fingerprint"] or ""
-            query_fingerprint = embed.embedding_fingerprint(embedder)
-            stored_metric = meta_row["distance_metric"] or "unknown"
-            dim_mismatch = (stored_dim != embedder.dim)
-            model_mismatch = (
-                stored_model is not None
-                and query_model is not None
-                and stored_model != query_model
-            )
-            scheme_mismatch = stored_scheme != query_scheme
-            fingerprint_mismatch = stored_fingerprint != query_fingerprint
-            metric_mismatch = stored_metric != "cosine"
-            if (dim_mismatch or model_mismatch or scheme_mismatch
-                    or fingerprint_mismatch or metric_mismatch):
-                print(
-                    "vector store was built with a different embedding model or "
-                    "runtime contract; "
-                    "run `omw embed reindex`",
-                    file=sys.stderr,
-                )
-                return []
+        report = contract_from_meta(dict(meta_row) if meta_row else None, embedder)
+        if not report["matches"]:
+            print(describe_mismatch(report), file=sys.stderr)
+            return []
         qv = embedder.embed([embed.query_text(embedder, text)])[0]
         cur = conn.execute(
             "SELECT relpath, distance FROM vec_notes "

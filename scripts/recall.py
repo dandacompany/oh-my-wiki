@@ -291,6 +291,61 @@ def _signal_queries(text: str) -> list[str]:
     return [query] if query and query.lower() != (text or "").strip().lower() else []
 
 
+#: how long to stay quiet after telling the user the vector index is stale.
+#: The condition persists until they reindex, and repeating it every prompt
+#: would be a permanent context tax that teaches them to skim past the marker.
+_CONTRACT_NOTICE_INTERVAL_S = 6 * 3600
+
+
+def _contract_notice_is_due() -> bool:
+    """True at most once per interval. Best-effort: a stamp we cannot write
+    means we speak up rather than go quiet."""
+    try:
+        import time
+        from scripts.paths import omw_home
+        stamp = omw_home() / ".vector-contract-notice"
+        now = time.time()
+        if stamp.exists() and now - stamp.stat().st_mtime < _CONTRACT_NOTICE_INTERVAL_S:
+            return False
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(str(int(now)), encoding="utf-8")
+    except Exception:
+        pass
+    return True
+
+
+def _vector_contract_notice(strategy: str) -> str:
+    """One line when the vector index cannot answer, or "" when it can.
+
+    The mismatch is already printed to stderr, but hooks discard stderr — so a
+    fault that silently turns hybrid recall into fts-only recall would never
+    reach anyone. stdout is the channel the host actually reads.
+
+    Rate-limited: `omw doctor` and `omw embed status` are the always-on
+    surfaces; this one only has to break the silence.
+    Never raises: recall must not fail because a diagnostic failed.
+    """
+    if strategy not in ("hybrid", "embedding"):
+        return ""
+    try:
+        from scripts import config, embed, vector_index
+        from scripts.paths import registry_path
+        if not vector_index.available():
+            return ""
+        db = registry_path()
+        emb_cfg = ((config.load_config() or {}).get("recall") or {}).get("embedding") or {}
+        # active_embedder, not get_embedder — see embed_admin.status.
+        report = vector_index.contract_report(db, embed.active_embedder(db, emb_cfg))
+        if report["matches"] or not _contract_notice_is_due():
+            return ""
+        fields = ", ".join(sorted(report["mismatched"]))
+        return (f"NOTE: vector search is disabled — the index and the current embedder "
+                f"disagree on {fields}, so these results are keyword-only. "
+                f"Run `omw embed reindex` to restore it.")
+    except Exception:
+        return ""
+
+
 def _recall_body(cfg: dict, text: str) -> str:
     """The read-side recall output (extracted verbatim from the old prompt()). Empty
     string means 'no recall injection' (mode=off, auto-miss, or no strong hit)."""
@@ -317,6 +372,14 @@ def _recall_body(cfg: dict, text: str) -> str:
         )[:top_k]
     threshold = score_threshold(cfg, strat)
     strong = [h for h in hits if (h.get("score") or 0) >= threshold]
+    _notice: list[str] = []
+
+    def degraded() -> str:
+        """Computed at most once, and only on a branch that would show it —
+        the check opens the vector store, which is not free on the hook path."""
+        if not _notice:
+            _notice.append(_vector_contract_notice(strat))
+        return _notice[0]
     if strong:  # Tier 2 — concrete grounding
         _record_use([h["relpath"] for h in strong])
         lines = [
@@ -328,8 +391,12 @@ def _recall_body(cfg: dict, text: str) -> str:
             tag_s = f" [{tags}]" if tags else ""
             lines.append(f"- {h.get('title') or h['relpath']} — `{h['relpath']}`{tag_s} (score {h.get('score')})")
         lines.append("Open: `omw view <slug>`. When citing a page, include its citations.")
+        if note := degraded():
+            lines.append(note)
         lines.append(f"</{MARKER}>")
         return "\n".join(lines)
+    if note := degraded():  # say it with nothing to show — that silence IS the symptom
+        return f"<{MARKER}> {note} </{MARKER}>"
     if cfg["mode"] == "advisory":  # Tier 1 nudge only when no strong hit
         return (
             f"<{MARKER}> For project or domain facts, check the active wiki first with "

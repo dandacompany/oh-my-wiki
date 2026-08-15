@@ -190,13 +190,31 @@ def status(db_path) -> dict:
     from scripts import recall
     effective_recall_cfg = recall._cfg()
     index_meta = vector_index.meta(db_path)
+    # A contract mismatch silently disables vector search, and comparing only
+    # model and dim misses it — those are the two fields that keep matching
+    # when a library upgrade changes the fingerprint.
+    # active_embedder, not get_embedder: it recovers the stored contract after
+    # an interrupted model switch, and reporting that as a fault would push a
+    # destructive reindex for something the query path already handles.
+    contract = vector_index.contract_from_meta(
+        index_meta, embed.active_embedder(db_path, emb))
+    diagnostics = list(recall.threshold_diagnostics(effective_recall_cfg))
+    if not contract["matches"]:
+        diagnostics.append(vector_index.describe_mismatch(contract))
+        for field, sides in sorted(contract["mismatched"].items()):
+            diagnostics.append(
+                f"  {field}: indexed={sides['indexed']!r} current={sides['current']!r}")
     return {
         "provider": emb.get("provider") or "none",
         "model": emb.get("model") or embed.DEFAULT_LOCAL_MODEL,
         "dim": emb.get("dim"),
         "index_model": (index_meta or {}).get("model"),
         "index_dim": (index_meta or {}).get("dim"),
-        "prefix_scheme": embed.prefix_scheme(embed.get_embedder(emb)),
+        "prefix_scheme": contract["current"].get("prefix_scheme"),
+        "fingerprint": contract["current"].get("fingerprint"),
+        "index_fingerprint": contract["indexed"].get("fingerprint"),
+        "index_distance_metric": contract["indexed"].get("distance_metric"),
+        "contract_matches": contract["matches"],
         "strategy": cfg.get("strategy") or "fts",
         "fastembed_available": embed_install.fastembed_available(),
         "vector_index_available": vector_index.available(),
@@ -205,6 +223,6 @@ def status(db_path) -> dict:
             strategy: recall.score_threshold(effective_recall_cfg, strategy)
             for strategy in ("fts", "embedding", "hybrid")
         },
-        "diagnostics": recall.threshold_diagnostics(effective_recall_cfg),
+        "diagnostics": diagnostics,
         "vaults": vaults,
     }
