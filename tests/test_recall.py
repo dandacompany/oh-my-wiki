@@ -51,8 +51,10 @@ def test_fts_recall_gates_hits_that_name_nothing(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "load_config", lambda: {"recall": {"strategy": "fts"}})
     monkeypatch.setattr(recall, "_active", lambda _db: {"id": 7})
     monkeypatch.setattr(search_index, "query", lambda *a, **k: [
-        {"relpath": "raw/import/hermes-top-10-skills.md", "title": "Hermes skills"},
-        {"relpath": "wiki/concepts/에이전트-메모리.md", "title": "에이전트 메모리"},
+        {"relpath": "raw/import/hermes-top-10-skills.md", "title": "Hermes skills",
+         "score": 9.0},
+        {"relpath": "wiki/concepts/에이전트-메모리.md", "title": "에이전트 메모리",
+         "score": 8.0},
     ])
     hits = recall._hits("에이전트 메모리 3층 구조가 뭐였지", 3)
     assert [h["relpath"] for h in hits] == ["wiki/concepts/에이전트-메모리.md"]

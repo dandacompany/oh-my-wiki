@@ -14,6 +14,7 @@ output means "no injection". Never raises to the host.
 """
 from __future__ import annotations
 
+import sqlite3
 import sys
 
 from scripts import maint
@@ -196,6 +197,18 @@ def _record_use(relpaths: list[str]) -> None:
         pass
 
 
+#: which retrieval arm produced a hit. The arms score on different scales —
+#: keyword search returns raw BM25 (live values 5-12), the semantic arms return
+#: 0..1 — so a hit can only be thresholded or ranked against its own kind.
+_ARM_KEY = "_arm"
+
+
+def _tag_arm(hits: list[dict], arm: str) -> list[dict]:
+    for hit in hits:
+        hit[_ARM_KEY] = arm
+    return hits
+
+
 def _hits(text: str, top_k: int) -> list[dict]:
     try:
         from scripts import config
@@ -217,30 +230,51 @@ def _hits(text: str, top_k: int) -> list[dict]:
             return []
         visibility = rc.get("visibility", None)
 
-        if strat == "fts":
-            # The hybrid/embedding arms below get quality_gate; the fts arm had
-            # no precision filter at all, so every prompt injected its top hits
-            # whether or not they were about the prompt. Note the two arms judge
-            # relevance differently — this one on title/path, quality_gate on
-            # body coverage.
-            # Over-fetch before gating: BM25 rank does not track relevance here,
-            # so the page that names the topic is regularly outside the top few.
-            hits = search_index.query(db, vault_id=v["id"],
-                                      query=normalize_query(text),
-                                      limit=max(top_k * 5, _PRETOOL_CANDIDATES),
-                                      visibility=visibility)
-            return search_index.names_query(hits, text)[:top_k]
-        else:
-            embedder = embed.active_embedder(
-                db, (cfg.get("recall") or {}).get("embedding") or {}
-            )
-            return search_index.search_strategy(db, vault_id=v["id"],
-                                                q=text, fts_query=normalize_query(text),
-                                                limit=top_k,
-                                                strategy=strat,
-                                                embedder=embedder,
-                                                visibility=visibility,
-                                                quality_gate=(strat in ("hybrid", "embedding")))
+        # Keyword first — it is nearly free, and it answers most prompts.
+        # The hybrid/embedding arms below get quality_gate; this one had no
+        # precision filter at all, so every prompt injected its top hits whether
+        # or not they were about the prompt. Note the two judge relevance
+        # differently — this one on title/path, quality_gate on body coverage.
+        # Over-fetch before gating: BM25 rank does not track relevance here, so
+        # the page that names the topic is regularly outside the top few.
+        keyword_hits = []
+        # 'embedding' means "do not decide by lexical match" — taking the
+        # keyword shortcut there would make the setting mean its opposite.
+        if strat in ("fts", "hybrid"):
+            try:
+                keyword_hits = search_index.names_query(
+                    search_index.query(db, vault_id=v["id"], query=normalize_query(text),
+                                       limit=max(top_k * 5, _PRETOOL_CANDIDATES),
+                                       visibility=visibility),
+                    text)[:top_k]
+            except (sqlite3.Error, OSError, ValueError):
+                # The keyword arm is now a gate in front of the semantic one, so
+                # its failure must read as "found nothing", not disable retrieval.
+                keyword_hits = []
+            # Judge against the keyword floor here, not downstream: these are raw
+            # BM25 scores, and a hit too weak to survive must not count as an
+            # answer that blocks escalation.
+            floor = score_threshold(_cfg(), "fts")
+            keyword_hits = [h for h in keyword_hits if (h.get("score") or 0) >= floor]
+        if strat == "fts" or keyword_hits:
+            # Escalating costs ~0.92s of embedder cold start per hook process
+            # (import + ONNX session, neither amortizable — the hook is a fresh
+            # process every time). Measured on a live vault, the semantic arm
+            # earns that only when keyword search comes back empty: where fts
+            # already answers, about half of what it adds is unrelated.
+            return _tag_arm(keyword_hits, "fts")
+        embedder = embed.active_embedder(
+            db, (cfg.get("recall") or {}).get("embedding") or {}
+        )
+        return _tag_arm(
+            search_index.search_strategy(db, vault_id=v["id"],
+                                         q=text, fts_query=normalize_query(text),
+                                         limit=top_k,
+                                         strategy=strat,
+                                         embedder=embedder,
+                                         visibility=visibility,
+                                         quality_gate=(strat in ("hybrid", "embedding"))),
+            strat)
     except Exception:
         return []
 
@@ -359,19 +393,33 @@ def _recall_body(cfg: dict, text: str) -> str:
     if strat == "llm":
         return render_llm_guidance(cfg.get("llm_submode", "route"))
     top_k = int(cfg["top_k"])
-    hits = _hits(text, top_k)
+
+    def _qualifies(hit: dict) -> bool:
+        # Threshold against the arm that produced the hit. Comparing a raw BM25
+        # score to the hybrid floor of 0.34 would pass everything and quietly
+        # make hybrid recall less precise than plain fts recall.
+        return (hit.get("score") or 0) >= score_threshold(cfg, hit.get(_ARM_KEY) or strat)
+
+    hits = [h for h in _hits(text, top_k) if _qualifies(h)]
     if followups := _signal_queries(text):
         by_path = {h["relpath"]: h for h in hits}
         for query in followups[:1]:
             for hit in _hits(query, top_k):
+                if not _qualifies(hit):
+                    continue
                 old = by_path.get(hit["relpath"])
-                if old is None or float(hit.get("score") or 0) > float(old.get("score") or 0):
+                # Rank within an arm; across arms keep what is already there,
+                # since the two score scales are not comparable.
+                if old is None:
                     by_path[hit["relpath"]] = hit
-        hits = sorted(
-            by_path.values(), key=lambda h: float(h.get("score") or 0), reverse=True
-        )[:top_k]
-    threshold = score_threshold(cfg, strat)
-    strong = [h for h in hits if (h.get("score") or 0) >= threshold]
+                elif old.get(_ARM_KEY) == hit.get(_ARM_KEY) and \
+                        float(hit.get("score") or 0) > float(old.get("score") or 0):
+                    by_path[hit["relpath"]] = hit
+        # Insertion order, not score order: each arm already returned its hits
+        # ranked, and sorting a raw BM25 score against a 0..1 semantic score
+        # would let one arm evict the other for no reason but its scale.
+        hits = list(by_path.values())[:top_k]
+    strong = hits  # already thresholded per arm by _qualifies
     _notice: list[str] = []
 
     def degraded() -> str:
