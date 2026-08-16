@@ -17,6 +17,7 @@ GEMINI.md
 MEMORY.md
 memory/
 .claude/
+.cate/
 
 # Secrets / env
 .env
