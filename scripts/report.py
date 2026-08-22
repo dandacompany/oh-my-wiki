@@ -45,6 +45,37 @@ def _wiki_breakdown(db_path, vault_id) -> dict:
             "other": max(0, len(rows) - ent - con - syn)}
 
 
+def _provenance(db_path, vault_id) -> dict:
+    """How many wiki pages name the raw source they were distilled from.
+
+    Read-only over the files (the notes table has no source_raw column). Syntheses are
+    excluded: they derive from other pages via `synthesizes`, not from a raw source, so
+    counting them would report a defect that cannot exist.
+
+    This is a coverage number, not a finding list. Only `summary` pages make a missing
+    source_raw a schema error — for concepts/entities a hand-written page is legitimate,
+    and a 30%-false-positive lint category trains users to ignore the whole thing.
+    """
+    from scripts import frontmatter, registry
+    root = registry.get_vault_root(db_path, vault_id)
+    rows = registry.list_notes(db_path, vault_id=vault_id, layer="wiki")
+    with_source = total = 0
+    for r in rows:
+        rel = r["relpath"] or ""
+        if rel.startswith("wiki/syntheses/") or rel in ("wiki/index.md", "wiki/log.md"):
+            continue
+        try:
+            meta, _ = frontmatter.parse((root / rel).read_text(encoding="utf-8"))
+        except (OSError, frontmatter.FrontmatterError):
+            continue
+        if not isinstance(meta, dict):
+            continue
+        total += 1
+        if meta.get("source_raw"):
+            with_source += 1
+    return {"with_source": with_source, "total": total}
+
+
 def _facets(db_path, vault_id) -> dict:
     from scripts import registry
     rows = registry.list_notes(db_path, vault_id=vault_id)
@@ -164,6 +195,8 @@ def _active_section(db_path, vault_id, *, today) -> dict:
         "layers": layers,
         "wiki": _safe(lambda: _wiki_breakdown(db_path, vault_id),
                       {"entities": 0, "concepts": 0, "syntheses": 0, "other": 0}),
+        "provenance": _safe(lambda: _provenance(db_path, vault_id),
+                            {"with_source": 0, "total": 0}),
         "facets": _safe(lambda: _facets(db_path, vault_id),
                         {"types": {}, "statuses": {}, "visibility": {"public": 0, "private": 0}}),
         "graph": _safe(lambda: _graph(db_path, vault_id),
@@ -289,6 +322,10 @@ def render(data: dict) -> str:
         if any(w.values()):
             L.append("  Wiki       " + _dot([("entities", w["entities"]), ("concepts", w["concepts"]),
                                              ("syntheses", w["syntheses"]), ("other", w["other"])]))
+        prov = av.get("provenance") or {}
+        if prov.get("total"):
+            L.append(f"  Provenance {prov['with_source']}/{prov['total']} pages name a "
+                     f"raw source (syntheses excluded)")
         types = av["facets"]["types"]
         if types:
             top_t = sorted(types.items(), key=lambda kv: (-kv[1], kv[0]))[:6]

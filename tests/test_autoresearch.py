@@ -392,7 +392,7 @@ def test_full_autoresearch_loop_3_rounds_then_file_back(wiki_vault):
     page = (root / relpath).read_text(encoding="utf-8")
     assert "type: synthesis" in page
     assert "Attention enables full parallelism" in page
-    assert "citations:" in page
+    assert "synthesizes:" in page   # `citations` was a dead duplicate, removed 2026-08-22
 
     index_text = (root / "wiki" / "index.md").read_text(encoding="utf-8")
     assert "attention-parallelism-beats-rnn-serialism" in index_text

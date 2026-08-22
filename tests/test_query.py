@@ -30,7 +30,8 @@ def test_write_synthesis_creates_page(wiki_vault):
     assert rel == "wiki/syntheses/tdd-beats-no-tests.md"
     text = (root / rel).read_text(encoding="utf-8")
     assert "type: synthesis" in text
-    assert "citations:" in text
+    assert "synthesizes:" in text
+    assert "citations:" not in text   # dead duplicate field, removed 2026-08-22
     assert "wiki/summaries/tdd-paper.md" in text
     assert "Argument..." in text
 

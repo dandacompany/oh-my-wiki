@@ -67,7 +67,23 @@ def validate(meta: dict, body: str, *, schemas: dict) -> list[dict]:
             for rel in rels:
                 if rel not in vr:
                     issues.append({"issue": f"unexpected_relation:{rel}", "detail": None})
+    declared = declared_fields(spec)
+    if declared:  # empty == deliberately unconstrained (see declared_fields)
+        for field in sorted(set(meta) - declared):
+            issues.append({"issue": f"unknown_field:{field}", "detail": None})
     return issues
+
+
+def declared_fields(spec: dict) -> set:
+    """Frontmatter keys a spec knows about. Pure.
+
+    An EMPTY set means the type is deliberately unconstrained (schemas/meta.yml
+    declares nothing so minimal meta pages are exempt), and callers must skip the
+    unknown-field check rather than report every key.
+    """
+    return (set(spec.get("required_fields", []))
+            | set(spec.get("field_types", {}))
+            | set(spec.get("allowed_values", {})))
 
 
 def scaffold_required_sections(body: str, spec: dict | None) -> str:

@@ -7,6 +7,10 @@ field_types:
   review: dict
   aliases: list
   source_raw: list
+  # Written by omw itself; declared here so unknown_field stays quiet on our own output.
+  summary: str # ingest.write_wiki_page → read by fts (scorer) + hot_cache
+  relations: dict # page_ops/merge → read by links.relations() + valid_relations
+  source_url: str # ingest.save_raw (carried onto imported pages)
 required_sections: []
 allowed_values:
   confidence: [high, medium, low]

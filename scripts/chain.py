@@ -13,10 +13,16 @@ CHAIN: dict[str, tuple[str, ...]] = {
     "search": ("ingest",),
     "fetch": ("ingest",),
     "autoresearch": ("synthesis",),
-    "ingest": ("summary",),
+    "ingest": ("summary", "lint"),
     "summary": ("synthesis",),
     "synthesis": ("lint",),
     "lint": ("review",),
+    # Direct page writes: the biggest source of orphan / index-drift / one-way-link
+    # findings, and previously the only writes with no successor at all. The
+    # `lint_issues > 0` gate in _endorsed keeps a healthy vault silent.
+    "page": ("lint",),
+    "edit": ("lint",),
+    "distill": ("lint",),
 }
 
 

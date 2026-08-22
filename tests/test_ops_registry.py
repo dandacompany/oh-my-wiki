@@ -5,6 +5,20 @@ from scripts import omw_cli
 from scripts import ops_registry as reg
 
 
+# commands/*.md that intentionally have no registered op of the same name.
+# Anything NOT listed here must map to a procedure — see test_no_orphan_command_files.
+_NON_OP_COMMAND_DOCS = {
+    # shared includes / host-runner guidance, not op cards
+    "menu.md", "migrate.md", "recall-llm.md", "runner-hermes-delegate.md",
+    # persona cards — dispatched by role via `omw persona-run`, not by op name
+    "persona-audit.md", "persona-curate-index.md", "persona-librarian.md",
+    # legacy vault docs: these names are already pinned as stale op names in
+    # tests/test_skill_no_stale_triggers.py (folded into `omw vault …` / `omw import`).
+    "vault-forget.md", "vault-import-memo.md", "vault-list.md",
+    "vault-setup.md", "vault-use.md",
+}
+
+
 def test_every_op_is_wellformed():
     for op in reg.OPS:
         assert op.kind in ("deterministic", "procedure"), op.name
@@ -31,8 +45,39 @@ def test_procedures_match_expected_agentic_set():
     assert set(reg.procedures()) == {
         "ingest", "query", "open", "edit", "move", "delete", "autoresearch",
         "persona-factcheck", "persona-consistency", "persona-terminology",
-        "summary", "synthesis",
+        "summary", "synthesis", "distill",
     }
+
+
+def test_distill_is_a_procedure_so_it_gets_an_op_skill():
+    """`distill` must be a procedure, not a deterministic op.
+
+    Only procedures get an ``omw-<op>`` agent skill (agent_skills._op_skill_procedures),
+    so registering the new-page path as deterministic would leave the natural-language
+    surface empty — the exact gap that made an agent bypass the procedures.
+    """
+    op = reg.get("distill")
+    assert op is not None, "distill must be registered"
+    assert op.kind == "procedure"
+    assert op.procedure_file == "commands/distill.md"
+    assert (_ROOT / op.procedure_file).is_file()
+
+
+def test_no_orphan_command_files():
+    """Every commands/*.md must belong to a registered op.
+
+    The reverse of test_no_dangling_op_references: that one catches a doc naming a
+    verb with no op; this one catches a command file with no op to invoke it. A
+    deterministic op may also carry a card (fetch/lint/next/…), so this checks all
+    registered names, not just procedures. Files listed in _NON_OP_COMMAND_DOCS are
+    deliberate non-op docs.
+    """
+    known = set(reg.names())
+    orphans = sorted(
+        p.name for p in (_ROOT / "commands").glob("*.md")
+        if p.stem not in known and p.name not in _NON_OP_COMMAND_DOCS
+    )
+    assert not orphans, f"command files with no registered op: {orphans}"
 
 
 def test_autoresearch_args():
@@ -163,3 +208,19 @@ def test_persona_bundle_registered_deterministic():
     assert op is not None
     assert op.kind == "deterministic"
     assert op.triggers  # routable: must have triggers (test_triggers guard)
+
+
+def test_skill_md_procedure_list_matches_registry():
+    """SKILL.md's hand-written Procedures sentence must list every registered procedure.
+
+    The surrounding prose tells readers not to hand-maintain an op table because it
+    drifts — and it did: `summary`/`synthesis` were registered but never added here.
+    """
+    text = (_ROOT / "SKILL.md").read_text(encoding="utf-8")
+    m = re.search(r"Procedures:\s*(.+?)\.\n", text, re.S)
+    assert m, "SKILL.md must keep a `Procedures:` sentence in the command-map section"
+    listed = set(re.findall(r"`([a-z][a-z-]+)`", m.group(1)))
+    assert listed == set(reg.procedures()), (
+        f"SKILL.md Procedures drift — missing {sorted(set(reg.procedures()) - listed)}, "
+        f"extra {sorted(listed - set(reg.procedures()))}"
+    )

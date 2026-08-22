@@ -53,6 +53,7 @@ def test_full_wiki_workflow(fresh_db, tmp_path):
         layer="summaries", title="Karpathy LLM Wiki",
         body="Karpathy describes wiki-as-knowledge-artifact. Capture sources, write summaries, link entities.",
         tags=["karpathy", "llm"], date_str="2026-05-25",
+        extra_meta={"source_raw": [raw_rel]},   # a summary must name the source it condenses
     )
     entity_rel = ingest.write_wiki_page(
         db, vault_id=vault["id"],

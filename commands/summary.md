@@ -23,9 +23,16 @@ Active vault. The `page` arg names an existing page (relpath/slug) or a raw sour
    "File this as a summary page? [Yes / No]".
 
 4. **On Yes, file it** as a `summary`-type page linked back to the source (set
-   `derived-from: [<source slug>]` in frontmatter; keep the source's citations). Use
-   the normal page-writing path (`omw edit`/create flow) with `type: summary`, then
-   `omw reindex`.
+   `derived-from: [<source slug>]` in frontmatter; keep the source's citations):
+
+   ```bash
+   omw page write --layer summaries --title "<title>" --body-file <body.md> \
+     --tags <t1>,<t2> --date <YYYY-MM-DD> --source-raw <source-relpath> \
+     --index "<oneliner>" --log-op summary
+   ```
+
+   `source_raw` is required on `summary` pages — a summary whose source cannot be
+   traced is a schema violation, not a stylistic gap. `omw page write` reindexes.
 
 ## After
 

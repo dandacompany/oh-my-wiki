@@ -42,6 +42,23 @@ def test_review_gated_on_stale_or_expired():
     assert [s["op"] for s in chain.next_after("lint", {"expired": 2})] == ["review"]
 
 
+def test_direct_page_writes_chain_to_lint():
+    """Writing a page is the most common way to create orphan / index-drift findings,
+    but `page`/`edit`/`distill` had no chain entry, so nothing was ever offered after
+    one — the user only learned by remembering to run lint themselves."""
+    for op in ("page", "edit", "distill"):
+        assert [s["op"] for s in chain.next_after(op, {"lint_issues": 2})] == ["lint"], op
+        # the lint_issues gate keeps a clean vault quiet
+        assert chain.next_after(op, {"lint_issues": 0}) == [], op
+
+
+def test_ingest_also_offers_lint():
+    """ingest touches 10-15 pages per run — by far the biggest write — yet only led
+    to `summary`."""
+    ops = [s["op"] for s in chain.next_after("ingest", {"lint_issues": 4})]
+    assert ops == ["summary", "lint"]
+
+
 def test_deterministic_same_input_same_output():
     sig = {"clusters": 1, "lint_issues": 0, "stale": 0, "expired": 0}
     assert chain.next_after("summary", sig) == chain.next_after("summary", sig)

@@ -1,1 +1,2 @@
 extends: base
+required_fields: [source_raw]

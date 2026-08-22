@@ -139,10 +139,15 @@ Use `AskUserQuestion` (max 4 options). The option set depends on `active.mode`:
 
 ### `wiki` mode
 
-1. Ingest — add a new source
-2. Query — ask the wiki
-3. Find — search existing pages
+1. Ingest — add a new source (external file/URL/paste → `raw/` → distilled pages)
+2. Distill — write a page from this session (no external source to capture)
+3. Query / Find — ask the wiki, or search existing pages
 4. Maintain — lint / edit / delete
+
+Ingest vs Distill is the capture fork: if there is an original to keep, it is `ingest`;
+if the material is what just happened in this session, it is `distill`. Never write a
+wiki file with your own file tools instead — that skips provenance, the new-vs-update
+choice, link suggestions, and reindexing.
 
 ## Safety contracts
 
@@ -257,8 +262,9 @@ Every omw op is one of two kinds — know which before you act:
 - **procedure** (needs this session): invoke `omw <op> …`; the CLI prints a
   procedure card with bound arguments for this host session. Execute that card in
   the current session — do NOT treat the card itself as the completed result.
-  Procedures: `ingest`, `query`, `open`, `edit`, `move`, `delete`,
-  `autoresearch`, `persona-factcheck`, `persona-consistency`, `persona-terminology`.
+  Procedures: `ingest`, `distill`, `query`, `open`, `edit`, `move`, `delete`,
+  `autoresearch`, `summary`, `synthesis`, `persona-factcheck`,
+  `persona-consistency`, `persona-terminology`.
 
 The authoritative per-op table (args + hints) is the generated
 `<!-- omw-commandmap:start -->` block in your host instruction file, regenerated

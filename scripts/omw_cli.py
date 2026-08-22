@@ -18,7 +18,7 @@ from scripts.paths import ensure_home, registry_path, resolve_vault_root
 AGENTIC_OPS = [
     "ingest", "query", "open", "edit", "move", "delete",
     "autoresearch", "persona-factcheck", "persona-consistency",
-    "persona-terminology", "summary", "synthesis",
+    "persona-terminology", "summary", "synthesis", "distill",
 ]
 
 

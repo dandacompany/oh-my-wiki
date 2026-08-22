@@ -79,9 +79,11 @@ OPS: tuple[OpSpec, ...] = (
                ArgSpec("--backend", False, "fetch backend", ("auto", "urllib", "chromium", "cloud"))),
          triggers=("fetch", "url 가져와", "페이지 가져와")),
     _det("capture", "Save one local source into raw/ and reindex.",
-         "omw capture <path> --title T --date YYYY-MM-DD"),
+         "omw capture <path> --title T --date YYYY-MM-DD",
+         triggers=("capture", "원본 저장", "raw 에 넣어")),
     _det("page", "Write a schema-aware structured page and update its index/log.",
-         "omw page write --layer L --title T --body-file F --date YYYY-MM-DD"),
+         "omw page write --layer L --title T --body-file F --date YYYY-MM-DD",
+         triggers=("page write", "페이지 작성", "페이지로 저장")),
     _det("research", "Manage deterministic autoresearch session state.",
          "omw research {init|record|should-stop|status|file-back} …"),
     _det("schema", "Show page-type schemas.", "omw schema {list|show} …"),
@@ -183,9 +185,10 @@ OPS: tuple[OpSpec, ...] = (
          "omw star [--now] [--open] [--dismiss] [--status]",
          triggers=("star", "github star", "별표", "스타 주기")),
     # --- agentic procedures (you execute commands/<op>.md; do NOT trust a shelled result) ---
-    _proc("ingest", "Pull a source (path/URL) into raw/ and reindex.",
-          args=(ArgSpec("source", True, "file path or URL"),), uses=("fetch", "reindex"),
-          triggers=("ingest", "흡수", "정리해서 넣어")),
+    _proc("ingest", "Capture a source (path/URL) into raw/, then write the summary and entity/concept pages distilled from it.",
+          args=(ArgSpec("source", True, "file path or URL"),),
+          uses=("fetch", "capture", "page", "links", "reindex"),
+          triggers=("ingest", "흡수", "정리해서 넣어", "이 소스 정리", "출처 정리해서 위키에")),
     _proc("query", "Answer a question from the wiki (LLM synthesis).",
           args=(ArgSpec("question", True, "natural-language question"),
                 ArgSpec("--vault", False, "vault name (default: active)")),
@@ -222,6 +225,13 @@ OPS: tuple[OpSpec, ...] = (
           args=(ArgSpec("page", True, "page relpath / slug / source to summarize"),),
           uses=("open", "edit"),
           triggers=("summary", "summarize", "요약", "간추려")),
+    _proc("distill", "Write a new distilled wiki page from material in this session (no external source to capture).",
+          args=(ArgSpec("topic", True, "what the new page is about"),
+                ArgSpec("--layer", False, "target layer", ("concepts", "entities", "summaries")),
+                ArgSpec("--source-raw", False, "raw relpath this page distils, when one exists")),
+          uses=("find", "page", "links", "reindex", "lint"),
+          triggers=("distill", "new page", "정제", "새 페이지", "개념 페이지",
+                    "이 논의 정리해서", "위키에 페이지로")),
     _proc("synthesis", "Weave a topic/cluster's structured pages into a wiki/syntheses page.",
           args=(ArgSpec("topic", True, "topic or cluster to synthesize"),),
           uses=("connections", "context", "query"),
@@ -236,6 +246,7 @@ _PHASE = {
     "reindex": "structure", "links": "structure", "fields": "structure", "page": "structure",
     "connections": "structure", "open": "structure", "edit": "structure",
     "move": "structure", "delete": "structure", "summary": "structure",
+    "distill": "structure",
     # synthesize — combine into new knowledge
     "query": "synthesize", "context": "synthesize", "autoresearch": "synthesize", "research": "synthesize",
     "synthesis": "synthesize",
@@ -264,7 +275,7 @@ _BY_NAME = {op.name: op for op in OPS}
 _NO_TRIGGER_OK = frozenset({
     "status", "reindex", "fields", "schema", "serve", "recall", "maint",
     "gate", "setup", "doctor", "update", "help", "version", "persona-run",
-    "capture", "page", "research",
+    "research",
 })
 
 

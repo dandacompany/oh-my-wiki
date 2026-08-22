@@ -32,7 +32,9 @@ def write_synthesis(
         "type": "synthesis",
         "tags": list(tags),
         "status": "processed",
-        "citations": list(citations),
+        # `synthesizes` is the declared field (schemas/synthesis.yml) and the relation
+        # verb links.py understands. A parallel `citations` key was written here too,
+        # declared by no schema and read by nothing — removed 2026-08-22.
         "synthesizes": list(citations),
     }
     if summary:
