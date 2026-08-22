@@ -37,7 +37,15 @@ writing — unless it was already confirmed in this session (see SKILL.md Multi-
 
 4. **Draft the body.** Standalone prose grounded in the session's actual material. Do NOT
    invent facts. Prefer the precise relation verbs in `relations:` — `derived-from`,
-   `extends`, `illustrates`, `applies-to`, `instances-of`, `see-also`.
+   `extends`, `illustrates`, `applies-to`, `instances-of`, `see-also` — and set them with
+   `omw page write --relation <verb>=<slug>` (repeatable) rather than hand-writing the
+   field, so the shape is right:
+
+   ```yaml
+   relations:
+     see-also: [red-green-refactor]
+     derived-from: [2026-08-21-execution-record]
+   ```
 
 5. **Propose, then confirm** (never write silently). Show the title, layer, tags,
    `source_raw`, and the draft body. Ask: "Write this page? [Yes / No]".

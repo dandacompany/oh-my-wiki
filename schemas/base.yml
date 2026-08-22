@@ -9,7 +9,8 @@ field_types:
   source_raw: list
   # Written by omw itself; declared here so unknown_field stays quiet on our own output.
   summary: str # ingest.write_wiki_page → read by fts (scorer) + hot_cache
-  relations: dict # page_ops/merge → read by links.relations() + valid_relations
+  relations: dict|list # mapping is canonical; the hand-written list form is also
+                       # accepted — see scripts/relations.normalize
   source_url: str # ingest.save_raw (carried onto imported pages)
 required_sections: []
 allowed_values:

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from scripts import paths
+from scripts import paths, relations
 
 _BUNDLED_DIR = paths.bundled_dir("schemas")
 
@@ -27,6 +27,8 @@ def _coarse_ok(value, want: str) -> bool:
         return isinstance(value, int) and not isinstance(value, bool)
     if want == "dict":
         return isinstance(value, dict)
+    if want == "dict|list":
+        return isinstance(value, (dict, list))
     return True  # unknown constraint token → don't fail
 
 
@@ -62,11 +64,9 @@ def validate(meta: dict, body: str, *, schemas: dict) -> list[dict]:
             issues.append({"issue": f"invalid_value:{field}", "detail": str(meta[field])})
     vr = spec.get("valid_relations") or []
     if vr:
-        rels = meta.get("relations")
-        if isinstance(rels, dict):
-            for rel in rels:
-                if rel not in vr:
-                    issues.append({"issue": f"unexpected_relation:{rel}", "detail": None})
+        for rel in relations.normalize(meta.get("relations")):
+            if rel not in vr:
+                issues.append({"issue": f"unexpected_relation:{rel}", "detail": None})
     declared = declared_fields(spec)
     if declared:  # empty == deliberately unconstrained (see declared_fields)
         for field in sorted(set(meta) - declared):

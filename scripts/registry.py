@@ -483,6 +483,30 @@ def get_active(db_path: Path) -> sqlite3.Row | None:
         conn.close()
 
 
+def _hand_over_active(conn) -> str | None:
+    """If no vault is active, promote the most recently used non-archived one.
+
+    Call inside the caller's transaction, AFTER the row has been removed or archived.
+    Returns the new active vault's name, or None when nothing was promoted (either an
+    active vault still exists, or no eligible vault remains).
+
+    Why this lives here: `vault forget`, `vault archive`, and `vault delete` (soft and
+    hard) all funnel into forget_vault/set_archived, so one implementation closes all
+    three. Leaving `active` empty breaks every subsequent command even though other
+    vaults are still registered.
+    """
+    if conn.execute("SELECT 1 FROM vaults WHERE is_active = 1").fetchone():
+        return None
+    row = conn.execute(
+        "SELECT id, name FROM vaults WHERE archived_at IS NULL "
+        "ORDER BY last_used DESC, id DESC LIMIT 1"
+    ).fetchone()
+    if not row:
+        return None
+    conn.execute("UPDATE vaults SET is_active = 1 WHERE id = ?", (row["id"],))
+    return row["name"]
+
+
 def set_active(db_path: Path, name: str) -> sqlite3.Row:
     conn = connect(db_path)
     try:
@@ -515,6 +539,7 @@ def set_archived(db_path: Path, name: str, archived: bool) -> sqlite3.Row:
                     "UPDATE vaults SET archived_at = ?, is_active = 0 WHERE id = ?",
                     (ts, row["id"]),
                 )
+                _hand_over_active(conn)
             else:
                 conn.execute(
                     "UPDATE vaults SET archived_at = NULL WHERE id = ?", (row["id"],)
@@ -524,13 +549,20 @@ def set_archived(db_path: Path, name: str, archived: bool) -> sqlite3.Row:
         conn.close()
 
 
-def forget_vault(db_path: Path, name: str) -> None:
+def forget_vault(db_path: Path, name: str) -> dict:
+    """Remove a vault from the registry. Returns {"active_moved_to": name | None}.
+
+    Previously returned None and silently left `active` empty when the removed vault
+    was the active one; callers surface active_moved_to so the move is never silent.
+    """
     conn = connect(db_path)
     try:
         with conn:
             cur = conn.execute("DELETE FROM vaults WHERE name = ?", (name,))
             if cur.rowcount == 0:
                 raise VaultError(f"vault {name!r} not found")
+            moved = _hand_over_active(conn)
+        return {"active_moved_to": moved}
     finally:
         conn.close()
 

@@ -10,6 +10,7 @@ import unicodedata
 from pathlib import Path
 
 from scripts import registry
+from scripts import relations as relations_mod
 
 _WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
 _MDLINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -60,11 +61,12 @@ def extract_links(body: str) -> list[tuple[str, str, int]]:
 def extract_relations(meta: dict) -> list[tuple[str, str, int]]:
     """Read frontmatter `relations:` → [(dst_slug, relation, position), ...].
 
-    relations is a dict {uses|contradicts|supersedes: [slug, ...]}. A scalar
-    value is treated as a one-item list. Missing/malformed → [].
+    Both frontmatter shapes are accepted (see scripts/relations.normalize): the
+    canonical mapping `{uses: [slug, ...]}` and the hand-written list form
+    `[{uses: slug}]`. Missing/unusable → [].
     """
-    rels = (meta or {}).get("relations")
-    if not isinstance(rels, dict):
+    rels = relations_mod.normalize((meta or {}).get("relations"))
+    if not rels:
         return []
     out: list[tuple[str, str, int]] = []
     pos = 0

@@ -53,7 +53,21 @@ For a local md/txt/pdf file, use `omw capture <path> --title "<title>" --date <Y
      from several). This makes raw sources traceable from the wiki page.
    - **Relations.** Prefer the precise relation verbs in `relations:` —
      `derived-from`, `extends`, `illustrates`, `applies-to`, `instances-of`,
-     `see-also`, `synthesizes` (alongside `uses`/`contradicts`/`supersedes`). A
+     `see-also`, `synthesizes` (alongside `uses`/`contradicts`/`supersedes`).
+     Set them deterministically — the shape is a mapping of verb to targets:
+
+     ```bash
+     omw page write … --relation see-also=red-green-refactor --relation uses=fakes-over-mocks
+     ```
+
+     ```yaml
+     relations:            # canonical shape written by --relation
+       see-also: [red-green-refactor]
+       uses: [fakes-over-mocks]
+     ```
+
+     The hand-written list form (`- see-also: slug`) is also read, but prefer the
+     mapping. A
      `synthesis` page must set `synthesizes: [slugs]` + a `## Sources` section; a
      `comparison` must set `compared_items: [...]`.
 

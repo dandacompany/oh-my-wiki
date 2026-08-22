@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from scripts import frontmatter, links, registry, reindex
+from scripts import relations as relations_mod
 from scripts.paths import ensure_vault_trash, vault_trash_root
 
 _WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
@@ -51,24 +52,33 @@ def _rewrite_body(body: str, target_slugs: set[str]) -> str:
     return "".join(lines)
 
 
+def relation_targets(meta: dict) -> dict:
+    """This page's relations as {verb: [target, ...]}, whichever shape it was written in."""
+    return relations_mod.normalize((meta or {}).get("relations"))
+
+
 def _rewrite_source(path: Path, target_slugs: set[str]) -> bool:
     text = path.read_text(encoding="utf-8")
     had_frontmatter = text.startswith("---\n")
     meta, body = frontmatter.parse(text)
     changed_meta = False
-    relations = meta.get("relations")
-    if isinstance(relations, dict):
-        for key, value in list(relations.items()):
-            values = value if isinstance(value, list) else [value]
+    # Normalize first: list-shaped relations used to fall through this block entirely,
+    # so deleting a page left dangling references behind in those files. A page that is
+    # rewritten here is written back in the canonical mapping shape.
+    normalized = relations_mod.normalize(meta.get("relations"))
+    if normalized:
+        kept_all = {}
+        for key, values in normalized.items():
             kept = [item for item in values if _slug(str(item)) not in target_slugs]
             if len(kept) != len(values):
                 changed_meta = True
-                if kept:
-                    relations[key] = kept if isinstance(value, list) else kept[0]
-                else:
-                    relations.pop(key, None)
-        if not relations:
-            meta.pop("relations", None)
+            if kept:
+                kept_all[key] = kept
+        if changed_meta:
+            if kept_all:
+                meta["relations"] = kept_all
+            else:
+                meta.pop("relations", None)
     new_body = _rewrite_body(body, target_slugs)
     if not changed_meta and new_body == body:
         return False

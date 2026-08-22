@@ -62,6 +62,7 @@ def _cmd_vault_archive(args) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     print(f"archived: {args.name}")
+    _report_active_after_removal(db)
     return 0
 
 
@@ -98,10 +99,21 @@ def _cmd_vault_create(args) -> int:
     registry.set_active(db, args.name)
     reindex.full(db, vault_id=vault["id"])
     print(json.dumps(
-        {"created": args.name, "path": str(root), "mode": args.mode, "type": args.type},
+        {"created": args.name, "path": str(root), "mode": args.mode,
+         "type": args.type, "active": args.name},
         ensure_ascii=False,
     ))
     return 0
+
+
+def _report_active_after_removal(db) -> None:
+    """Say where `active` ended up. Removing the active vault used to be silent, so the
+    user only found out when the next command died with "no active vault"."""
+    row = registry.get_active(db)
+    if row:
+        print(f"active vault: {row['name']}")
+    else:
+        print("no active vault — set one with `omw vault use <name>`")
 
 
 def _cmd_vault_use(args) -> int:
@@ -129,6 +141,7 @@ def _cmd_vault_forget(args) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     print(f"forgot vault: {args.name} (files untouched)")
+    _report_active_after_removal(db)
     return 0
 
 
@@ -203,6 +216,7 @@ def _cmd_vault_delete(args) -> int:
         print(f"deleted (soft): moved to {out['trash']}")
     else:
         print(f"deleted (hard): {args.name}")
+    _report_active_after_removal(db)
     return 0
 
 
@@ -1469,6 +1483,15 @@ def _cmd_page(args) -> int:
         )
     else:
         extra_meta = {"source_raw": args.source_raw} if args.source_raw else None
+        rels: dict[str, list[str]] = {}
+        for pair in args.relation:
+            verb, sep, slug = pair.partition("=")
+            if not sep or not verb.strip() or not slug.strip():
+                print(f"error: --relation expects VERB=SLUG, got {pair!r}", file=sys.stderr)
+                return 1
+            rels.setdefault(verb.strip(), []).append(slug.strip())
+        if rels:
+            extra_meta = {**(extra_meta or {}), "relations": rels}
         relpath = ingest.write_wiki_page(
             db, vault_id=vault["id"], layer=args.layer, title=args.title, body=body,
             tags=tags, date_str=args.date, extra_meta=extra_meta,
@@ -2149,6 +2172,11 @@ def build_parser() -> argparse.ArgumentParser:
     ppwrite.add_argument("--date", required=True)
     ppwrite.add_argument("--source-raw", action="append", default=[])
     ppwrite.add_argument("--citation", action="append", default=[])
+    ppwrite.add_argument(
+        "--relation", action="append", default=[], metavar="VERB=SLUG",
+        help="typed edge, repeatable (e.g. --relation see-also=red-green-refactor). "
+             "Without this there was no deterministic way to set relations, so agents "
+             "hand-wrote the field and guessed its shape.")
     ppwrite.add_argument("--index", default=None, help="one-line index description")
     ppwrite.add_argument("--log-op", default=None)
     ppwrite.add_argument("--vault", default=None)
